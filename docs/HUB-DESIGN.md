@@ -1,6 +1,7 @@
 # sprint-hub v2 — Design overview
 
 Status: draft, 2026-10-16. Overview level only. Claude Code splits this into sprint steps.
+**Scope and order: see `docs/ROADMAP.md`. It overrides the `MVP` / `v2` / `later` tags below.**
 The current sprint-hub (`~/Work/sprint-hub`) and BenWhispers stay untouched. v2 is built on its own branch.
 
 ---
