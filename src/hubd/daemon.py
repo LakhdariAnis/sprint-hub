@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from hubd.model import Run, Step
+from hubd.model import Run, State, Step
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
@@ -33,6 +33,27 @@ class Hub:
             if entry.project == project and entry.step.step == step_id:
                 return entry
         raise NotFound(f"no step {project}/{step_id}")
+
+    def blocked(self, entry: StepEntry) -> bool:
+        """A step is blocked while a step it `needs` (same project) is not approved."""
+        approved = {
+            e.step.step
+            for e in self.index.steps
+            if e.project == entry.project and e.step.state == State.approved
+        }
+        return any(need not in approved for need in entry.step.needs)
+
+    def today(self) -> dict[str, list[StepEntry]]:
+        steps = self.index.steps
+        ready = [
+            e for e in steps if e.step.state in (State.todo, State.changes) and not self.blocked(e)
+        ]
+        ready.sort(key=lambda e: (e.step.due is None, e.step.due or "", e.project, e.step.step))
+        return {
+            "running": [e for e in steps if e.step.state == State.doing],
+            "review": [e for e in steps if e.step.state == State.done],
+            "next": ready,
+        }
 
     async def start(self, project: str, step_id: str) -> Step:
         async with self.lock:

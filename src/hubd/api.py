@@ -60,6 +60,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
         spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
         return {**step_json(entry), "spec": spec}
 
+    @app.get("/today")
+    def today() -> dict[str, list[dict]]:
+        return {k: [step_json(e) for e in v] for k, v in hub.today().items()}
+
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
         return (await hub.start(project, step_id)).model_dump(mode="json")
