@@ -9,6 +9,7 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+from rich.markup import escape
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -62,6 +63,21 @@ def progress_merged(path: Path) -> set[str]:
     return done
 
 
+def checklist(path: Path, sid: str) -> tuple[list[tuple[str, str]], int, int]:
+    """Lines of sprint/progress/<sid>.md as (mark, text), plus (ticked, total)."""
+    f = path / "sprint" / "progress" / f"{sid}.md"
+    if not f.exists():
+        return [], 0, 0
+    items = re.findall(r"(?m)^\s*[-*] \[([ xX~])\] (.+)$", f.read_text())
+    items = [(m.lower(), txt.strip()) for m, txt in items]
+    return items, sum(m == "x" for m, _ in items), len(items)
+
+
+def status_label(s: dict) -> str:
+    label = STATUS_LABEL[s["status"]]
+    return f"{label}  {s['ticked']}/{s['total']}" if s["total"] and s["status"] != "done" else label
+
+
 def load_steps(path: Path) -> list[dict]:
     main = "main" if git(path, "rev-parse", "--verify", "main") else "master"
     main_tip = git(path, "rev-parse", main)
@@ -77,17 +93,20 @@ def load_steps(path: Path) -> list[dict]:
             b in merged and git(path, "rev-parse", b) != main_tip for b in mine
         ):
             status = "done"
-        elif mine:
+        elif mine or (path / "sprint" / "progress" / f"{sid}.md").exists():
             status = "doing"
         else:
             status = "todo"
         spec = next(iter((path / "sprint").glob(f"{sid}-*.md")), None)
+        _, ticked, total = checklist(path, sid)
         steps.append({
             "id": sid,
             "title": fm.get("description", "").removeprefix(f"Sprint {sid} - "),
             "model": fm.get("model", "?"),
             "status": status,
             "spec": spec,
+            "ticked": ticked,
+            "total": total,
         })
     return steps
 
@@ -166,9 +185,24 @@ class StepsScreen(Screen):
 
     def on_mount(self) -> None:
         t = self.query_one(DataTable)
-        t.add_columns("id", "title", "model", "status")
+        for col in ("id", "title", "model", "status"):
+            t.add_column(col, key=col)
         self.action_refresh()
         t.focus()
+        self.set_interval(2, self.tick)
+
+    def tick(self) -> None:
+        """Live-update the checklist of every step while Claude ticks it."""
+        t = self.query_one(DataTable)
+        for s in self.steps:
+            _, ticked, total = checklist(self.project["path"], s["id"])
+            if (ticked, total) != (s["ticked"], s["total"]):
+                s["ticked"], s["total"] = ticked, total
+                if s["status"] == "todo" and total:
+                    s["status"] = "doing"
+                t.update_cell(s["id"], "status", status_label(s))
+        if s := self.current():
+            self.show_step(s)
 
     def action_refresh(self) -> None:
         t = self.query_one(DataTable)
@@ -176,7 +210,7 @@ class StepsScreen(Screen):
         t.clear()
         self.steps = load_steps(self.project["path"])
         for s in self.steps:
-            t.add_row(s["id"], s["title"], s["model"], STATUS_LABEL[s["status"]], key=s["id"])
+            t.add_row(s["id"], s["title"], s["model"], status_label(s), key=s["id"])
         done = sum(s["status"] == "done" for s in self.steps)
         bar = self.query_one(ProgressBar)
         bar.update(total=max(len(self.steps), 1), progress=done)
@@ -188,8 +222,17 @@ class StepsScreen(Screen):
             self.show_step(self.steps[t.cursor_row])
 
     def show_step(self, s: dict) -> None:
+        items, ticked, total = checklist(self.project["path"], s["id"])
+        icon = {"x": "[green]✔[/green]", "~": "[yellow]●[/yellow]", " ": "[dim]○[/dim]"}
+        head = ""
+        if items:
+            lines = [f"{icon[m]} {escape(txt)}" for m, txt in items]
+            head = f"[b]Checklist {ticked}/{total}[/b]\n" + "\n".join(lines) + "\n\n[dim]── spec ──[/dim]\n"
         text = s["spec"].read_text() if s["spec"] else "(no spec file in sprint/)"
-        self.query_one("#desc", Static).update("\n".join(text.splitlines()[:25]))
+        body = head + escape("\n".join(text.splitlines()[:25]))
+        if body != getattr(self, "_desc", None):
+            self._desc = body
+            self.query_one("#desc", Static).update(body)
 
     def current(self) -> dict | None:
         i = self.query_one(DataTable).cursor_row
