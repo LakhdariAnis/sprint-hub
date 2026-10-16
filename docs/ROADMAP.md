@@ -83,7 +83,7 @@ deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manua
 (read-only), command palette, systemd user service, one-time read-only import of BenWhispers' state.
 
 **Weekly planning** (new, from Anis 2026-10-16), same rules as the `new-sprint` skill:
-- Read `hours:` from step frontmatter and `Time: <h> h` from PROGRESS entries.
+- Read `hours:` from step frontmatter. Actual hours = agent time (run start → run-ended hook, recorded by hubd for every run) + Anis's own time not overlapping a run (entered on approve), written as `Time: <h> h (agent <a> h)` in PROGRESS.
 - Sprint bar on the Project screen: planned / 15 h and actual / 18 h; turns red over budget.
 - **Week view** on Today: this week's `work` sprint and `personal` sprint across all projects, hours done vs planned, days left in the week. Warns on two sprints in one track, or none in `work`.
 - **Project ETA**: remaining sprints and hours, finish week, with the calibration factor (actual ÷ planned over the last 3 closed sprints).
