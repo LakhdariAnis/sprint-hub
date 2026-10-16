@@ -5,6 +5,7 @@ description = "sprint-hub v2 daemon"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.3",
+    "uvicorn>=0.54.0",
 ]
 
 [build-system]
@@ -16,3 +17,6 @@ dev = [
     "httpx2>=2.13.1",
     "pytest>=9.1.1",
 ]
+
+[project.scripts]
+hubd = "hubd.__main__:main"
