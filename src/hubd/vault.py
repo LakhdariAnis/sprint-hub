@@ -1,8 +1,13 @@
 """Load the vault into an in-memory index (docs/HUB-DESIGN.md section 4)."""
 
+import os
 import re
+import shutil
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
+from enum import Enum
 from pathlib import Path
 
 import frontmatter
@@ -17,6 +22,8 @@ _HEADING = re.compile(r"^## (.+?)\s*$")
 _COMMENT = re.compile(r"\s+#.*$")
 _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
+_FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
+_FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 
 
 @dataclass
@@ -122,6 +129,78 @@ def _load_step(path: Path) -> Step:
         meta["step"] = path.stem
     meta["runs"], meta["review"] = parse_body(post.content)
     return Step.model_validate(meta)
+
+
+def save_step(path: Path, step: Step) -> None:
+    """Write the changed frontmatter fields of `step` back to `path`; every other byte stays."""
+    current = _load_step(path)
+    lines = path.read_bytes().decode().split("\n")
+    if lines[0].rstrip() != "---":
+        raise ValueError(f"{path}: no frontmatter")
+    end = next(i for i, line in enumerate(lines[1:], 1) if line.rstrip() == "---")
+    eol = "\r" if lines[0].endswith("\r") else ""
+    changed = {
+        name: _format(getattr(step, name))
+        for name in _FRONTMATTER_FIELDS
+        if getattr(step, name) != getattr(current, name)
+    }
+    _set_fields(lines, 1, end, changed, eol)
+    _write_atomic(path, "\n".join(lines).encode())
+
+
+def _format(value: object) -> str | None:
+    """A field value as it is written in the file; None = remove the line."""
+    if value is None:
+        return None
+    if isinstance(value, Enum):
+        return str(value.value)
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, list):
+        return "[" + ", ".join(map(str, value)) + "]"
+    return str(value)
+
+
+def _set_fields(
+    lines: list[str], start: int, end: int, values: dict[str, str | None], eol: str
+) -> None:
+    """Set `key: value` lines in `lines[start:end]` in place; keeps spacing and `# ...` comments."""
+    for key, value in values.items():
+        for i in range(start, end):
+            m = _FIELD.match(lines[i])
+            if m and m["key"] == key:
+                break
+        else:
+            if value:
+                at = end
+                while at > start and not lines[at - 1].strip():
+                    at -= 1
+                lines.insert(at, f"{key}: {value}{eol}")
+                end += 1
+            continue
+        if value is None:
+            del lines[i]
+            end -= 1
+            continue
+        rest = m["rest"]
+        comment = c[0] if (c := _COMMENT.search(rest)) else ""
+        lead = rest[: len(rest) - len(rest.lstrip())] or " "
+        lines[i] = f"{key}:{lead if value else ''}{value}{comment}{m['eol']}"
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Write to a temp file in the same folder, then rename over `path`."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f"{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:

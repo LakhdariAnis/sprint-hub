@@ -5,7 +5,15 @@ import frontmatter
 import pytest
 
 from hubd.model import Review, Run, State, TaskState
-from hubd.vault import FileError, load_vault, parse_body, parse_run, split_sections
+from hubd.vault import (
+    FileError,
+    _load_step,
+    load_vault,
+    parse_body,
+    parse_run,
+    save_step,
+    split_sections,
+)
 
 VAULT = Path(__file__).parent / "fixtures" / "vault"
 STEPS = VAULT / "projects" / "demo" / "steps"
@@ -104,3 +112,46 @@ def test_missing_project_file_is_an_error(tmp_path: Path) -> None:
     (tmp_path / "projects" / "p").mkdir(parents=True)
     [error] = load_vault(tmp_path).errors
     assert error.path == tmp_path / "projects" / "p" / "project.md"
+
+
+def _copy_step(tmp_path: Path, name: str) -> Path:
+    path = tmp_path / f"{name}.md"
+    path.write_bytes((STEPS / f"{name}.md").read_bytes())
+    return path
+
+
+@pytest.mark.parametrize("name", ["101", "102", "103", "104", "105"])
+def test_save_unchanged_is_byte_identical(tmp_path: Path, name: str) -> None:
+    path = _copy_step(tmp_path, name)
+    before = path.read_bytes()
+    save_step(path, _load_step(path))
+    assert path.read_bytes() == before
+
+
+def test_save_state_changes_only_that_line(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    before = path.read_text().splitlines()
+    step = _load_step(path)
+    step.state = State.done
+    save_step(path, step)
+    after = path.read_text().splitlines()
+    assert [(a, b) for a, b in zip(before, after, strict=True) if a != b] == [
+        (
+            "state: doing   # todo | doing | done | changes | approved",
+            "state: done   # todo | doing | done | changes | approved",
+        )
+    ]
+    assert _load_step(path).state is State.done
+
+
+def test_save_adds_and_removes_fields(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "101")
+    step = _load_step(path)
+    step.branch = "step/101-repo"
+    step.needs = ["100", "99"]
+    save_step(path, step)
+    assert "branch: step/101-repo\nneeds: [100, 99]\n---\n" in path.read_text()
+    step.branch = None
+    save_step(path, step)
+    assert "branch:" not in path.read_text()
+    assert _load_step(path).needs == ["100", "99"]
