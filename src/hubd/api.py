@@ -1,11 +1,12 @@
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from hubd.daemon import Hub, NotFound, step_json, vault_path
@@ -78,6 +79,17 @@ def create_app(hub: Hub | None = None) -> FastAPI:
             {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
             for e in hub.index.errors
         ]
+
+    @app.get("/events")
+    async def events() -> StreamingResponse:
+        async def stream() -> AsyncIterator[str]:
+            with hub.subscribe() as queue:
+                yield ": connected\n\n"  # subscribed: events from now on reach this client
+                while True:
+                    event = await queue.get()
+                    yield f"event: {event['type']}\ndata: {json.dumps(event)}\n\n"
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
 
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
