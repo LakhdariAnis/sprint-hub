@@ -116,6 +116,9 @@ def parse_tasks(text: str) -> list[Task]:
 def load_vault(path: Path) -> Index:
     """Read every project and step under `path/projects`. A broken file becomes one FileError."""
     index = Index()
+    if not (path / "projects").is_dir():
+        index.errors.append(FileError(path / "projects", None, "no projects folder"))
+        return index
     for project_dir in sorted(p for p in (path / "projects").iterdir() if p.is_dir()):
         project = _guard(index, project_dir / "project.md", _load_project)
         if project:

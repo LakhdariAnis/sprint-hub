@@ -4,9 +4,7 @@ import sys
 import uvicorn
 
 from hubd import doctor, install
-
-HOST = "127.0.0.1"  # localhost only: the API has no auth
-PORT = 8765
+from hubd.api import HOST, PORT
 
 
 def main() -> None:
@@ -20,7 +18,7 @@ def main() -> None:
         sys.exit(doctor.main())
     if command == "uninstall-hook":
         sys.exit(install.change(install.uninstalled))
-    uvicorn.run("hubd.api:app", host=HOST, port=PORT)
+    uvicorn.run("hubd.api:serve_app", factory=True, host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

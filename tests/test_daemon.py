@@ -1,8 +1,8 @@
 import asyncio
-import shutil
 from pathlib import Path
 
 import pytest
+from conftest import Recorder
 
 from hubd.daemon import Hub, NotFound
 from hubd.model import State
@@ -10,36 +10,11 @@ from hubd.runners.fake import FakeRunner
 from hubd.states import InvalidTransition
 from hubd.vault import _load_step
 
-FIXTURE = Path(__file__).parent / "fixtures" / "vault"
 
-
-class Recorder:
-    def __init__(self) -> None:
-        self.sent: list[tuple[str, str]] = []
-
-    def notify(self, title: str, body: str) -> None:
-        self.sent.append((title, body))
-
-
-@pytest.fixture
-def vault(tmp_path: Path) -> Path:
-    shutil.copytree(FIXTURE, tmp_path, dirs_exist_ok=True)
-    (tmp_path / "demo-repo" / "sprint" / "104-retry.md").write_text(
-        "# Step 104 — Retry\n\n## Tasks\n- Find the bug\n- Fix it\n"
-    )
-    return tmp_path
-
-
-def make_hub(vault: Path, notifier: Recorder | None = None) -> Hub:
-    return Hub(vault, lambda ended: FakeRunner(ended, delay=0), notifier or Recorder())
-
-
-def test_start_ticks_then_done_saved(vault: Path) -> None:
-    notifier = Recorder()
+def test_start_ticks_then_done_saved(vault: Path, hub: Hub, notifier: Recorder) -> None:
     step_file = vault / "projects" / "demo" / "steps" / "104.md"
 
     async def main() -> None:
-        hub = make_hub(vault, notifier)
         step = await hub.start("demo", "104")  # 104 is in `changes`
         assert step.state == State.doing
         saved = _load_step(step_file)
@@ -56,9 +31,8 @@ def test_start_ticks_then_done_saved(vault: Path) -> None:
     assert notifier.sent == [("Run ended", "demo 104 Write the docs: review it")]
 
 
-def test_invalid_starts(vault: Path) -> None:
+def test_invalid_starts(hub: Hub) -> None:
     async def main() -> None:
-        hub = make_hub(vault)
         with pytest.raises(InvalidTransition, match="no 'start' from 'done'"):
             await hub.start("demo", "103")
         with pytest.raises(InvalidTransition, match="by: me"):
@@ -69,9 +43,8 @@ def test_invalid_starts(vault: Path) -> None:
     asyncio.run(main())
 
 
-def test_run_ended_checks_the_session(vault: Path) -> None:
+def test_run_ended_checks_the_session(hub: Hub) -> None:
     async def main() -> None:
-        hub = make_hub(vault)
         with pytest.raises(NotFound):
             await hub.run_ended("unknown", "102")
         with pytest.raises(NotFound):
