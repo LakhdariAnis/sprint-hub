@@ -4,7 +4,7 @@ Status: 2026-10-16. This file sets the **scope and order** of v2. It overrides t
 `docs/HUB-DESIGN.md`. HUB-DESIGN stays the long-term picture. This file says what gets built, and when.
 
 A version takes one or more sprints. Sprint sizes and weeks follow the time rules of the `new-sprint` skill (≤ 15 h planned of an 18 h budget, one ISO week each); the sprint table with weeks and ETA is in `sprint/README.md`. Each version ends with something that runs, tests that pass in CI and a short demo.
-Only the current version has step files. Later sprints' steps are written when it starts, so the plan can use
+Only the next sprint has step files (one step = one run of about 1 h). The sprint after it gets its steps when the current one closes, so the plan can use
 what the last sprint taught.
 
 ---
@@ -26,7 +26,7 @@ These rules fix the four weak points from the review (2026-10-16).
 - No tool is added "for the portfolio". If it would only look good, it stays out.
 
 ### 3. Code first, small commits
-- No docs-only steps after `101`. Design happens inside the step that builds it (an ASCII sketch agreed in chat, then code).
+- No design-only steps: a doc step only documents code that already exists (e.g. `107`). Design happens inside the step that builds it (an ASCII sketch agreed in chat, then code).
 - **Commit after every finished checklist task** (see `CLAUDE.md` → Commits). The git history must show the
   project growing in small working steps, not big dumps.
 - Every step report ends with **"Explain-back"**: 3 questions about this step's code that Anis must be able to
@@ -58,7 +58,7 @@ project held together with tape.
 
 ## Versions
 
-### 0.2.0 — Core loop, laptop only (Sprints 1–2, ids `101`–`105`, `201`–`204`)
+### 0.2.0 — Core loop, laptop only (Sprints 1–2, ids `101`–`114`, then `2xx`)
 Start a step, watch the checklist live, the run ends, review it, approve (local merge) or request changes.
 Runs fully in demo mode. Tests and CI are green.
 
