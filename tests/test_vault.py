@@ -185,3 +185,44 @@ def test_save_review_rejects_multiline_comment(tmp_path: Path) -> None:
     step.review = Review(verdict="changes", comment="a\nb")
     with pytest.raises(ValueError, match="one line"):
         save_step(path, step)
+
+
+def test_save_crash_leaves_file_untouched(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = _copy_step(tmp_path, "102")
+    before = path.read_bytes()
+    step = _load_step(path)
+    step.state = State.done
+
+    def boom(src: object, dst: object) -> None:
+        raise OSError("disk gone")
+
+    monkeypatch.setattr("hubd.vault.os.replace", boom)
+    with pytest.raises(OSError, match="disk gone"):
+        save_step(path, step)
+    assert path.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_save_adds_missing_review_section(tmp_path: Path) -> None:
+    path = tmp_path / "1.md"
+    path.write_text("---\nstep: 1\ntitle: T\nstate: done\n---\n\n## Runs\n")
+    step = _load_step(path)
+    step.review = Review(verdict="approve")
+    save_step(path, step)
+    assert path.read_text().endswith("## Runs\n\n## Review\nverdict: approve\ncomment:\n")
+    assert _load_step(path).review == step.review
+
+
+def test_save_keeps_crlf_and_missing_final_newline(tmp_path: Path) -> None:
+    path = tmp_path / "1.md"
+    path.write_bytes(
+        b"---\r\nstep: 1\r\ntitle: T\r\nstate: todo\r\n---\r\n## Review\r\nverdict:\r\ncomment: x"
+    )
+    step = _load_step(path)
+    step.state = State.doing
+    step.review = Review(verdict="changes", comment="x")
+    save_step(path, step)
+    assert path.read_bytes() == (
+        b"---\r\nstep: 1\r\ntitle: T\r\nstate: doing\r\n---\r\n"
+        b"## Review\r\nverdict: changes\r\ncomment: x"
+    )
