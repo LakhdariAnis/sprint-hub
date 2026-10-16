@@ -16,6 +16,20 @@ can run the demo or the tests without Claude or Omarchy installed.
 3. **Adapters only for the Claude runner.** Interface and fake for `AgentRunner`, direct calls for theme and notifications.
    Covers the biggest risk with less code. Theme and notify changes still spread.
 
+### What steps 108–111 showed (facts for the options, not a decision)
+- **Fake.** `FakeRunner` (`runners/fake.py`, ~50 lines) runs the whole tick-then-end loop in tests with no Claude,
+  in under a second. To see each tick, the test swaps the runner's `sleep`; nothing else is patched.
+- **The interface moved once.** Writing the real runner (109) showed `resume` also needs the step: the hook needs
+  `HUB_RUN=<step id>`, and a session→step map in memory is lost when hubd restarts. With options 2 and 3 that was a
+  change to `base.py`, `fake.py` and one test. With option 1 it would have touched each caller.
+- **Flags in one place.** `runners/claude.py` names `--model`, `--session-id`, `--resume` once, with the doc link.
+  `hubd doctor` reads the same names, so a renamed flag is one edit and shows as ✘ before a run fails.
+- **More outside formats than planned.** The done signal adds two contracts: the `SessionEnd` hook input on stdin
+  and the `hooks` block in `~/.claude/settings.json`. A real hook input is in `tests/fixtures/hook/` (captured with
+  `claude --init-only`, no tokens spent).
+- **Cost.** `runners/` is 3 files, ~120 lines with the protocol; one direct `subprocess.Popen` call would be ~15.
+  The notifier (`Notifier`, step 112) and the theme source are not built yet, so options 2 and 3 differ only in code not written yet.
+
 ## Decision
 TODO(Anis)
 
