@@ -53,7 +53,7 @@ def test_resume_runs_the_same_step_again(tmp_path: Path) -> None:
         runner = FakeRunner(run_ended, delay=0)
         await runner.start(STEP, "s1", "sonnet", tmp_path, "go")
         await runner.tasks["s1"]
-        await runner.resume("s1", tmp_path, "fix it")
+        await runner.resume(STEP, "s1", tmp_path, "fix it")
         await runner.tasks["s1"]
 
     asyncio.run(main())
