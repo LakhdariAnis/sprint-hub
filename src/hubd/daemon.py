@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from watchfiles import awatch
+
 from hubd.model import Run, State, Step
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
@@ -61,6 +63,15 @@ class Hub:
     def repo(self, project: str) -> Path | None:
         settings = self.index.projects.get(project)
         return self.vault / settings.repo if settings and settings.repo else None
+
+    async def watch(self, stop: asyncio.Event) -> None:
+        """Reload each changed `.md` file in the vault and in each repo's `sprint/` until `stop`."""
+        # shortcut: repos are picked once at start; a project added later needs a hubd restart.
+        repos = [r / "sprint" for p in self.index.projects if (r := self.repo(p))]
+        paths = [self.vault, *(r for r in repos if r.is_dir())]
+        async for changes in awatch(*paths, watch_filter=_is_md, debounce=50, stop_event=stop):
+            for path in sorted({p for _, p in changes}):
+                await self.reload(Path(path))
 
     async def reload(self, path: Path) -> None:
         """Bring one changed file into the index and tell subscribers what changed."""
@@ -174,6 +185,10 @@ class Hub:
             self.emit({"type": "step", **step_json(entry)})
             self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
             return new
+
+
+def _is_md(_: object, path: str) -> bool:
+    return path.endswith(".md")  # also skips save_step's `.tmp` files
 
 
 def vault_path() -> Path:

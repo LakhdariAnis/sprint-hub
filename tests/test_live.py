@@ -1,6 +1,10 @@
 import asyncio
+import time
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from hubd.api import create_app
 from hubd.daemon import Hub
 
 STEPS = Path("projects") / "demo" / "steps"
@@ -90,3 +94,15 @@ def test_project_edit_reloads_all(vault: Path, hub: Hub) -> None:
 
     assert asyncio.run(main()) == [{"type": "reload"}]
     assert hub.index.projects["demo"].model == "opus"
+
+
+def test_file_edit_shows_in_get_within_1s(vault: Path, hub: Hub) -> None:
+    path = hub.vault / STEPS / "101.md"
+    edited = path.read_text().replace("state: todo", "state: doing")
+    with TestClient(create_app(hub)) as client:
+        time.sleep(0.2)  # let the watcher start
+        path.write_text(edited)
+        written = time.monotonic()
+        while client.get("/steps/demo/101").json()["state"] != "doing":
+            assert time.monotonic() - written < 1, "edit not seen within 1 s"
+            time.sleep(0.02)

@@ -1,3 +1,6 @@
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from importlib.metadata import version
 from pathlib import Path
 
@@ -21,7 +24,18 @@ class RunEnded(BaseModel):
 
 
 def create_app(hub: Hub | None = None) -> FastAPI:
-    app = FastAPI(title="hubd")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if hub is None:
+            yield
+            return
+        stop = asyncio.Event()
+        watcher = asyncio.create_task(hub.watch(stop))
+        yield
+        stop.set()
+        await watcher
+
+    app = FastAPI(title="hubd", lifespan=lifespan)
 
     @app.exception_handler(InvalidTransition)
     async def conflict(_: Request, exc: InvalidTransition) -> JSONResponse:
