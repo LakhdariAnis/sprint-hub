@@ -145,8 +145,8 @@ def _guard[T](index: Index, path: Path, load: Callable[[Path], T]) -> T | None:
 
 def _file_error(path: Path, exc: Exception) -> FileError:
     if isinstance(exc, yaml.MarkedYAMLError) and exc.problem_mark:
-        # mark is 0-based inside the frontmatter, which starts after the `---` on line 1
-        return FileError(path, exc.problem_mark.line + 2, f"bad YAML: {exc.problem}")
+        # python-frontmatter keeps the newline after `---`, so the 0-based mark + 1 = file line
+        return FileError(path, exc.problem_mark.line + 1, f"bad YAML: {exc.problem}")
     if isinstance(exc, ValidationError):
         errors = exc.errors()
         first = errors[0]["loc"][0] if errors[0]["loc"] else None

@@ -5,7 +5,7 @@ import frontmatter
 import pytest
 
 from hubd.model import Review, Run, State, TaskState
-from hubd.vault import load_vault, parse_body, parse_run, split_sections
+from hubd.vault import FileError, load_vault, parse_body, parse_run, split_sections
 
 VAULT = Path(__file__).parent / "fixtures" / "vault"
 STEPS = VAULT / "projects" / "demo" / "steps"
@@ -53,8 +53,7 @@ def test_body_without_review_section() -> None:
 
 def test_load_vault_good_fixtures() -> None:
     index = load_vault(VAULT)
-    assert index.errors == []
-    assert list(index.projects) == ["demo"]
+    assert list(index.projects) == ["broken", "demo"]
     assert [(e.project, e.step.step) for e in index.steps] == [
         ("demo", "101"),
         ("demo", "102"),
@@ -86,3 +85,22 @@ def test_step_id_keeps_leading_zero(tmp_path: Path) -> None:
     index = load_vault(tmp_path)
     assert index.errors == []
     assert index.steps[0].step.step == "02"
+
+
+def test_each_broken_file_gives_one_error() -> None:
+    steps = VAULT / "projects" / "broken" / "steps"
+    assert load_vault(VAULT).errors == [
+        FileError(steps / "201.md", 3, "bad YAML: mapping values are not allowed in this context"),
+        FileError(
+            steps / "202.md",
+            4,
+            "state: Input should be 'todo', 'doing', 'done', 'changes' or 'approved'",
+        ),
+        FileError(steps / "203.md", None, "title: Field required"),
+    ]
+
+
+def test_missing_project_file_is_an_error(tmp_path: Path) -> None:
+    (tmp_path / "projects" / "p").mkdir(parents=True)
+    [error] = load_vault(tmp_path).errors
+    assert error.path == tmp_path / "projects" / "p" / "project.md"
