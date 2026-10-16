@@ -3,8 +3,8 @@
 Status: 2026-10-16. This file sets the **scope and order** of v2. It overrides the `MVP` / `v2` / `later` tags in
 `docs/HUB-DESIGN.md`. HUB-DESIGN stays the long-term picture. This file says what gets built, and when.
 
-Each version is one sprint. Each version ends with something that runs, tests that pass in CI and a short demo.
-Only the current sprint has step files. The next sprint's steps are written when it starts, so the plan can use
+A version takes one or more sprints. Sprint sizes and weeks follow the time rules of the `new-sprint` skill (≤ 15 h planned of an 18 h budget, one ISO week each); the sprint table with weeks and ETA is in `sprint/README.md`. Each version ends with something that runs, tests that pass in CI and a short demo.
+Only the current version has step files. Later sprints' steps are written when it starts, so the plan can use
 what the last sprint taught.
 
 ---
@@ -58,7 +58,7 @@ project held together with tape.
 
 ## Versions
 
-### v2.0 — Core loop, laptop only (Sprint 1, ids `101`–`108`)
+### v2.0 — Core loop, laptop only (Sprints 1–2, ids `101`–`105`, `201`–`204`)
 Start a step, watch the checklist live, the run ends, review it, approve (local merge) or request changes.
 Runs fully in demo mode. Tests and CI are green.
 
@@ -77,17 +77,26 @@ Tools (the only ones allowed in v2.0):
 Cut from HUB-DESIGN's MVP: SQLite (an in-memory index rebuilt from the files is enough for one user), APScheduler,
 markdown-it-py, Syncthing, Obsidian, ntfy, Tailscale, Remote Control. Each one can come back in a later version, with an ADR.
 
-### v2.1 — Daily use (Sprint 2, ids `201`–…)
+### v2.1 — Daily use (Sprints 3–4)
 Things that make Anis use it every day instead of v1:
 deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manual tasks (`by: me`), questions inbox
 (read-only), command palette, systemd user service, one-time read-only import of BenWhispers' state.
 
-### v2.2 — Away from the laptop (Sprint 3, ids `301`–…)
+**Weekly planning** (new, from Anis 2026-10-16), same rules as the `new-sprint` skill:
+- Read `hours:` from step frontmatter and `Time: <h> h` from PROGRESS entries.
+- Sprint bar on the Project screen: planned / 15 h and actual / 18 h; turns red over budget.
+- **Week view** on Today: this week's `work` sprint and `personal` sprint across all projects, hours done vs planned, days left in the week. Warns on two sprints in one track, or none in `work`.
+- **Project ETA**: remaining sprints and hours, finish week, with the calibration factor (actual ÷ planned over the last 3 closed sprints).
+- Close a sprint at week end: move unfinished steps to the next sprint, ask for actual hours.
+- Data only from the md files (zero tokens). No calendar sync.
+
+
+### v2.2 — Away from the laptop (Sprint 5)
 Review and approve from the phone without building an app:
 Syncthing + Obsidian approve flow, phone push (ntfy over Tailscale), `--remote-control` on runs.
 Each of these new tools needs its ADR first. If one ADR can't justify its tool, cut that feature.
 
-### v2.3 — Insight (Sprint 4, ids `401`–…)
+### v2.3 — Insight (Sprints 6–7)
 `needs:` dependencies, create a step from the app, diff view, time and tokens per step, chat history, daily log.
 Tokens and chats read the undocumented Claude logs through `UsageSource` (rule 4).
 
