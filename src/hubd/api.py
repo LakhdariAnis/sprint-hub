@@ -9,9 +9,16 @@ from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
 from hubd.states import InvalidTransition
+from hubd.vault import StepEntry
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
+
+
+def step_json(entry: StepEntry) -> dict:
+    """A step as the list views need it: frontmatter, runs, review and checklist."""
+    tasks = [{"text": t.text, "state": t.state.name} for t in entry.tasks]
+    return {"project": entry.project, **entry.step.model_dump(mode="json"), "tasks": tasks}
 
 
 class RunEnded(BaseModel):
@@ -36,6 +43,22 @@ def create_app(hub: Hub | None = None) -> FastAPI:
 
     if hub is None:
         return app
+
+    @app.get("/projects")
+    def projects() -> list[dict]:
+        return [{"id": k, **p.model_dump(mode="json")} for k, p in hub.index.projects.items()]
+
+    @app.get("/projects/{project}/steps")
+    def project_steps(project: str) -> list[dict]:
+        if project not in hub.index.projects:
+            raise NotFound(f"no project {project}")
+        return [step_json(e) for e in hub.index.steps if e.project == project]
+
+    @app.get("/steps/{project}/{step_id}")
+    def step(project: str, step_id: str) -> dict:
+        entry = hub.entry(project, step_id)
+        spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
+        return {**step_json(entry), "spec": spec}
 
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
