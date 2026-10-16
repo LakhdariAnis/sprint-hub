@@ -1,4 +1,5 @@
 from importlib.metadata import version
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -64,6 +65,13 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     def today() -> dict[str, list[dict]]:
         return {k: [step_json(e) for e in v] for k, v in hub.today().items()}
 
+    @app.get("/errors")
+    def errors() -> list[dict]:
+        return [
+            {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
+            for e in hub.index.errors
+        ]
+
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
         return (await hub.start(project, step_id)).model_dump(mode="json")
@@ -73,6 +81,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
         return (await hub.run_ended(body.session_id, body.step)).model_dump(mode="json")
 
     return app
+
+
+def _relative(path: Path, root: Path) -> Path:
+    return path.relative_to(root) if path.is_relative_to(root) else path
 
 
 def serve_app() -> FastAPI:

@@ -63,3 +63,20 @@ def test_today(vault: Path) -> None:
     assert ids(today["running"]) == ["102"]
     assert ids(today["review"]) == ["103"]
     assert ids(today["next"]) == ["107", "101", "104"]
+
+
+def test_errors_show_the_broken_files(hub: Hub) -> None:
+    errors = TestClient(create_app(hub)).get("/errors").json()
+    assert errors == [
+        {
+            "path": "projects/broken/steps/201.md",
+            "line": 3,
+            "message": "bad YAML: mapping values are not allowed in this context",
+        },
+        {
+            "path": "projects/broken/steps/202.md",
+            "line": 4,
+            "message": "state: Input should be 'todo', 'doing', 'done', 'changes' or 'approved'",
+        },
+        {"path": "projects/broken/steps/203.md", "line": None, "message": "title: Field required"},
+    ]
