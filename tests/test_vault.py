@@ -155,3 +155,33 @@ def test_save_adds_and_removes_fields(tmp_path: Path) -> None:
     save_step(path, step)
     assert "branch:" not in path.read_text()
     assert _load_step(path).needs == ["100", "99"]
+
+
+def test_save_review_keeps_trailing_comment(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "104")
+    before = path.read_text().splitlines()
+    step = _load_step(path)
+    step.review = Review(verdict="approve", comment="Looks good.")
+    save_step(path, step)
+    after = path.read_text().splitlines()
+    assert [b for a, b in zip(before, after, strict=True) if a != b] == [
+        "verdict: approve       # I write: approve | changes",
+        "comment: Looks good.",
+    ]
+    assert _load_step(path).review == step.review
+
+
+def test_save_review_fills_empty_lines(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    step = _load_step(path)
+    step.review = Review(verdict="changes", comment="Fix the typo.")
+    save_step(path, step)
+    assert "## Review\nverdict: changes\ncomment: Fix the typo.\n\n## Questions" in path.read_text()
+
+
+def test_save_review_rejects_multiline_comment(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    step = _load_step(path)
+    step.review = Review(verdict="changes", comment="a\nb")
+    with pytest.raises(ValueError, match="one line"):
+        save_step(path, step)

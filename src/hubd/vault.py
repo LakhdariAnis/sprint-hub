@@ -145,7 +145,26 @@ def save_step(path: Path, step: Step) -> None:
         if getattr(step, name) != getattr(current, name)
     }
     _set_fields(lines, 1, end, changed, eol)
+    if step.review and step.review != current.review:
+        _save_review(lines, step.review, eol)
     _write_atomic(path, "\n".join(lines).encode())
+
+
+def _save_review(lines: list[str], review: Review, eol: str) -> None:
+    if "\n" in review.comment:
+        raise ValueError("review comment must be one line")
+    values = {"verdict": review.verdict or "", "comment": review.comment}
+    heading = next(
+        (i for i, line in enumerate(lines) if (m := _HEADING.match(line)) and m[1] == "Review"),
+        None,
+    )
+    if heading is None:
+        at = len(lines) - 1 if lines[-1] == "" else len(lines)
+        fields = [f"{k}: {v}".rstrip() + eol for k, v in values.items()]
+        lines[at:at] = ["", f"## Review{eol}", *fields]
+        return
+    end = next((i for i in range(heading + 1, len(lines)) if _HEADING.match(lines[i])), len(lines))
+    _set_fields(lines, heading + 1, end, values, eol)
 
 
 def _format(value: object) -> str | None:
