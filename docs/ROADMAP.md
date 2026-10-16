@@ -20,7 +20,7 @@ These rules fix the four weak points from the review (2026-10-16).
   write a list of questions or options, but never the answer. These are the parts an interviewer will ask about.
 
 ### 2. Every tool has to justify itself
-- v2.0 uses only the tools in the table below. A new tool needs an ADR in `docs/decisions/` (template there)
+- 0.2.0 uses only the tools in the table below. A new tool needs an ADR in `docs/decisions/` (template there)
   **before** the step that adds it: the problem it solves, the simpler choice it beats, and what it costs.
 - Max two new tools per version.
 - No tool is added "for the portfolio". If it would only look good, it stays out.
@@ -58,11 +58,11 @@ project held together with tape.
 
 ## Versions
 
-### v2.0 — Core loop, laptop only (Sprints 1–2, ids `101`–`105`, `201`–`204`)
+### 0.2.0 — Core loop, laptop only (Sprints 1–2, ids `101`–`105`, `201`–`204`)
 Start a step, watch the checklist live, the run ends, review it, approve (local merge) or request changes.
 Runs fully in demo mode. Tests and CI are green.
 
-Tools (the only ones allowed in v2.0):
+Tools (the only ones allowed in 0.2.0):
 
 | Tool | Why |
 |---|---|
@@ -77,7 +77,7 @@ Tools (the only ones allowed in v2.0):
 Cut from HUB-DESIGN's MVP: SQLite (an in-memory index rebuilt from the files is enough for one user), APScheduler,
 markdown-it-py, Syncthing, Obsidian, ntfy, Tailscale, Remote Control. Each one can come back in a later version, with an ADR.
 
-### v2.1 — Daily use (Sprints 3–4)
+### 0.3.0 — Daily use (Sprints 3–4)
 Things that make Anis use it every day instead of v1:
 deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manual tasks (`by: me`), questions inbox
 (read-only), command palette, systemd user service, one-time read-only import of BenWhispers' state.
@@ -91,12 +91,12 @@ deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manua
 - Data only from the md files (zero tokens). No calendar sync.
 
 
-### v2.2 — Away from the laptop (Sprint 5)
+### 0.4.0 — Away from the laptop (Sprint 5)
 Review and approve from the phone without building an app:
 Syncthing + Obsidian approve flow, phone push (ntfy over Tailscale), `--remote-control` on runs.
 Each of these new tools needs its ADR first. If one ADR can't justify its tool, cut that feature.
 
-### v2.3 — Insight (Sprints 6–7)
+### 1.0.0 — Insight (Sprints 6–7)
 `needs:` dependencies, create a step from the app, diff view, time and tokens per step, chat history, daily log.
 Tokens and chats read the undocumented Claude logs through `UsageSource` (rule 4).
 
