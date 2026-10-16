@@ -1,6 +1,9 @@
 import argparse
+import sys
 
 import uvicorn
+
+from hubd import install
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
@@ -8,8 +11,13 @@ PORT = 8765
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="hubd")
-    parser.add_argument("command", nargs="?", default="serve", choices=["serve"])
-    parser.parse_args()
+    commands = ["serve", "install-hook", "uninstall-hook"]
+    parser.add_argument("command", nargs="?", default="serve", choices=commands)
+    command = parser.parse_args().command
+    if command == "install-hook":
+        sys.exit(install.change(install.with_hook))
+    if command == "uninstall-hook":
+        sys.exit(install.change(install.uninstalled))
     uvicorn.run("hubd.api:app", host=HOST, port=PORT)
 
 
