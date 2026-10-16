@@ -5,21 +5,14 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from hubd.daemon import Hub, NotFound, vault_path
+from hubd.daemon import Hub, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
 from hubd.states import InvalidTransition
-from hubd.vault import StepEntry
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
-
-
-def step_json(entry: StepEntry) -> dict:
-    """A step as the list views need it: frontmatter, runs, review and checklist."""
-    tasks = [{"text": t.text, "state": t.state.name} for t in entry.tasks]
-    return {"project": entry.project, **entry.step.model_dump(mode="json"), "tasks": tasks}
 
 
 class RunEnded(BaseModel):
