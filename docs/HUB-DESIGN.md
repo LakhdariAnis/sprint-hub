@@ -80,6 +80,13 @@ Out of scope: habits, streaks, generic personal todos, time blocking, calendar s
 - **Weekly summary** `later`: one page per week, generated from the daily logs.
 - **Stats** `later`: per project, steps per week, review turnaround, changes-requested rate, model mix.
 
+### Chats
+- **Chat history per project** `v2`: every Claude Code chat run in the project's repo (read from `~/.claude/projects/<repo-path>/`), newest first: title, date, length, model, linked step, lines changed. `Enter` resumes it (`claude --resume <id>`). Preview shows the first prompt and the last answer.
+- **Automatic titles** `v2`: use the `ai-title` Claude Code already writes for each chat (no extra tokens, no skill needed). Fallback: the first prompt. I can rename a chat in the Hub; the name is saved in the vault, never in Claude's files.
+- **Link chats to steps** `v2`: chats started by the Hub are linked by session id. Other chats can be linked to a step by hand.
+- **Chat chains** `v2`: follow `continued-in` so a chat that was continued shows as one thread.
+- **Search chats** `later`: full-text search over all chat logs.
+
 ### Agent (my Claude Code setup)
 - **Skills view** `v2`: every skill in `~/.claude/skills/` and from plugins, with its description, use count and last use (read from session logs). One key opens the `SKILL.md` in `$EDITOR`. Plugin skills are read-only.
 - **Usage view** `v2`: tokens and time per day, per project, per model, and per skill. Built on the same session-log parsing as "Time and tokens per step".
@@ -113,6 +120,7 @@ Out of scope: habits, streaks, generic personal todos, time blocking, calendar s
 | **Run** | One Claude Code session on a step or task: session id, model, start, end, tokens, result. | Listed in the vault step file. |
 | **Review** | My verdict on a run: approve or request changes, with a comment. | `## Review` section of the vault step file. |
 | **Question** | Something Claude asks me during a run, and my answer. | `## Questions` section of the vault step file. |
+| **Chat** | Any Claude Code session in a project's repo: id, title (`ai-title` or my rename), dates, model, cost-state, linked step. A Run is a Chat the Hub started. | Read from `~/.claude/projects/<repo-path>/<id>.jsonl`. My renames and links live in `~/Hub/projects/<project>/chats.md`. |
 | **Skill** | A Claude Code skill: name, description, source (mine or a plugin), use count, last use. | `~/.claude/skills/<name>/SKILL.md` (read-only to hubd). |
 | **Deadline** | Date, text, tags, an optional link to a project or step. | `~/Hub/deadlines.md`, or `due:` in frontmatter. |
 | **Log entry** | What happened on one day. | `~/Hub/log/YYYY-MM-DD.md` (written by the daemon). |
@@ -203,6 +211,11 @@ The spec files in the repo keep the current format (`sprint/<id>-<slug>.md`, `.c
   - MVP: Obsidian + Syncthing to edit the vault (approve, deadlines), ntfy for pushes, and the Claude mobile app for Remote Control of running sessions.
   - v2: the phone app, reworked from IDC. Its Flutter client (foreground service, persistent WebSocket, pairing, inbox, design) is reused. The IDC Python daemon is not run: its typed `{type, payload}` message router moves into hubd as a WebSocket endpoint, so there is one daemon with one set of allowed commands. The app connects over Tailscale (LAN discovery only as a fallback at home). ntfy is then dropped.
 
+Token rules:
+- hubd never calls a model by itself. Parsing, titles, usage, reminders and merges cost zero tokens.
+- Prefer one session per step. Starting single tasks makes each new session read the spec and files again.
+- Request changes resumes the same chat only while it is small. A long chat (e.g. over ~150k tokens of context) gets a fresh session with a short summary of the review comment and the diff instead.
+
 Flow example (approve from phone): I set `verdict: approve` in Obsidian on the phone → Syncthing syncs →
 hubd sees the change and validates it → merges the branch locally → sets `state: approved` → logs it → pushes
 "05a merged" to the phone.
@@ -248,16 +261,17 @@ hubd sees the change and validates it → merges the branch locally → sets `st
 5. **Review queue**: done steps with report, diffstat and checklist. Approve or request changes.
 6. **Questions**: open questions across projects.
 7. **Deadlines**: list by date. Add, move, mark done.
-8. **Log** (v2): daily log pages.
-9. **Agent** (v2): skills, usage, and project setup.
-10. **Command palette**: overlay on every screen.
+8. **Chats** (v2): chat history per project, also a tab on the Project screen.
+9. **Log** (v2): daily log pages.
+10. **Agent** (v2): skills, usage, and project setup.
+11. **Command palette**: overlay on every screen.
 
 ### Keys
 | Key | Action |
 |---|---|
 | `Super+Shift+S` | Open or focus the app (Hyprland binding, as today) |
 | `Ctrl+K` or `:` | Command palette |
-| `g t` / `g p` / `g r` / `g q` / `g d` / `g a` | Go to Today / Projects / Review / Questions / Deadlines / Agent |
+| `g t` / `g p` / `g r` / `g q` / `g d` / `g c` / `g a` | Go to Today / Projects / Review / Questions / Deadlines / Chats / Agent |
 | `j` / `k`, `Enter`, `Esc` | Move, open, back |
 | `s` | Start the selected step (model from frontmatter) |
 | `t` | Start only the selected task |
@@ -319,3 +333,4 @@ hubd sees the change and validates it → merges the branch locally → sets `st
 8. **Internship project (v2)**: link it to `internship/tracker.csv`, or replace the CSV with vault steps?
 9. **IDC rework scope**: which IDC screens stay (remote mouse, keyboard, sensors, easter eggs) and which are cut to keep the app focused.
 10. **Plan limits**: can the Usage view show how much of the Pro/Max limit is left? Only if Claude Code exposes it in a file or command. Otherwise show tokens only.
+11. **Claude log format**: `~/.claude/projects/*.jsonl` (`ai-title`, `cost-state`, `continued-in`) is internal and undocumented, so it can change with any Claude Code update. The parser must skip unknown lines and never crash.
