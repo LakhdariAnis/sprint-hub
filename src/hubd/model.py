@@ -66,7 +66,7 @@ class Step(BaseModel):
     """`projects/<project>/steps/<id>.md`: frontmatter, plus runs and review from the body."""
 
     # YAML reads `step: 101` as an int; keep ids as strings.
-    # shortcut: `step: 02` still loads as 2 (YAML drops the zero), fix in the loader (104).
+    # `step: 02` loads as 2 (YAML drops the zero); the loader puts the zero back.
     model_config = ConfigDict(coerce_numbers_to_str=True)
 
     step: str

@@ -4,8 +4,8 @@ from pathlib import Path
 import frontmatter
 import pytest
 
-from hubd.model import Review, Run
-from hubd.vault import parse_body, parse_run, split_sections
+from hubd.model import Review, Run, State, TaskState
+from hubd.vault import load_vault, parse_body, parse_run, split_sections
 
 VAULT = Path(__file__).parent / "fixtures" / "vault"
 STEPS = VAULT / "projects" / "demo" / "steps"
@@ -49,3 +49,40 @@ def test_body_with_run_and_review() -> None:
 
 def test_body_without_review_section() -> None:
     assert parse_body("## Runs\n") == ([], None)
+
+
+def test_load_vault_good_fixtures() -> None:
+    index = load_vault(VAULT)
+    assert index.errors == []
+    assert list(index.projects) == ["demo"]
+    assert [(e.project, e.step.step) for e in index.steps] == [
+        ("demo", "101"),
+        ("demo", "102"),
+        ("demo", "103"),
+        ("demo", "104"),
+        ("demo", "105"),
+    ]
+    assert [e.step.state for e in index.steps] == list(State)
+    assert index.steps[3].step.review == Review(
+        verdict="changes", comment="Add the install section."
+    )
+
+
+def test_step_joined_with_spec_and_checklist() -> None:
+    entries = {e.step.step: e for e in load_vault(VAULT).steps}
+    doing = entries["102"]
+    assert doing.spec == VAULT / "demo-repo" / "sprint" / "102-api.md"
+    assert [t.state for t in doing.tasks] == [TaskState.done, TaskState.doing, TaskState.todo]
+    assert (entries["101"].spec, entries["101"].tasks) == (None, [])
+
+
+def test_step_id_keeps_leading_zero(tmp_path: Path) -> None:
+    steps = tmp_path / "projects" / "p" / "steps"
+    steps.mkdir(parents=True)
+    (tmp_path / "projects" / "p" / "project.md").write_text(
+        "---\nname: p\nmodel: sonnet\nmerge: auto\n---\n"
+    )
+    (steps / "02.md").write_text("---\nstep: 02\ntitle: x\nstate: todo\n---\n")
+    index = load_vault(tmp_path)
+    assert index.errors == []
+    assert index.steps[0].step.step == "02"
