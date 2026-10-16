@@ -81,6 +81,17 @@ def parse_run(line: str) -> Run:
     return Run.model_validate(fields)
 
 
+def format_run(run: Run) -> str:
+    """The inverse of `parse_run`; minute precision, like the file."""
+    parts = [f"{run.started:%Y-%m-%d %H:%M}", run.model, f"session {run.session}"]
+    if run.minutes is not None:
+        parts.append(f"{run.minutes} min")
+    if run.tokens is not None:
+        parts.append(f"{run.tokens} tokens")
+    parts.append(f"task {run.task}")
+    return "- " + " · ".join(parts)
+
+
 def parse_review(lines: list[str]) -> Review:
     """`key: value` lines; an empty value means not set."""
     fields = {}
@@ -145,19 +156,45 @@ def save_step(path: Path, step: Step) -> None:
         if getattr(step, name) != getattr(current, name)
     }
     _set_fields(lines, 1, end, changed, eol)
+    if step.runs != current.runs:
+        _save_runs(lines, current.runs, step.runs, eol)
     if step.review and step.review != current.review:
         _save_review(lines, step.review, eol)
     _write_atomic(path, "\n".join(lines).encode())
+
+
+def _save_runs(lines: list[str], old: list[Run], new: list[Run], eol: str) -> None:
+    """Append the runs in `new` after `old`; existing run lines are never rewritten."""
+    if new[: len(old)] != old:
+        raise ValueError("runs can only be appended")
+    added = [format_run(run) + eol for run in new[len(old) :]]
+    heading = _find_heading(lines, "Runs")
+    if heading is None:
+        at = _find_heading(lines, "Review")
+        if at is None:
+            at = len(lines) - 1 if lines[-1] == "" else len(lines)
+        lines[at:at] = [f"## Runs{eol}", *added, eol]
+        return
+    at = heading + 1
+    for i in range(heading + 1, len(lines)):
+        if _HEADING.match(lines[i]):
+            break
+        if lines[i].startswith("- "):
+            at = i + 1
+    lines[at:at] = added
+
+
+def _find_heading(lines: list[str], name: str) -> int | None:
+    return next(
+        (i for i, line in enumerate(lines) if (m := _HEADING.match(line)) and m[1] == name), None
+    )
 
 
 def _save_review(lines: list[str], review: Review, eol: str) -> None:
     if "\n" in review.comment:
         raise ValueError("review comment must be one line")
     values = {"verdict": review.verdict or "", "comment": review.comment}
-    heading = next(
-        (i for i, line in enumerate(lines) if (m := _HEADING.match(line)) and m[1] == "Review"),
-        None,
-    )
+    heading = _find_heading(lines, "Review")
     if heading is None:
         at = len(lines) - 1 if lines[-1] == "" else len(lines)
         fields = [f"{k}: {v}".rstrip() + eol for k, v in values.items()]

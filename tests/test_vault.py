@@ -8,6 +8,7 @@ from hubd.model import Review, Run, State, TaskState
 from hubd.vault import (
     FileError,
     _load_step,
+    format_run,
     load_vault,
     parse_body,
     parse_run,
@@ -226,3 +227,52 @@ def test_save_keeps_crlf_and_missing_final_newline(tmp_path: Path) -> None:
         b"---\r\nstep: 1\r\ntitle: T\r\nstate: doing\r\n---\r\n"
         b"## Review\r\nverdict: changes\r\ncomment: x"
     )
+
+
+NEW_RUN = Run(started=datetime(2026, 10, 16, 9, 5), model="opus", session="abc-1")
+
+
+def test_format_run_round_trip() -> None:
+    line = "- 2026-10-15 22:10 · sonnet · session 7b1e…a04 · 42 min · 1200000 tokens · task all"
+    assert format_run(parse_run(line)) == line
+    assert format_run(NEW_RUN) == "- 2026-10-16 09:05 · opus · session abc-1 · task all"
+
+
+def test_save_appends_run_to_empty_runs_section(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "101")
+    step = _load_step(path)
+    step.runs = [NEW_RUN]
+    save_step(path, step)
+    assert "## Runs\n- 2026-10-16 09:05 · opus · session abc-1 · task all\n\n## Review" in (
+        path.read_text()
+    )
+    assert _load_step(path).runs == [NEW_RUN]
+
+
+def test_save_appends_run_after_existing_runs(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    before = path.read_text()
+    step = _load_step(path)
+    step.runs = [*step.runs, NEW_RUN]
+    save_step(path, step)
+    old_line = "- 2026-10-15 21:40 · sonnet · session 3f2a…c91 · task all\n"
+    assert path.read_text() == before.replace(old_line, old_line + format_run(NEW_RUN) + "\n")
+
+
+def test_save_adds_missing_runs_section_before_review(tmp_path: Path) -> None:
+    path = tmp_path / "1.md"
+    path.write_text("---\nstep: 1\ntitle: T\nstate: todo\n---\n\n## Review\nverdict:\n")
+    step = _load_step(path)
+    step.runs = [NEW_RUN]
+    save_step(path, step)
+    assert path.read_text().endswith(
+        "---\n\n## Runs\n" + format_run(NEW_RUN) + "\n\n## Review\nverdict:\n"
+    )
+
+
+def test_save_refuses_to_rewrite_runs(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    step = _load_step(path)
+    step.runs = [NEW_RUN]
+    with pytest.raises(ValueError, match="appended"):
+        save_step(path, step)
