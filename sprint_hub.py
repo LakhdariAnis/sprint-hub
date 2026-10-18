@@ -15,7 +15,17 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.theme import Theme
-from textual.widgets import Button, DataTable, Footer, Header, ListItem, ListView, Label, ProgressBar, Static
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Label,
+    ListItem,
+    ListView,
+    ProgressBar,
+    Static,
+)
 
 CONFIG = Path("~/.config/sprint-hub/projects.toml").expanduser()
 THEME_FILE = Path("~/.local/state/omarchy/current/theme/colors.toml").expanduser()
@@ -227,7 +237,11 @@ class StepsScreen(Screen):
         head = ""
         if items:
             lines = [f"{icon[m]} {escape(txt)}" for m, txt in items]
-            head = f"[b]Checklist {ticked}/{total}[/b]\n" + "\n".join(lines) + "\n\n[dim]── spec ──[/dim]\n"
+            head = (
+                f"[b]Checklist {ticked}/{total}[/b]\n"
+                + "\n".join(lines)
+                + "\n\n[dim]── spec ──[/dim]\n"
+            )
         text = s["spec"].read_text() if s["spec"] else "(no spec file in sprint/)"
         body = head + escape("\n".join(text.splitlines()[:25]))
         if body != getattr(self, "_desc", None):
