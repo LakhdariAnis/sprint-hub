@@ -1,7 +1,7 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
   import Spec from '../Spec.svelte'
-  import { loadDiffstat, loadStep, loadSteps } from '../steps'
+  import { approveStep, loadDiffstat, loadStep, loadSteps, requestChanges } from '../steps'
   import { put, steps } from '../store.svelte'
 
   let { project, id }: { project?: string; id?: string } = $props()
@@ -29,12 +29,28 @@
   const open = (p: string, i: string) => (location.hash = `#/review/${encodeURIComponent(p)}/${encodeURIComponent(i)}`)
   const done = $derived(sel?.tasks.filter((t) => t.state === 'done').length ?? 0)
 
+  // Both moves are only valid from `done`; hubd's refusal (e.g. a merge conflict) shows under the buttons.
+  let confirming = $state(false)
+  let comment = $state('')
+  let busy = $state(false)
+  let moveError = $state('')
+  const move = (run: () => Promise<unknown>) => {
+    if (!sel) return
+    busy = true
+    moveError = ''
+    run().then(() => ((confirming = false), (comment = '')), (e: Error) => (moveError = e.message)).finally(() => (busy = false))
+  }
+  const approve = () => sel && move(() => approveStep(sel.project, sel.step).then((d) => put(sel.project, d)))
+  const changesRequested = () => sel && move(() => requestChanges(sel.project, sel.step, comment.trim()).then((d) => put(sel.project, d)))
+
   let stat = $state<string | null>(null)
   let statError = $state('')
   $effect(() => {
     if (!sel) return
     const [p, i] = [sel.project, sel.step]
     stat = null
+    confirming = false
+    moveError = ''
     statError = ''
     loadStep(p, i).then((d) => put(p, d), () => {})
     loadDiffstat(p, i).then((d) => (stat = d), (e: Error) => (statError = e.message))
@@ -70,6 +86,25 @@
         <span class="mi"><span class="dim">state</span> {sel.state}</span>
         <span class="mi"><span class="dim">branch</span> <span class="mono">{sel.branch ?? '–'}</span> {#if sel.branch}<Copy text={sel.branch} label="branch" />{/if}</span>
       </div>
+      {#if sel.state === 'done'}
+        <section class="pane">
+          <div class="ph">Decide</div>
+          <div class="pad act">
+            {#if confirming}
+              <span>Merge <span class="mono">{sel.branch ?? 'nothing'}</span> into main?</span>
+              <button class="btn" type="button" disabled={busy} onclick={approve}>Yes, approve</button>
+              <button class="btn ghost" type="button" disabled={busy} onclick={() => (confirming = false)}>Cancel</button>
+            {:else}
+              <button class="btn" type="button" disabled={busy} onclick={() => (confirming = true)}>Approve</button>
+            {/if}
+            <form onsubmit={(e) => (e.preventDefault(), changesRequested())}>
+              <input bind:value={comment} placeholder="What should change? (one line)" aria-label="Review comment" />
+              <button class="btn ghost" type="submit" disabled={busy || !comment.trim()}>Request changes</button>
+            </form>
+            {#if moveError}<p class="err in">{moveError}</p>{/if}
+          </div>
+        </section>
+      {/if}
       <section class="pane">
         <div class="ph">Diffstat <span class="mono dim">main...{sel.branch ?? '–'}</span></div>
         {#if statError}<p class="err in">{statError}</p>
@@ -121,6 +156,13 @@
   .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .mi { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--lt); border-radius: 6px; font-size: 12px; background: var(--bg); }
+  .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .act form { display: flex; flex: 1; gap: 8px; min-width: 260px; }
+  .act input { flex: 1; height: 30px; padding: 0 10px; border: 1px solid var(--mu); border-radius: 6px; background: var(--dk); }
+  .act .err { flex-basis: 100%; }
+  .btn { height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--ac); background: var(--ac); color: var(--bg); font-weight: 500; cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--mu); }
+  .btn:disabled { opacity: 0.6; cursor: default; }
   pre { margin: 0; font: 12px var(--mono); white-space: pre-wrap; }
   .task { padding: 8px 16px; border-bottom: 1px solid var(--lt); }
   .task.done { color: var(--fgd); }
