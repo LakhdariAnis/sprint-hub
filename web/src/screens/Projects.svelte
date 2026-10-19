@@ -9,6 +9,8 @@
     () => (status = 'failed'),
   )
 
+  const open = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
+  const key = (e: KeyboardEvent, id: string) => e.key === 'Enter' && open(id)
 </script>
 
 <header class="hd"><h1>Projects</h1></header>
@@ -22,7 +24,7 @@
     </thead>
     <tbody>
       {#each rows as r (r.id)}
-        <tr class="row">
+        <tr class="row" tabindex="0" onclick={() => open(r.id)} onkeydown={(e) => key(e, r.id)}>
           <td class="name">{r.name}</td>
           <td class="mono dim">{r.path}</td>
           <td class="n mono">{r.approved}/{r.total}</td>
