@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import subprocess
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -25,9 +26,18 @@ from hubd.vault import (
     save_step,
 )
 
+# shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
+MAIN = "main"
+
 
 class NotFound(Exception):
     pass
+
+
+class MergeConflict(InvalidTransition):
+    def __init__(self, reason: str, files: list[str]):
+        super().__init__(reason)
+        self.files = files
 
 
 def step_json(entry: StepEntry) -> dict:
@@ -196,6 +206,52 @@ class Hub:
             self.emit({"type": "step", **step_json(entry)})
             self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
             return new
+
+    async def approve(self, project: str, step_id: str) -> Step:
+        """Merge the step branch into main (locally, never pushed), then mark it approved."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            new = transition(entry.step, Event.approve, Actor.me)
+            repo, branch = self.repo(project), entry.step.branch
+            if repo and branch:  # no repo or no branch (a `by: me` step): nothing to merge
+                try:
+                    await asyncio.to_thread(_merge, repo, branch)
+                except MergeConflict as exc:
+                    self.notifier.notify(
+                        "Merge conflict", f"{project} {step_id}: {', '.join(exc.files)}"
+                    )
+                    raise
+            save_step(entry.path, new)
+            entry.step = new
+            self.emit({"type": "step", **step_json(entry)})
+            return new
+
+
+def _git(repo: Path, *args: str) -> str:
+    result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    if result.returncode:
+        raise InvalidTransition(f"git {' '.join(args)}: {(result.stderr or result.stdout).strip()}")
+    return result.stdout.strip()
+
+
+def _merge(repo: Path, branch: str) -> None:
+    """`git merge --no-ff branch`; refuse a dirty repo or wrong branch, abort a conflict."""
+    head = _git(repo, "branch", "--show-current")
+    if head != MAIN:
+        raise InvalidTransition(f"{repo}: on branch '{head}', not '{MAIN}'; switch to {MAIN} first")
+    # Untracked files are not changes; git itself refuses if one would be overwritten.
+    if _git(repo, "status", "--porcelain", "--untracked-files=no"):
+        raise InvalidTransition(f"{repo}: uncommitted changes; commit or stash them first")
+    try:
+        _git(repo, "merge", "--no-ff", "--no-edit", branch)
+    except InvalidTransition as exc:
+        files = _git(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+        if not files:
+            raise  # not a conflict (e.g. no such branch): git's own message says why
+        _git(repo, "merge", "--abort")
+        raise MergeConflict(
+            f"merge {branch}: conflict in {', '.join(files)}; merge aborted", files
+        ) from exc
 
 
 def _is_md(_: object, path: str) -> bool:
