@@ -3,6 +3,7 @@
   import { router } from './route.svelte'
   import Empty from './screens/Empty.svelte'
   import Sidebar from './Sidebar.svelte'
+  import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
 
   const r = $derived(router.route)
@@ -19,6 +20,7 @@
       {:else if r.name === 'step'}<Empty title="{r.project} · step {r.id}" crumb="Projects · {r.project}" />
       {:else}<Empty title="Review" />{/if}
     </main>
+    <StatusLine />
   </div>
 </div>
 
