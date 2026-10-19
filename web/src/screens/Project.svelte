@@ -12,6 +12,13 @@
   }
 
   let sel = $state(0)
+  const keys = (e: KeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'j') sel = Math.min(sel + 1, steps.length - 1)
+    else if (e.key === 'ArrowUp' || e.key === 'k') sel = Math.max(sel - 1, 0)
+    else if (e.key === 'Enter' && cur) location.hash = `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(cur.step)}`
+    else return
+    e.preventDefault()
+  }
   let detail = $state<Step | null>(null)
   const cur = $derived(steps[sel])
 
@@ -31,6 +38,8 @@
     )
   })
 </script>
+
+<svelte:window onkeydown={keys} />
 
 <header class="hd">
   <div class="bc">Projects</div>
