@@ -6,7 +6,8 @@ from importlib.metadata import version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from hubd.daemon import Hub, NotFound, step_json, vault_path
@@ -17,6 +18,8 @@ from hubd.states import InvalidTransition
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
+# shortcut: the built app is found next to the source, so it only runs from a source checkout.
+WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
 
 
 class RunEnded(BaseModel):
@@ -51,7 +54,7 @@ def create_app(hub: Hub | None = None) -> FastAPI:
         return {"ok": True, "version": version("hubd")}
 
     if hub is None:
-        return app
+        return _with_web(app)
 
     @app.get("/projects")
     def projects() -> list[dict]:
@@ -98,6 +101,19 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
         return (await hub.run_ended(body.session_id, body.step)).model_dump(mode="json")
+
+    return _with_web(app)
+
+
+def _with_web(app: FastAPI) -> FastAPI:
+    """Serve the built Svelte app at `/`. Mounted last so the API routes match first."""
+    if WEB_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+    else:
+
+        @app.get("/", response_class=PlainTextResponse)
+        def no_web() -> str:
+            return "The web app is not built. Run: cd web && npm install && npm run build\n"
 
     return app
 
