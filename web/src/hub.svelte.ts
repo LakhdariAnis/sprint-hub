@@ -1,5 +1,6 @@
 import type { FileError } from './projects'
-import { put } from './store.svelte'
+import { loadStep } from './steps'
+import { put, steps } from './store.svelte'
 
 // Live numbers for the frame: hubd health, the counts shown in the bar and the tabs, and broken vault files.
 export const hub = $state({ live: null as boolean | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[] })
@@ -19,15 +20,26 @@ async function load() {
   }
 }
 
-load()
-
 // The one `/events` stream of the app. `step` and `tasks` carry the whole step; the store takes it as is.
-const events = new EventSource('/events')
-const take = (e: MessageEvent) => {
-  const { type: _, ...s } = JSON.parse(e.data)
-  put(s.project, s)
+function connect() {
+  const events = new EventSource('/events')
+  const take = (e: MessageEvent) => {
+    const { type: _, ...s } = JSON.parse(e.data)
+    put(s.project, s)
+  }
+  events.addEventListener('tasks', take)
+  events.addEventListener('step', (e) => (take(e), load()))
+  // A fixed file comes back as a `step` event, so every load re-reads the error list.
+  for (const type of ['error', 'removed', 'reload']) events.addEventListener(type, load)
+  // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
+  events.onopen = () => {
+    load()
+    for (const s of Object.values(steps)) loadStep(s.project, s.step).then((d) => put(s.project, d), () => {})
+  }
+  events.onerror = () => {
+    hub.live = false
+    // The browser retries a dropped stream itself, but gives up on an error reply (e.g. the dev proxy's 502).
+    if (events.readyState === EventSource.CLOSED) setTimeout(connect, 3000)
+  }
 }
-events.addEventListener('tasks', take)
-events.addEventListener('step', (e) => (take(e), load()))
-// A fixed file comes back as a `step` event, so every load re-reads the error list.
-for (const type of ['error', 'removed', 'reload']) events.addEventListener(type, load)
+connect()

@@ -22,9 +22,11 @@ def main() -> None:
         sys.exit(install.change(install.uninstalled))
     if args.demo:
         print(f"hubd demo (built-in data, FakeRunner): http://{HOST}:{PORT}/", flush=True)
-        uvicorn.run("hubd.demo:demo_app", factory=True, host=HOST, port=PORT)
-        return
-    uvicorn.run("hubd.api:serve_app", factory=True, host=HOST, port=PORT)
+        app = "hubd.demo:demo_app"
+    else:
+        app = "hubd.api:serve_app"
+    # Open `/events` streams never close on their own: without a timeout, Ctrl+C waits for them forever.
+    uvicorn.run(app, factory=True, host=HOST, port=PORT, timeout_graceful_shutdown=1)
 
 
 if __name__ == "__main__":
