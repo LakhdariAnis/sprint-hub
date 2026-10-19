@@ -32,7 +32,11 @@ class NotFound(Exception):
 
 def step_json(entry: StepEntry) -> dict:
     """A step as clients see it: frontmatter, runs, review and checklist."""
-    tasks = [{"text": t.text, "state": t.state.name} for t in entry.tasks]
+    tasks = [
+        {"text": t.text, "state": t.state.name}
+        | ({"at": at.isoformat(timespec="seconds")} if (at := entry.seen.get(t.text)) else {})
+        for t in entry.tasks
+    ]
     return {"project": entry.project, **entry.step.model_dump(mode="json"), "tasks": tasks}
 
 
@@ -102,6 +106,8 @@ class Hub:
             self.emit({"type": "error", "path": str(path), "line": line, "message": message})
             return
         entry = _join(project, path, step, self.repo(project))
+        if old:
+            entry.seen = old.seen
         self.index.steps.append(entry)
         self.index.steps.sort(key=lambda e: (e.project, e.path))
         if old is None or old.step != step:
@@ -113,6 +119,11 @@ class Hub:
             if repo and path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
                 tasks = parse_tasks(path.read_text()) if path.exists() else []
                 if tasks != entry.tasks:
+                    before, now = {t.text: t.state for t in entry.tasks}, datetime.now()
+                    entry.seen = {
+                        t.text: now if before.get(t.text) != t.state else entry.seen.get(t.text)
+                        for t in tasks
+                    }
                     entry.tasks = tasks
                     self.emit({"type": "tasks", **step_json(entry)})
 

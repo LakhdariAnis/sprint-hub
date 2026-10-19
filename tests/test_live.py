@@ -45,6 +45,24 @@ def test_checklist_tick_emits_tasks(vault: Path, hub: Hub) -> None:
     [event] = asyncio.run(main())
     assert event["type"] == "tasks"
     assert [t["state"] for t in event["tasks"]] == ["done", "done", "todo"]
+    # Only the task hubd saw change gets a time; the others changed before it watched.
+    assert ["at" in t for t in event["tasks"]] == [False, True, False]
+
+
+def test_tick_time_stays_when_other_tasks_change(vault: Path, hub: Hub) -> None:
+    path = hub.vault / "demo-repo" / "sprint" / "progress" / "102.md"
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text(path.read_text().replace("[~]", "[x]"))
+            await hub.reload(path)
+            path.write_text(path.read_text().replace("[ ]", "[~]"))
+            await hub.reload(path)
+            return drain(queue)
+
+    first, second = asyncio.run(main())
+    assert second["tasks"][1]["at"] == first["tasks"][1]["at"]
+    assert "at" in second["tasks"][2]
 
 
 def test_broken_edit_is_an_error_then_fixed(vault: Path, hub: Hub) -> None:
