@@ -25,7 +25,7 @@ def main() -> None:
         app = "hubd.demo:demo_app"
     else:
         app = "hubd.api:serve_app"
-    # Open `/events` streams never close on their own: without a timeout, Ctrl+C waits for them forever.
+    # Open `/events` streams never close on their own: without a timeout, Ctrl+C waits forever.
     uvicorn.run(app, factory=True, host=HOST, port=PORT, timeout_graceful_shutdown=1)
 
 
