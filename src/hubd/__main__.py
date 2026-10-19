@@ -21,6 +21,7 @@ def main() -> None:
     if command == "uninstall-hook":
         sys.exit(install.change(install.uninstalled))
     if args.demo:
+        print(f"hubd demo (built-in data, FakeRunner): http://{HOST}:{PORT}/docs", flush=True)
         uvicorn.run("hubd.demo:demo_app", factory=True, host=HOST, port=PORT)
         return
     uvicorn.run("hubd.api:serve_app", factory=True, host=HOST, port=PORT)
