@@ -14,11 +14,13 @@ class FakeRunner:
         self.run_ended = run_ended
         self.delay = delay
         self.tasks: dict[str, asyncio.Task[None]] = {}  # keeps runs alive; tests await them
+        self.resumed: list[tuple[str, str]] = []  # (session_id, prompt) of each resume
 
     async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
     async def resume(self, step: Step, session_id: str, cwd: Path, prompt: str) -> None:
+        self.resumed.append((session_id, prompt))
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
     async def _run(self, session_id: str, step_id: str, cwd: Path) -> None:

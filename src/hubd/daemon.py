@@ -172,15 +172,24 @@ class Hub:
             if repo is None:
                 raise InvalidTransition(f"project {project}: no repo to run in")
             new = transition(entry.step, Event.start, Actor.daemon)
-            model = new.model or settings.model
-            session = str(uuid4())
+            # Changes requested: continue the last run's chat, the review comment is the prompt.
+            last = new.runs[-1] if entry.step.state == State.changes and new.runs else None
+            comment = new.review.comment if new.review else ""
+            resume = last if last and comment else None
+            if resume:
+                model, session = resume.model, resume.session
+            else:
+                model, session = new.model or settings.model, str(uuid4())
             started = datetime.now().replace(second=0, microsecond=0)  # the file keeps minutes
             new.runs = [*new.runs, Run(started=started, model=model, session=session)]
             before = entry.path.read_bytes()
             save_step(entry.path, new)
             old, entry.step = entry.step, new
             try:
-                await self.runner.start(new, session, model, repo, f"/sprint-{step_id}")
+                if resume:
+                    await self.runner.resume(new, session, repo, comment)
+                else:
+                    await self.runner.start(new, session, model, repo, f"/sprint-{step_id}")
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too
                 entry.step = old

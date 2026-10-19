@@ -18,6 +18,8 @@ FIXTURE = Path(__file__).parents[2] / "tests" / "fixtures" / "vault"
 
 # Extra demo data on top of the fixture: (path under the vault, text).
 EXTRA = {
+    "demo-repo/sprint/103-ui.md": "# Step 103 — Show the list\n\n## Tasks\n"
+    "- Draw the list\n- Sort it\n",
     "demo-repo/sprint/104-docs.md": "# Step 104 — Write the docs\n\n## Tasks\n"
     "- Write the intro\n- Add the install section\n- Link the API\n",
     "demo-repo/sprint/progress/104.md": "# Step 104\n- [x] Write the intro\n"
