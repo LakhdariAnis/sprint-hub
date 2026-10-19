@@ -29,8 +29,7 @@ These rules fix the four weak points from the review (2026-10-16).
 - No design-only steps: a doc step only documents code that already exists (e.g. `107`). Design happens inside the step that builds it (an ASCII sketch agreed in chat, then code).
 - **Commit after every finished checklist task** (see `CLAUDE.md` → Commits). The git history must show the
   project growing in small working steps, not big dumps.
-- Every step report ends with **"Explain-back"**: 3 questions about this step's code that Anis must be able to
-  answer without notes. If he can't, the next step waits.
+- Every step ends with a check Anis does in the browser, then his OK. (Explain-back dropped, Anis, 2026-10-19.)
 
 ### 4. Never depend directly on things we don't control
 **The problem, in plain words:** HUB-DESIGN reads Claude Code's private files (`~/.claude/projects/*.jsonl`,
@@ -79,6 +78,7 @@ markdown-it-py, Syncthing, Obsidian, ntfy, Tailscale, Remote Control. Each one c
 
 ### 0.3.0 — Daily use (Sprints 3–4)
 Things that make Anis use it every day instead of v1:
+Omarchy theme and the Settings screen (both moved from 0.2.0 on 2026-10-19),
 deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manual tasks (`by: me`), questions inbox
 (read-only), command palette, systemd user service, one-time read-only import of BenWhispers' state.
 
@@ -96,8 +96,9 @@ Review and approve from the phone without building an app:
 Syncthing + Obsidian approve flow, phone push (ntfy over Tailscale), `--remote-control` on runs.
 Each of these new tools needs its ADR first. If one ADR can't justify its tool, cut that feature.
 
-### 1.0.0 — Insight (Sprints 6–7)
+### 1.0.0 — Insight (Sprints 6–8)
 `needs:` dependencies, create a step from the app, diff view, time and tokens per step, chat history, daily log.
+Sprint 8 (added 2026-10-19): the Chats, New chat and Planning chat screens from the mockups.
 Tokens and chats read the undocumented Claude logs through `UsageSource` (rule 4).
 
 ### Parked (not planned)
