@@ -4,6 +4,7 @@
   import Empty from './screens/Empty.svelte'
   import Project from './screens/Project.svelte'
   import Projects from './screens/Projects.svelte'
+  import Step from './screens/Step.svelte'
   import Sidebar from './Sidebar.svelte'
   import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
@@ -19,7 +20,7 @@
       {#if r.name === 'today'}<Empty title="Today" />
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
-      {:else if r.name === 'step'}<Empty title="{r.project} · step {r.id}" crumb="Projects · {r.project}" />
+      {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
       {:else}<Empty title="Review" />{/if}
     </main>
     <StatusLine />
