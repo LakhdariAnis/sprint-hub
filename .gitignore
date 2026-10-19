@@ -4,3 +4,5 @@ node_modules/
 ui/dist/
 .coverage
 web/dist/
+web/test-results/
+web/playwright-report/
