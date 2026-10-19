@@ -1,4 +1,5 @@
-export type Task = { text: string; state: 'todo' | 'doing' | 'done' }
+// `at`: when hubd saw the task reach its state (ISO time); missing if that was before hubd started.
+export type Task = { text: string; state: 'todo' | 'doing' | 'done'; at?: string }
 export type Step = {
   project: string
   step: string

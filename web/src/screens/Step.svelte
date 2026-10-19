@@ -23,6 +23,17 @@
       .finally(() => (busy = false))
   }
 
+  // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
+  let now = $state(Date.now())
+  $effect(() => {
+    const t = setInterval(() => (now = Date.now()), 30_000)
+    return () => clearInterval(t)
+  })
+  const time = (t: { state: string; at?: string }) =>
+    !t.at || t.state === 'todo' ? '—'
+    : t.state === 'done' ? t.at.slice(11, 16)
+    : `${Math.max(0, Math.floor((now - Date.parse(t.at)) / 60_000))}m`
+
   $effect(() => {
     error = ''
     loadStep(project, id).then(
@@ -59,6 +70,7 @@
             <span class="mono dim">{i + 1}</span>
             <span class="box" aria-label={t.state}></span>
             <span>{t.text}</span>
+            <span class="mono tm" class:dim={t.state !== 'doing'}>{time(t)}</span>
           </div>
         {:else}
           <p class="dim pad">No checklist yet.</p>
@@ -107,8 +119,9 @@
   .pane { background: var(--bg); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ph { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--lt); font-weight: 600; }
   .pad { padding: 12px 16px; }
-  .task { display: grid; grid-template-columns: 20px 22px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--lt); font-size: 14px; }
+  .task { display: grid; grid-template-columns: 20px 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--lt); font-size: 14px; }
   .task.done { color: var(--fgd); }
+  .tm { font-size: 12px; font-weight: 400; }
   .task.doing { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); font-weight: 600; }
   .box { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--mu); display: grid; place-items: center; }
   .done .box { background: var(--g); border-color: var(--g); }
