@@ -2,6 +2,7 @@
   import './theme.css'
   import { router } from './route.svelte'
   import Empty from './screens/Empty.svelte'
+  import Projects from './screens/Projects.svelte'
   import Sidebar from './Sidebar.svelte'
   import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
@@ -15,7 +16,7 @@
     <TopBar />
     <main>
       {#if r.name === 'today'}<Empty title="Today" />
-      {:else if r.name === 'projects'}<Empty title="Projects" />
+      {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Empty title={r.project} crumb="Projects" />
       {:else if r.name === 'step'}<Empty title="{r.project} · step {r.id}" crumb="Projects · {r.project}" />
       {:else}<Empty title="Review" />{/if}
