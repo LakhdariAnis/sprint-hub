@@ -1,4 +1,4 @@
-"""`hubd --demo`: the whole loop on built-in data. Nothing here touches the real vault or settings."""
+"""`hubd --demo`: the whole loop on built-in data. Never touches the real vault or settings."""
 
 import shutil
 import subprocess
