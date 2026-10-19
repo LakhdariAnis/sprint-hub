@@ -70,7 +70,7 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     def step(project: str, step_id: str) -> dict:
         entry = hub.entry(project, step_id)
         spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
-        return {**step_json(entry), "spec": spec}
+        return {**step_json(entry), "spec": spec, "path": str(entry.path)}
 
     @app.get("/today")
     def today() -> dict[str, list[dict]]:

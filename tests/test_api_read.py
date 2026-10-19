@@ -42,6 +42,7 @@ def test_one_step_has_spec_checklist_runs_review(hub: Hub) -> None:
     assert len(step["tasks"]) == 3
     assert step["runs"][0]["session"] == "3f2a…c91"
     assert step["review"] == {"verdict": None, "comment": ""}
+    assert step["path"] == str(hub.vault / "projects" / "demo" / "steps" / "102.md")
     assert client.get("/steps/demo/101").json()["spec"] is None
     assert client.get("/steps/demo/999").status_code == 404
 
