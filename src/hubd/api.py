@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from hubd.daemon import Hub, NotFound, step_json, vault_path
+from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -44,6 +44,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     @app.exception_handler(InvalidTransition)
     async def conflict(_: Request, exc: InvalidTransition) -> JSONResponse:
         return JSONResponse({"detail": exc.reason}, status_code=409)
+
+    @app.exception_handler(MergeConflict)
+    async def merge_conflict(_: Request, exc: MergeConflict) -> JSONResponse:
+        return JSONResponse({"detail": exc.reason, "files": exc.files}, status_code=409)
 
     @app.exception_handler(NotFound)
     async def not_found(_: Request, exc: NotFound) -> JSONResponse:
@@ -97,6 +101,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
         return (await hub.start(project, step_id)).model_dump(mode="json")
+
+    @app.post("/steps/{project}/{step_id}/approve")
+    async def approve(project: str, step_id: str) -> dict:
+        return (await hub.approve(project, step_id)).model_dump(mode="json")
 
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:

@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 from conftest import Recorder
+from fastapi.testclient import TestClient
 
+from hubd.api import create_app
 from hubd.daemon import Hub, MergeConflict
 from hubd.model import State
 from hubd.states import InvalidTransition
@@ -81,3 +83,18 @@ def test_wrong_state_is_refused(hub: Hub, repo: Path) -> None:
     with pytest.raises(InvalidTransition, match="no 'approve' from 'changes'"):
         approve(hub, "104")
     assert git(repo, "rev-parse", "HEAD") == head
+
+
+def test_api_approve_and_conflict(hub: Hub, repo: Path) -> None:
+    client = TestClient(create_app(hub))
+    assert client.post("/steps/demo/104/approve").status_code == 409
+    (repo / "ui.txt").write_text("other\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "clash")
+    response = client.post("/steps/demo/103/approve")
+    assert response.status_code == 409
+    assert response.json()["files"] == ["ui.txt"]
+    git(repo, "reset", "-q", "--hard", "HEAD~1")
+    response = client.post("/steps/demo/103/approve")
+    assert response.status_code == 200
+    assert response.json()["state"] == "approved"
