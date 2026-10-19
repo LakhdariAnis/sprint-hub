@@ -81,6 +81,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
         spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
         return {**step_json(entry), "spec": spec, "path": str(entry.path)}
 
+    @app.get("/steps/{project}/{step_id}/diffstat")
+    async def diffstat(project: str, step_id: str) -> dict:
+        return {"stat": await hub.diffstat(project, step_id)}
+
     @app.get("/today")
     def today() -> dict[str, list[dict]]:
         return {k: [step_json(e) for e in v] for k, v in hub.today().items()}

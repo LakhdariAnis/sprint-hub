@@ -98,3 +98,10 @@ def test_api_approve_and_conflict(hub: Hub, repo: Path) -> None:
     response = client.post("/steps/demo/103/approve")
     assert response.status_code == 200
     assert response.json()["state"] == "approved"
+
+
+def test_diffstat(hub: Hub, repo: Path) -> None:
+    client = TestClient(create_app(hub))
+    stat = client.get("/steps/demo/103/diffstat").json()["stat"]
+    assert "1 file changed" in stat
+    assert client.get("/steps/demo/nope/diffstat").status_code == 404

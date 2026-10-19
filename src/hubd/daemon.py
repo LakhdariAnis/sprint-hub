@@ -244,6 +244,14 @@ class Hub:
             self.emit({"type": "step", **step_json(entry)})
             return new
 
+    async def diffstat(self, project: str, step_id: str) -> str:
+        """`git diff --stat main...branch`; empty when the step has no repo or branch."""
+        entry = self.entry(project, step_id)
+        repo, branch = self.repo(project), entry.step.branch
+        if not repo or not branch:
+            return ""
+        return await asyncio.to_thread(_git, repo, "diff", "--stat", f"{MAIN}...{branch}")
+
 
 def _git(repo: Path, *args: str) -> str:
     result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
