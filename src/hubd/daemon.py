@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd.model import Run, State, Step
+from hubd.model import Review, Run, State, Step
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
@@ -51,9 +51,7 @@ def step_json(entry: StepEntry) -> dict:
 
 
 class Hub:
-    def __init__(
-        self, vault: Path, runner: Callable[[RunEnded], AgentRunner], notifier: Notifier
-    ):
+    def __init__(self, vault: Path, runner: Callable[[RunEnded], AgentRunner], notifier: Notifier):
         self.vault = vault = vault.resolve()  # watchfiles reports absolute paths
         self.index = load_vault(vault)
         self.queues: set[asyncio.Queue[dict]] = set()
@@ -221,6 +219,17 @@ class Hub:
                         "Merge conflict", f"{project} {step_id}: {', '.join(exc.files)}"
                     )
                     raise
+            save_step(entry.path, new)
+            entry.step = new
+            self.emit({"type": "step", **step_json(entry)})
+            return new
+
+    async def request_changes(self, project: str, step_id: str, comment: str) -> Step:
+        """Save the comment in `## Review`, state `changes`; the next start resumes the chat."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            new = transition(entry.step, Event.request_changes, Actor.me)
+            new.review = Review(verdict="changes", comment=comment)
             save_step(entry.path, new)
             entry.step = new
             self.emit({"type": "step", **step_json(entry)})

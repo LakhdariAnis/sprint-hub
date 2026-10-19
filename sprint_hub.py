@@ -4,6 +4,7 @@
 # dependencies = ["textual"]
 # ///
 """sprint-hub: browse sprint steps of your projects and start them."""
+
 import re
 import subprocess
 import tomllib
@@ -35,14 +36,14 @@ STATUS_LABEL = {"done": "✔ done", "doing": "● in progress", "todo": "○ tod
 
 # ---------- data ----------
 
+
 def load_projects() -> list[dict]:
     if not CONFIG.exists():
         CONFIG.parent.mkdir(parents=True, exist_ok=True)
         CONFIG.write_text(DEFAULT_CONFIG)
     data = tomllib.loads(CONFIG.read_text())
     return [
-        {"name": p["name"], "path": Path(p["path"]).expanduser()}
-        for p in data.get("project", [])
+        {"name": p["name"], "path": Path(p["path"]).expanduser()} for p in data.get("project", [])
     ]
 
 
@@ -109,15 +110,17 @@ def load_steps(path: Path) -> list[dict]:
             status = "todo"
         spec = next(iter((path / "sprint").glob(f"{sid}-*.md")), None)
         _, ticked, total = checklist(path, sid)
-        steps.append({
-            "id": sid,
-            "title": fm.get("description", "").removeprefix(f"Sprint {sid} - "),
-            "model": fm.get("model", "?"),
-            "status": status,
-            "spec": spec,
-            "ticked": ticked,
-            "total": total,
-        })
+        steps.append(
+            {
+                "id": sid,
+                "title": fm.get("description", "").removeprefix(f"Sprint {sid} - "),
+                "model": fm.get("model", "?"),
+                "status": status,
+                "spec": spec,
+                "ticked": ticked,
+                "total": total,
+            }
+        )
     return steps
 
 
@@ -143,6 +146,7 @@ def omarchy_theme() -> Theme | None:
 
 
 # ---------- screens ----------
+
 
 class ProjectsScreen(Screen):
     BINDINGS = [Binding("r", "refresh", "Refresh")]
@@ -268,7 +272,9 @@ class StepsScreen(Screen):
             return
         subprocess.Popen(
             ["setsid", "xdg-terminal-exec", f"--dir={self.project['path']}", "bw", s["id"]],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
         self.app.notify(f"Started bw {s['id']}")
 
