@@ -27,3 +27,14 @@ def test_demo_lists_projects_and_start_runs_fake_runner() -> None:
         while client.get("/steps/demo/104").json()["state"] != "done":
             assert time.monotonic() < deadline, "FakeRunner did not end the run"
             time.sleep(0.05)
+
+
+def test_demo_approve_merges_into_the_demo_repo() -> None:
+    with TestClient(demo_app()) as client:
+        response = client.post("/steps/demo/103/approve")
+        assert response.json()["state"] == "approved"
+        repo = client.get("/steps/demo/103").json()["path"].split("/projects/")[0] + "/demo-repo"
+    log = subprocess.run(
+        ["git", "log", "-1", "--format=%s"], cwd=repo, capture_output=True, text=True
+    )
+    assert log.stdout.strip() == "Merge branch 'step/103-ui'"
