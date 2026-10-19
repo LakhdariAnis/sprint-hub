@@ -8,7 +8,7 @@ export type Step = {
   by: 'claude' | 'me'
   model: string | null
   branch: string | null
-  runs: { minutes: number | null }[]
+  runs: { started?: string; minutes: number | null }[]
   tasks: Task[]
   spec?: string | null
   path?: string
