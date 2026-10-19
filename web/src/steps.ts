@@ -9,6 +9,7 @@ export type Step = {
   runs: { minutes: number | null }[]
   tasks: Task[]
   spec?: string | null
+  path?: string
 }
 
 // API order is by file name, which is step order.
