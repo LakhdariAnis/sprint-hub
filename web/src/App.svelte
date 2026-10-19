@@ -1,13 +1,32 @@
 <script lang="ts">
-  let live = $state<boolean | null>(null)
+  import './theme.css'
+  import { router } from './route.svelte'
+  import Empty from './screens/Empty.svelte'
+  import Projects from './screens/Projects.svelte'
+  import Sidebar from './Sidebar.svelte'
+  import StatusLine from './StatusLine.svelte'
+  import TopBar from './TopBar.svelte'
 
-  fetch('/health')
-    .then((r) => r.ok && r.json())
-    .then((body) => (live = body?.ok === true))
-    .catch(() => (live = false))
+  const r = $derived(router.route)
 </script>
 
-<main>
-  <h1>sprint-hub</h1>
-  <p>{live === null ? 'checking hubd…' : live ? 'hubd live' : 'hubd down'}</p>
-</main>
+<div class="app">
+  <Sidebar />
+  <div class="mn">
+    <TopBar />
+    <main>
+      {#if r.name === 'today'}<Empty title="Today" />
+      {:else if r.name === 'projects'}<Projects />
+      {:else if r.name === 'project'}<Empty title={r.project} crumb="Projects" />
+      {:else if r.name === 'step'}<Empty title="{r.project} · step {r.id}" crumb="Projects · {r.project}" />
+      {:else}<Empty title="Review" />{/if}
+    </main>
+    <StatusLine />
+  </div>
+</div>
+
+<style>
+  .app { height: 100%; display: flex; overflow: hidden; }
+  .mn { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  main { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+</style>
