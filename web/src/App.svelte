@@ -1,11 +1,13 @@
 <script lang="ts">
   import './theme.css'
+  import './keys.svelte'
   import { router } from './route.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
   import Projects from './screens/Projects.svelte'
   import Step from './screens/Step.svelte'
   import Today from './screens/Today.svelte'
+  import Help from './Help.svelte'
   import Sidebar from './Sidebar.svelte'
   import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
@@ -14,6 +16,7 @@
 </script>
 
 <div class="app">
+  <Help />
   <Sidebar />
   <div class="mn">
     <TopBar />
