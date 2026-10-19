@@ -283,6 +283,7 @@ hubd sees the change and validates it → merges the branch locally → sets `st
 | `x` | Tick a manual task or deadline |
 | `n` | New step (v2) or new deadline |
 | `e` | Open the file in `$EDITOR` |
+| `y` / `Y` | Copy the selected item's value (path, branch, command) / the code block under focus |
 | `/` | Filter the current list |
 | `?` | Key help |
 
