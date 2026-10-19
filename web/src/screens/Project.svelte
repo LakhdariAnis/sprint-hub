@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Copy from '../Copy.svelte'
   import { goal, loadStep, loadSteps, type Step } from '../steps'
 
   let { project }: { project: string } = $props()
@@ -72,7 +73,7 @@
       <h2>{cur.step} · {cur.title}</h2>
       <dl>
         <dt>Model</dt><dd class="mono">{cur.model ?? '–'}</dd>
-        <dt>Branch</dt><dd class="mono">{cur.branch ?? '–'}</dd>
+        <dt>Branch</dt><dd class="mono">{cur.branch ?? '–'} {#if cur.branch}<Copy text={cur.branch} label="branch" />{/if}</dd>
         <dt>State</dt><dd class="s-{cur.state}" style="color: var(--x)"><span class="dot"></span> {cur.state}</dd>
       </dl>
       <h3>Goal</h3>
