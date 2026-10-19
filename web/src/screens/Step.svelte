@@ -1,6 +1,6 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
-  import { loadStep } from '../steps'
+  import { loadStep, startStep } from '../steps'
   import { key, put, steps } from '../store.svelte'
 
   let { project, id }: { project: string; id: string } = $props()
@@ -11,6 +11,17 @@
   // Odd parts are fenced code blocks, each with its own copy button.
   const parts = $derived((s?.spec ?? '').split(/(```[^\n]*\n[\s\S]*?```)/))
   const code = (block: string) => block.replace(/^```[^\n]*\n/, '').replace(/\n?```$/, '')
+
+  // Only these states have a `start` move in the state table (src/hubd/states.py); hubd never runs `by: me` steps.
+  const canStart = $derived(s && (s.state === 'todo' || s.state === 'changes') && s.by !== 'me')
+  let busy = $state(false)
+  const start = () => {
+    busy = true
+    error = ''
+    startStep(project, id)
+      .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
+      .finally(() => (busy = false))
+  }
 
   $effect(() => {
     error = ''
@@ -30,6 +41,7 @@
       <span class="mi"><span class="dim">model</span> <span class="mono">{s.model ?? '–'}</span></span>
       <span class="mi"><span class="dim">branch</span> <span class="mono">{s.branch ?? '–'}</span> {#if s.branch}<Copy text={s.branch} label="branch" />{/if}</span>
       {#if s.path}<span class="mi"><span class="dim">file</span> <span class="mono">{s.path}</span> <Copy text={s.path} label="step file path" /></span>{/if}
+      {#if canStart}<button class="btn" type="button" disabled={busy} onclick={start}>Start <kbd>s</kbd></button>{/if}
     </div>
   {/if}
 </header>
@@ -85,6 +97,12 @@
     font-size: 11.5px; background: color-mix(in srgb, var(--x) 16%, transparent);
   }
   .chip::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--x); }
+  .btn {
+    margin-left: auto; height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--ac);
+    background: var(--ac); color: var(--bg); font-weight: 500; display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn kbd { background: transparent; border-color: color-mix(in srgb, var(--bg) 45%, transparent); color: var(--bg); }
   .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px; padding: 0 20px 14px; align-items: start; }
   .pane { background: var(--bg); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ph { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--lt); font-weight: 600; }
