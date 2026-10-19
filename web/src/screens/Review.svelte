@@ -1,6 +1,7 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
   import Spec from '../Spec.svelte'
+  import { useKeys } from '../keys.svelte'
   import { approveStep, loadDiffstat, loadStep, loadSteps, requestChanges } from '../steps'
   import { put, steps } from '../store.svelte'
 
@@ -43,6 +44,23 @@
   const approve = () => sel && move(() => approveStep(sel.project, sel.step).then((d) => put(sel.project, d)))
   const changesRequested = () => sel && move(() => requestChanges(sel.project, sel.step, comment.trim()).then((d) => put(sel.project, d)))
 
+  // j/k walk the three groups as one list; the URL holds the selection.
+  const flat = $derived(groups.flatMap((g) => g.list))
+  const step = (d: number) => {
+    const n = flat[Math.max(0, Math.min(flat.length - 1, flat.indexOf(sel!) + d))]
+    if (n) open(n.project, n.step)
+  }
+  let box = $state<HTMLInputElement>()
+  const confirmKey = () => confirming && !busy && approve()
+  useKeys({
+    j: () => step(1),
+    k: () => step(-1),
+    a: () => (sel?.state !== 'done' ? undefined : confirming ? confirmKey() : (confirming = true)),
+    y: confirmKey,
+    c: () => sel?.state === 'done' && box?.focus(),
+    Escape: () => (confirming = false),
+  })
+
   let stat = $state<string | null>(null)
   let statError = $state('')
   $effect(() => {
@@ -66,8 +84,9 @@
       <section class="pane">
         <div class="ph">{g.title} <span class="mono dim">{g.list.length}</span></div>
         {#each g.list as s (s.project + '/' + s.step)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <div class="row" class:on={sel === s} role="link" tabindex="0" onclick={() => open(s.project, s.step)}
-            onkeydown={(e) => e.key === 'Enter' && open(s.project, s.step)}>
+            onfocus={() => open(s.project, s.step)}>
             <span class="mono dim">{s.project}</span>
             <span class="mono">{s.step}</span>
             <span class="t">{s.title}</span>
@@ -98,7 +117,7 @@
               <button class="btn" type="button" disabled={busy} onclick={() => (confirming = true)}>Approve</button>
             {/if}
             <form onsubmit={(e) => (e.preventDefault(), changesRequested())}>
-              <input bind:value={comment} placeholder="What should change? (one line)" aria-label="Review comment" />
+              <input bind:this={box} bind:value={comment} onkeydown={(e) => e.key === 'Escape' && box?.blur()} placeholder="What should change? (one line)" aria-label="Review comment" />
               <button class="btn ghost" type="submit" disabled={busy || !comment.trim()}>Request changes</button>
             </form>
             {#if moveError}<p class="err in">{moveError}</p>{/if}
