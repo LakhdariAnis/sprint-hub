@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
@@ -20,6 +20,11 @@ HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
 # shortcut: the built app is found next to the source, so it only runs from a source checkout.
 WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
+
+
+class Changes(BaseModel):
+    # One line: the comment is one `comment:` field in the step file.
+    comment: str = Field(min_length=1, pattern=r"^[^\r\n]*\S[^\r\n]*$")
 
 
 class RunEnded(BaseModel):
@@ -105,6 +110,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     @app.post("/steps/{project}/{step_id}/approve")
     async def approve(project: str, step_id: str) -> dict:
         return (await hub.approve(project, step_id)).model_dump(mode="json")
+
+    @app.post("/steps/{project}/{step_id}/changes")
+    async def changes(project: str, step_id: str, body: Changes) -> dict:
+        return (await hub.request_changes(project, step_id, body.comment)).model_dump(mode="json")
 
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
