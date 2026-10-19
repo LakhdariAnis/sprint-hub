@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { loadProjects, type Row } from '../projects'
+  import { loadProjects, type FileError, type Row } from '../projects'
 
   let rows = $state<Row[]>([])
+  let errors = $state<FileError[]>([])
   let status = $state<'loading' | 'ready' | 'failed'>('loading')
 
   loadProjects().then(
-    (d) => ((rows = d.rows), (status = 'ready')),
+    (d) => ((rows = d.rows), (errors = d.errors), (status = 'ready')),
     () => (status = 'failed'),
   )
 
@@ -32,6 +33,9 @@
           <td class="n mono" class:y={r.review > 0}>{r.review}</td>
           <td class="n mono">{r.todo}</td>
         </tr>
+      {/each}
+      {#each errors as e}
+        <tr class="warn"><td colspan="6">⚠ <span class="mono">{e.path}{e.line ? `:${e.line}` : ''}</span> {e.message}</td></tr>
       {/each}
     </tbody>
   </table>
