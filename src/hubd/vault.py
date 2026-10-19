@@ -6,7 +6,7 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -42,6 +42,8 @@ class StepEntry:
     step: Step
     spec: Path | None = None
     tasks: list[Task] = field(default_factory=list)
+    # When hubd saw each task (by text) reach its state; only changes seen while it runs.
+    seen: dict[str, datetime | None] = field(default_factory=dict)
 
 
 @dataclass
