@@ -1,0 +1,38 @@
+/* All colours live here as variables. Sprint 3 swaps these for the Omarchy theme. */
+:root {
+  --bg: #2d353b;
+  --dk: #21272c;
+  --dkr: #181d20;
+  --lt: #343f44;
+  --sel: #3d484d;
+  --mu: #475258;
+  --fg: #d3c6aa;
+  --fg2: #9da9a0;
+  --fg3: #4f585e;
+  --ac: #7fbbb3;
+  --r: #e67e80;
+  --y: #dbbc7f;
+  --o: #e09d7f;
+  --g: #a7c080;
+  --c: #83c092;
+  --b: #7fbbb3;
+  --m: #d699b6;
+  --fgd: color-mix(in srgb, var(--fg) 76%, var(--bg));
+  --mono: 'Liberation Mono', 'Cousine', ui-monospace, monospace;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body { background: var(--dk); color: var(--fg); font: 13px/1.4 var(--sans); }
+button, input { font: inherit; color: inherit; }
+a { color: inherit; }
+.mono, kbd { font-family: var(--mono); }
+kbd {
+  font-size: 11px; padding: 0 4px; border: 1px solid var(--mu); border-radius: 4px;
+  color: var(--fg); background: var(--bg); line-height: 16px; display: inline-block;
+  min-width: 18px; text-align: center;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--x, var(--mu)); flex: none; display: inline-block; }
+.x-g { --x: var(--g); }
+.x-r { --x: var(--r); }
