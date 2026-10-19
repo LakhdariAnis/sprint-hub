@@ -1,13 +1,15 @@
 <script lang="ts">
-  let live = $state<boolean | null>(null)
+  import './theme.css'
+  import { router } from './route.svelte'
+  import Empty from './screens/Empty.svelte'
 
-  fetch('/health')
-    .then((r) => r.ok && r.json())
-    .then((body) => (live = body?.ok === true))
-    .catch(() => (live = false))
+  const r = $derived(router.route)
 </script>
 
 <main>
-  <h1>sprint-hub</h1>
-  <p>{live === null ? 'checking hubd…' : live ? 'hubd live' : 'hubd down'}</p>
+  {#if r.name === 'today'}<Empty title="Today" />
+  {:else if r.name === 'projects'}<Empty title="Projects" />
+  {:else if r.name === 'project'}<Empty title={r.project} crumb="Projects" />
+  {:else if r.name === 'step'}<Empty title="{r.project} · step {r.id}" crumb="Projects · {r.project}" />
+  {:else}<Empty title="Review" />{/if}
 </main>
