@@ -3,13 +3,13 @@ export type Route =
   | { name: 'projects' }
   | { name: 'project'; project: string }
   | { name: 'step'; project: string; id: string }
-  | { name: 'review' }
+  | { name: 'review'; project?: string; id?: string }
 
 export function parse(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent)
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
-  if (a === 'review') return { name: 'review' }
+  if (a === 'review') return { name: 'review', project: b, id: c }
   return { name: 'today' }
 }
 

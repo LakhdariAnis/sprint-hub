@@ -1,5 +1,6 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
+  import Spec from '../Spec.svelte'
   import { loadStep, startStep } from '../steps'
   import { key, put, steps } from '../store.svelte'
 
@@ -8,9 +9,6 @@
 
   const s = $derived(steps[key(project, id)])
   const done = $derived(s?.tasks.filter((t) => t.state === 'done').length ?? 0)
-  // Odd parts are fenced code blocks, each with its own copy button.
-  const parts = $derived((s?.spec ?? '').split(/(```[^\n]*\n[\s\S]*?```)/))
-  const code = (block: string) => block.replace(/^```[^\n]*\n/, '').replace(/\n?```$/, '')
 
   // Only these states have a `start` move in the state table (src/hubd/states.py); hubd never runs `by: me` steps.
   const canStart = $derived(s && (s.state === 'todo' || s.state === 'changes') && s.by !== 'me')
@@ -81,11 +79,7 @@
       <div class="ph">Spec</div>
       <div class="pb pad">
         {#if s.spec}
-          {#each parts as p, i}
-            {#if i % 2}
-              <div class="code"><Copy text={code(p)} label="code" /><pre>{code(p)}</pre></div>
-            {:else}<pre class="txt">{p}</pre>{/if}
-          {/each}
+          <Spec text={s.spec} />
         {:else}
           <p class="dim">No spec in the repo.</p>
         {/if}
@@ -127,8 +121,4 @@
   .done .box { background: var(--g); border-color: var(--g); }
   .done .box::after { content: ''; width: 10px; height: 5px; border: 2.5px solid var(--bg); border-top: 0; border-right: 0; transform: translateY(-2px) rotate(-45deg); }
   .doing .box { border-color: var(--ac); border-right-color: transparent; border-radius: 50%; }
-  pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
-  .txt { font-family: var(--sans); }
-  .code { position: relative; margin: 6px 0; padding: 10px 12px; background: var(--dk); border: 1px solid var(--lt); border-radius: 6px; font-size: 12px; }
-  .code :global(.cp) { position: absolute; top: 6px; right: 6px; }
 </style>

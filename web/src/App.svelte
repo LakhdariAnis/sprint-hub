@@ -1,8 +1,8 @@
 <script lang="ts">
   import './theme.css'
   import { router } from './route.svelte'
-  import Empty from './screens/Empty.svelte'
   import Project from './screens/Project.svelte'
+  import Review from './screens/Review.svelte'
   import Projects from './screens/Projects.svelte'
   import Step from './screens/Step.svelte'
   import Today from './screens/Today.svelte'
@@ -22,7 +22,7 @@
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
-      {:else}<Empty title="Review" />{/if}
+      {:else}<Review project={r.project} id={r.id} />{/if}
     </main>
     <StatusLine />
   </div>

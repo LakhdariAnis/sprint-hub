@@ -10,6 +10,7 @@ export type Step = {
   branch: string | null
   runs: { started?: string; minutes: number | null }[]
   tasks: Task[]
+  review?: { verdict: 'approve' | 'changes' | null; comment: string } | null
   spec?: string | null
   path?: string
 }
@@ -31,3 +32,11 @@ export async function startStep(project: string, id: string): Promise<Step> {
 
 // The text under `## Goal` in the repo spec, up to the next heading.
 export const goal = (spec: string | null | undefined) => spec?.match(/^## Goal\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1].trim() ?? ''
+
+// `git diff --stat main...branch` of the step; a refused read throws hubd's reason.
+export async function loadDiffstat(project: string, id: string): Promise<string> {
+  const r = await fetch(`/steps/${encodeURIComponent(project)}/${encodeURIComponent(id)}/diffstat`)
+  const body = await r.json().catch(() => null)
+  if (!r.ok) throw new Error(body?.detail ?? `hubd answered ${r.status}`)
+  return body.stat
+}
