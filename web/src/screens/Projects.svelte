@@ -1,5 +1,6 @@
 <script lang="ts">
   import { hub } from '../hub.svelte'
+  import { useKeys } from '../keys.svelte'
   import { loadProjects, type Row } from '../projects'
 
   let rows = $state<Row[]>([])
@@ -11,7 +12,9 @@
   )
 
   const open = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
-  const key = (e: KeyboardEvent, id: string) => e.key === 'Enter' && open(id)
+  let sel = $state(0)
+  const move = (d: number) => (sel = Math.max(0, Math.min(rows.length - 1, sel + d)))
+  useKeys({ j: () => move(1), k: () => move(-1), Enter: () => rows[sel] && open(rows[sel].id) })
 </script>
 
 <header class="hd"><h1>Projects</h1></header>
@@ -24,8 +27,9 @@
       <tr><th>Project</th><th>Path</th><th class="n">Progress</th><th class="n">Running</th><th class="n">Review</th><th class="n">Todo</th></tr>
     </thead>
     <tbody>
-      {#each rows as r (r.id)}
-        <tr class="row" tabindex="0" onclick={() => open(r.id)} onkeydown={(e) => key(e, r.id)}>
+      {#each rows as r, i (r.id)}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <tr class="row" class:on={i === sel} tabindex="0" onclick={() => open(r.id)} onfocus={() => (sel = i)}>
           <td class="name">{r.name}</td>
           <td class="mono dim">{r.path}</td>
           <td class="n mono">{r.approved}/{r.total}</td>
@@ -55,6 +59,6 @@
   .y { color: var(--y); }
   .row { cursor: pointer; }
   .row:hover, .row:focus { background: var(--lt); outline: none; }
-  .row:focus { box-shadow: inset 3px 0 0 var(--ac); }
+  .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .warn td { color: var(--y); background: color-mix(in srgb, var(--y) 10%, var(--bg)); }
 </style>

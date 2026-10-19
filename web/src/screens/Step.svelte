@@ -1,6 +1,7 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
   import Spec from '../Spec.svelte'
+  import { useKeys } from '../keys.svelte'
   import { loadStep, startStep } from '../steps'
   import { key, put, steps } from '../store.svelte'
 
@@ -20,6 +21,8 @@
       .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
+
+  useKeys({ s: () => canStart && !busy && start(), Escape: () => (location.hash = `#/projects/${encodeURIComponent(project)}`) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())

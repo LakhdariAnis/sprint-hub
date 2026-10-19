@@ -1,5 +1,6 @@
 <script lang="ts">
   import { hub } from '../hub.svelte'
+  import { useKeys } from '../keys.svelte'
   import { steps } from '../store.svelte'
 
   const panes = [
@@ -17,7 +18,13 @@
   const since = (started?: string) => (started ? `${Math.max(0, Math.floor((now - Date.parse(started)) / 60_000))}m` : '–')
 
   const open = (k: string) => (location.hash = `#/steps/${k}`)
-  const onkey = (e: KeyboardEvent, k: string) => e.key === 'Enter' && open(k)
+
+  // j/k walk the three panes as one list.
+  const keysAll = $derived(panes.flatMap((p) => hub.today[p.id].filter((k) => steps[k])))
+  let sel = $state('')
+  const at = $derived(keysAll.includes(sel) ? sel : keysAll[0])
+  const move = (d: number) => (sel = keysAll[Math.max(0, Math.min(keysAll.length - 1, keysAll.indexOf(at) + d))] ?? '')
+  useKeys({ j: () => move(1), k: () => move(-1), Enter: () => at && open(at) })
 </script>
 
 <header class="hd"><h1>Today</h1></header>
@@ -34,7 +41,8 @@
         {@const k = `${s.project}/${s.step}`}
         {@const done = s.tasks.filter((t) => t.state === 'done').length}
         {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
-        <div class="row" role="link" tabindex="0" onclick={() => open(k)} onkeydown={(e) => onkey(e, k)}>
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="row" class:on={k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
           <span class="mono dim">{s.project}</span>
           <span class="mono">{s.step}</span>
           <span class="t">
@@ -64,6 +72,6 @@
   .row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--lt); font-size: 14px; cursor: pointer; }
   .row:last-child { border-bottom: 0; }
   .row:hover, .row:focus { background: var(--lt); outline: none; }
-  .row:focus { box-shadow: inset 3px 0 0 var(--ac); }
+  .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .cur { display: block; font-size: 12px; }
 </style>
