@@ -36,3 +36,9 @@ kbd {
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--x, var(--mu)); flex: none; display: inline-block; }
 .x-g { --x: var(--g); }
 .x-r { --x: var(--r); }
+/* One colour per step state, used by every screen. */
+.s-todo { --x: var(--mu); }
+.s-doing { --x: var(--b); }
+.s-done { --x: var(--y); }
+.s-changes { --x: var(--o); }
+.s-approved { --x: var(--g); }
