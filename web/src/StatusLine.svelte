@@ -1,19 +1,20 @@
 <script lang="ts">
+  import { keys } from './keys.svelte'
   import { router } from './route.svelte'
 
-  // Hints only: the keys themselves arrive in step 212.
   const hints: Record<string, [string, string][]> = {
-    today: [['j k', 'move'], ['↵', 'open'], ['Tab', 'next pane']],
-    projects: [['j k', 'move'], ['↵', 'open project'], ['/', 'filter']],
+    today: [['j k', 'move'], ['↵', 'open']],
+    projects: [['j k', 'move'], ['↵', 'open project']],
     project: [['j k', 'move'], ['↵', 'open step'], ['Esc', 'back']],
     step: [['s', 'start'], ['Esc', 'back']],
-    review: [['j k', 'move'], ['a', 'approve'], ['c', 'request changes']],
+    review: [['j k', 'move'], ['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']],
   }
-  const list = $derived(hints[router.route.name])
+  const common: [string, string][] = [['g t/p/r', 'go'], ['?', 'help']]
+  const list = $derived([...hints[router.route.name], ...common])
 </script>
 
 <footer class="kb">
-  <span class="mode">NORMAL</span>
+  <span class="mode">{keys.pending ? 'GO' : 'NORMAL'}</span>
   {#each list as [key, text]}
     <span><kbd>{key}</kbd> {text}</span>
   {/each}
