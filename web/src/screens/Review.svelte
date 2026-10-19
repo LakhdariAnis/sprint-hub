@@ -63,9 +63,12 @@
 
   let stat = $state<string | null>(null)
   let statError = $state('')
+  // Keyed on strings, not on `sel`: `put` makes a new object, so reading `sel` here would reload forever.
+  const selProject = $derived(sel?.project)
+  const selStep = $derived(sel?.step)
   $effect(() => {
-    if (!sel) return
-    const [p, i] = [sel.project, sel.step]
+    if (!selProject || !selStep) return
+    const [p, i] = [selProject, selStep]
     stat = null
     confirming = false
     moveError = ''
