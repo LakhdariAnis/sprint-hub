@@ -13,5 +13,11 @@ export function parse(hash: string): Route {
   return { name: 'today' }
 }
 
-export const router = $state({ route: parse(location.hash) })
-addEventListener('hashchange', () => (router.route = parse(location.hash)))
+export const router = $state({ route: parse(location.hash), open: [] as string[] })
+
+// Steps opened this session, as `project/id`, oldest first: the sidebar's OPEN section.
+function track(r: Route) {
+  if (r.name === 'step' && !router.open.includes(`${r.project}/${r.id}`)) router.open.push(`${r.project}/${r.id}`)
+}
+track(router.route)
+addEventListener('hashchange', () => track((router.route = parse(location.hash))))

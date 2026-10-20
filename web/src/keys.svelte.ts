@@ -1,7 +1,8 @@
 import { onMount } from 'svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
-export const keys = $state({ help: false, pending: false })
+// `rail`: the sidebar is collapsed to its icon rail (^B).
+export const keys = $state({ help: false, pending: false, rail: false })
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
