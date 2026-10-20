@@ -14,7 +14,7 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await page.getByRole('button', { name: /Start/ }).click()
   await expect(chip).toHaveText(/running/)
   // Live over SSE: the checklist fills, then the run ends.
-  await expect(page.getByText('Checklist 3/3')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.big')).toHaveText(/3\s*\/\s*3/, { timeout: 30_000 })
   await expect(chip).toHaveText(/done/, { timeout: 30_000 })
 
   await page.goto('/#/review/notes/301')
