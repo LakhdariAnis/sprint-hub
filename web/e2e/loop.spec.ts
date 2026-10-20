@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test'
 // The core loop on the demo vault: Today → start notes/301 → FakeRunner ticks it to done → approve.
 test('start a step, wait for done, approve it', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Anis$/ })).toBeVisible()
 
-  const next = page.locator('.pane', { hasText: 'Next up' })
+  const next = page.locator('.pn', { hasText: 'Now' })
   await next.getByRole('link', { name: /301\s+Parse the notes/ }).click()
 
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
