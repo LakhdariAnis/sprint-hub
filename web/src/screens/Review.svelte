@@ -170,7 +170,7 @@
   .err.in { margin: 12px 16px; }
   .grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 12px; padding: 0 20px 14px; align-items: start; }
   .queue, .detail { display: grid; gap: 12px; min-width: 0; }
-  .pane { background: var(--bg); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
+  .pane { background: var(--dk); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ph { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--lt); font-weight: 600; }
   .row { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--lt); cursor: pointer; }
   .row:last-child { border-bottom: 0; }

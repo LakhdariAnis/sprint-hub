@@ -113,7 +113,7 @@
   .btn:disabled { opacity: 0.6; cursor: default; }
   .btn kbd { background: transparent; border-color: color-mix(in srgb, var(--bg) 45%, transparent); color: var(--bg); }
   .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 12px; padding: 0 20px 14px; align-items: start; }
-  .pane { background: var(--bg); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
+  .pane { background: var(--dk); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ph { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--lt); font-weight: 600; }
   .pad { padding: 12px 16px; }
   .task { display: grid; grid-template-columns: 20px 22px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--lt); font-size: 14px; }

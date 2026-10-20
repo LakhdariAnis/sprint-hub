@@ -67,7 +67,7 @@
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   .panes { display: grid; gap: 12px; padding: 0 20px 14px; }
-  .pane { background: var(--bg); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
+  .pane { background: var(--dk); border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ph { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--lt); font-weight: 600; }
   .row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--lt); font-size: 14px; cursor: pointer; }
   .row:last-child { border-bottom: 0; }
