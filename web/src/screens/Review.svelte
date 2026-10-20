@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
@@ -78,7 +79,10 @@
   })
 </script>
 
-<header class="hd"><h1>Review</h1></header>
+<Header>
+  {#snippet crumb()}{waiting.length} waiting for you{/snippet}
+  Review
+</Header>
 
 {#if error}<p class="err">{error}</p>{/if}
 <div class="grid">
@@ -161,8 +165,6 @@
 </div>
 
 <style>
-  .hd { padding: 16px 20px 14px; }
-  h1 { font-size: 22px; font-weight: 600; margin: 3px 0 0; letter-spacing: -0.01em; line-height: 1.2; }
   h2 { font-size: 18px; font-weight: 600; margin: 0; flex-basis: 100%; }
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }

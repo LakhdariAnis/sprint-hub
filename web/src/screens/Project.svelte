@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
   import { useKeys } from '../keys.svelte'
   import { goal, loadStep, loadSteps, type Step } from '../steps'
@@ -40,10 +41,10 @@
   })
 </script>
 
-<header class="hd">
-  <div class="bc">Projects</div>
-  <h1>{project}</h1>
-</header>
+<Header>
+  {#snippet crumb()}<a href="#/projects">Projects</a> › {project}{/snippet}
+  {project}
+</Header>
 
 {#if status === 'failed'}
   <p class="dim">Cannot load {project}. Is hubd running?</p>
@@ -89,9 +90,6 @@
 {/if}
 
 <style>
-  .hd { padding: 16px 20px 14px; }
-  .bc { font-size: 12px; color: var(--fgd); }
-  h1 { font-size: 22px; font-weight: 600; margin: 3px 0 0; letter-spacing: -0.01em; line-height: 1.2; }
   .dim { color: var(--fgd); }
   p.dim { padding: 0 20px; }
   .body { display: flex; align-items: flex-start; }

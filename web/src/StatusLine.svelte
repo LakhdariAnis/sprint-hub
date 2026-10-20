@@ -36,5 +36,6 @@
     background: var(--dk); border-top: 1px solid var(--sel); font: 12px var(--mono); color: var(--fg2); white-space: nowrap;
   }
   .md { background: var(--ac); color: var(--bg); font-weight: 700; padding: 0 8px; border-radius: 3px; line-height: 18px; }
+  .keys > span { display: flex; align-items: center; gap: 4px; }
   .fc { margin-left: auto; }
 </style>

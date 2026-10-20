@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
@@ -44,10 +45,11 @@
   })
 </script>
 
-<header class="hd">
-  <div class="bc"><a href="#/projects">Projects</a> › <a href="#/projects/{encodeURIComponent(project)}">{project}</a> › <span class="mono">{id}</span></div>
-  <h1><span class="mono dim">{id}</span> {s?.title ?? ''}</h1>
-  {#if s}
+<Header>
+  {#snippet crumb()}<a href="#/projects">Projects</a> › <a href="#/projects/{encodeURIComponent(project)}">{project}</a> › {id}{/snippet}
+  <span class="mono dim">{id}</span> {s?.title ?? ''}
+</Header>
+{#if s}
     <div class="meta">
       <span class="chip s-{s.state}">{s.state}</span>
       <span class="mi"><span class="dim">model</span> <span class="mono">{s.model ?? '–'}</span></span>
@@ -55,8 +57,7 @@
       {#if s.path}<span class="mi"><span class="dim">file</span> <span class="mono">{s.path}</span> <Copy text={s.path} label="step file path" /></span>{/if}
       {#if canStart}<button class="btn" type="button" disabled={busy} onclick={start}>Start <kbd>s</kbd></button>{/if}
     </div>
-  {/if}
-</header>
+{/if}
 
 {#if error}
   <p class="err">{error}</p>
@@ -92,14 +93,9 @@
 {/if}
 
 <style>
-  .hd { padding: 16px 20px 14px; }
-  .bc { font-size: 12px; color: var(--fgd); }
-  .bc a { color: var(--fgd); text-decoration: none; }
-  .bc a:hover { color: var(--fg); }
-  h1 { font-size: 22px; font-weight: 600; margin: 3px 0 10px; letter-spacing: -0.01em; line-height: 1.2; }
   .dim { color: var(--fgd); }
   .err { margin: 0 20px 14px; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
-  .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 0 20px 14px; }
   .mi { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--lt); border-radius: 6px; font-size: 12px; background: var(--bg); }
   .chip {
     display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 8px; border-radius: 10px;

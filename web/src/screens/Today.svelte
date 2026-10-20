@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from '../Header.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { steps } from '../store.svelte'
@@ -27,7 +28,10 @@
   useKeys({ j: () => move(1), k: () => move(-1), Enter: () => at && open(at) })
 </script>
 
-<header class="hd"><h1>Today</h1></header>
+<Header>
+  {#snippet crumb()}{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}{/snippet}
+  Today
+</Header>
 
 {#if hub.live === false}
   <p class="dim pad">Cannot reach hubd.</p>
@@ -62,8 +66,6 @@
 </div>
 
 <style>
-  .hd { padding: 16px 20px 14px; }
-  h1 { font-size: 22px; font-weight: 600; margin: 3px 0 0; letter-spacing: -0.01em; line-height: 1.2; }
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   .panes { display: grid; gap: 12px; padding: 0 20px 14px; }

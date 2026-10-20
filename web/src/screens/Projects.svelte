@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from '../Header.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { loadProjects, type Row } from '../projects'
@@ -17,7 +18,10 @@
   useKeys({ j: () => move(1), k: () => move(-1), Enter: () => rows[sel] && open(rows[sel].id) })
 </script>
 
-<header class="hd"><h1>Projects</h1></header>
+<Header>
+  {#snippet crumb()}vault · {rows.length} projects{/snippet}
+  Projects
+</Header>
 
 {#if status === 'failed'}
   <p class="dim">Cannot load projects. Is hubd running?</p>
@@ -47,8 +51,6 @@
 {/if}
 
 <style>
-  .hd { padding: 16px 20px 14px; }
-  h1 { font-size: 22px; font-weight: 600; margin: 3px 0 0; letter-spacing: -0.01em; line-height: 1.2; }
   .dim { color: var(--fgd); }
   p.dim { padding: 0 20px; }
   table { width: 100%; border-collapse: collapse; }
