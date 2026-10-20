@@ -9,13 +9,13 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await next.getByRole('link', { name: /301\s+Parse the notes/ }).click()
 
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
-  const chip = page.locator('.chip')
-  await expect(chip).toHaveText('todo')
+  const chip = page.locator('.hd .chip')
+  await expect(chip).toHaveText(/todo/)
   await page.getByRole('button', { name: /Start/ }).click()
-  await expect(chip).toHaveText('doing')
+  await expect(chip).toHaveText(/running/)
   // Live over SSE: the checklist fills, then the run ends.
   await expect(page.getByText('Checklist 3/3')).toBeVisible({ timeout: 30_000 })
-  await expect(chip).toHaveText('done', { timeout: 30_000 })
+  await expect(chip).toHaveText(/done/, { timeout: 30_000 })
 
   await page.goto('/#/review/notes/301')
   await page.getByRole('button', { name: 'Approve', exact: true }).click()
