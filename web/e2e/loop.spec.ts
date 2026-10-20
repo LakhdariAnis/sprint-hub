@@ -20,10 +20,10 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await expect(chip).toHaveText(/done/, { timeout: 30_000 })
 
   await page.goto('/#/review/notes/301')
-  await page.getByRole('button', { name: 'Approve', exact: true }).click()
-  await page.getByRole('button', { name: 'Yes, approve' }).click()
-  await expect(page.locator('.mi', { hasText: 'state' })).toHaveText(/approved/)
-  await expect(page.locator('.pane', { hasText: 'Approved' }).getByRole('link', { name: /301/ })).toBeVisible()
+  await page.getByRole('button', { name: /^Approve/ }).click()
+  await page.getByRole('button', { name: /^Yes, approve/ }).click()
+  await expect(page.locator('.head .chip')).toHaveText(/approved/)
+  await expect(page.locator('.queue').getByRole('link', { name: /301/ })).toBeVisible()
 })
 
 test('plain keys switch tabs, open steps and the sidebar rail', async ({ page }) => {
