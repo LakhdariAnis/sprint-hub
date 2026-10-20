@@ -1,6 +1,7 @@
 <script lang="ts">
   import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
+  import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
   import { approveStep, loadDiffstat, loadStep, loadSteps, requestChanges } from '../steps'
@@ -124,7 +125,7 @@
               <button class="btn" type="button" disabled={busy} onclick={() => (confirming = true)}>Approve <span class="kb">a</span></button>
             {/if}
             <form onsubmit={(e) => (e.preventDefault(), changesRequested())}>
-              <input bind:this={box} bind:value={comment} onkeydown={(e) => e.key === 'Escape' && box?.blur()} placeholder="Request changes: what should change? (c)" aria-label="Review comment" />
+              <input bind:this={box} bind:value={comment} onkeydown={(e) => e.key === 'Escape' && box?.blur()} placeholder="What should change? (c)" aria-label="Review comment" />
               <button class="btn ghost" type="submit" disabled={busy || !comment.trim()}>Request changes</button>
             </form>
             {#if moveError}<p class="err in">{moveError}</p>{/if}
@@ -156,7 +157,7 @@
           <section class="pn">
             <div class="ph">Checklist <span class="n">{done}/{sel.tasks.length}</span></div>
             {#each sel.tasks as t}
-              <div class="task {t.state}"><span class="mono">{t.state === 'done' ? '[x]' : t.state === 'doing' ? '[~]' : '[ ]'}</span> {t.text}</div>
+              <div class="task {t.state}"><span class="mk">{t.state === 'done' ? '✓' : t.state === 'doing' ? '●' : '○'}</span><Inline text={t.text} /></div>
             {:else}
               <p class="dim pad">No checklist.</p>
             {/each}
@@ -190,9 +191,9 @@
   .meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--fg2); }
   .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--sel); }
   .act form { display: flex; flex: 1; gap: 8px; min-width: 260px; }
-  .act input { flex: 1; height: 32px; padding: 0 10px; border: 1px solid var(--mu); border-radius: 6px; background: var(--bg); }
+  .act input { flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--mu); border-radius: 7px; background: var(--bg); }
   .act .err { flex-basis: 100%; margin: 0; }
-  .btn { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; border-radius: 6px; border: 1px solid var(--g); background: var(--g); color: var(--bg); font-weight: 600; cursor: pointer; }
+  .btn { height: 34px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; border-radius: 7px; border: 1px solid var(--g); background: var(--g); color: var(--bg); font-weight: 600; cursor: pointer; }
   .btn .kb { background: color-mix(in srgb, var(--bg) 25%, transparent); color: var(--bg); }
   .btn.ghost { background: transparent; color: var(--fg); border-color: var(--mu); font-weight: 400; }
   .btn:disabled { opacity: 0.6; cursor: default; }
@@ -200,4 +201,7 @@
   .task { padding: 8px 16px; border-bottom: 1px solid var(--sel); font-size: 13.5px; }
   .task:last-child { border-bottom: 0; }
   .task.done { color: var(--fgd); }
+  .mk { display: inline-block; width: 18px; color: var(--fgm); }
+  .done .mk { color: var(--g); }
+  .doing .mk { color: var(--ac); }
 </style>

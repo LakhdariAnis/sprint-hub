@@ -80,7 +80,7 @@
       <p>{detail ? goal(detail.spec) || 'No goal in the spec.' : '…'}</p>
       <h3>Checklist</h3>
       {#each cur.tasks as t}
-        <div class="t"><span class="mono">{t.state === 'done' ? '[x]' : t.state === 'doing' ? '[~]' : '[ ]'}</span> <Inline text={t.text} /></div>
+        <div class="t {t.state}"><span class="mk">{t.state === 'done' ? '✓' : t.state === 'doing' ? '●' : '○'}</span><Inline text={t.text} /></div>
       {:else}
         <p class="dim">No checklist yet.</p>
       {/each}
@@ -106,6 +106,9 @@
   dt { color: var(--fgd); }
   dd { margin: 0; }
   .t { padding: 2px 0; }
+  .mk { display: inline-block; width: 18px; color: var(--fgm); }
+  .done .mk { color: var(--g); }
+  .doing .mk { color: var(--ac); }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fgd); font-weight: 400; padding: 6px 20px; border-bottom: 1px solid var(--lt); }
   .n { text-align: right; }

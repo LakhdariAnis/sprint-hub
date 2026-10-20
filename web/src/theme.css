@@ -51,7 +51,7 @@ kbd {
 }
 .hk { font: 700 11px/17px var(--mono); border: 1px solid var(--mu); color: var(--fg2); border-radius: 3px; padding: 0 5px; }
 .pn.f .hk { background: var(--ac); border-color: var(--ac); color: var(--bg); }
-.ph .n { font: 12px var(--mono); color: var(--fg2); font-weight: 400; }
+.ph .n { font: 12px var(--mono); color: var(--fg2); font-weight: 400; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ph .r { margin-left: auto; font: 12px var(--mono); color: var(--fg2); font-weight: 400; display: flex; gap: 8px; align-items: center; }
 .gr {
   padding: 10px 16px 5px; font: 11px var(--mono); letter-spacing: 0.1em; color: var(--fg2);

@@ -38,7 +38,8 @@
     }
     return out
   }
-  const blocks = $derived(parse(text))
+  // A leading `# Step NN — title` repeats the page title: every screen that shows a spec already has it.
+  const blocks = $derived(parse(text).filter((b, i) => !(i === 0 && b.t === 'h' && b.n === 1)))
 </script>
 
 <div class="md">
