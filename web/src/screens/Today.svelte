@@ -105,7 +105,7 @@
           {@const soon = 'soon' in r && r.soon}
           <div class="rm">
             <span class="ck" style={done ? 'background: var(--g); border-color: var(--g)' : c && `border-color: var(--${c})`}></span>
-            <span style={done ? 'color: var(--fg3); text-decoration: line-through' : ''}>{r.text}</span>
+            <span style={done ? 'color: var(--fgm); text-decoration: line-through' : ''}>{r.text}</span>
             <span class="id" style={c ? `color: var(--${c})` : soon ? 'color: var(--y)' : ''}>{r.when}</span>
           </div>
         {/each}

@@ -18,6 +18,8 @@
   --b: #7fbbb3;
   --m: #d699b6;
   --fgd: color-mix(in srgb, var(--fg) 76%, var(--bg));
+  /* Small grey labels: --fg3 alone is 2:1 on --dk, this mix is 4.9:1 (Everforest). */
+  --fgm: color-mix(in srgb, var(--fg2) 75%, var(--fg3));
   --mono: 'Liberation Mono', 'Cousine', ui-monospace, monospace;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
 }
@@ -27,6 +29,7 @@ html, body, #app { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--sans); }
 button, input { font: inherit; color: inherit; }
 a { color: inherit; }
+:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
 .mono, kbd { font-family: var(--mono); }
 kbd {
   font-size: 11px; padding: 0 4px; border: 1px solid var(--mu); border-radius: 4px;
@@ -68,7 +71,9 @@ kbd {
 .x-r { --x: var(--r); }
 .x-y { --x: var(--y); }
 /* One colour per step state, used by every screen. */
-.s-todo { --x: var(--mu); }
+.s-todo { --x: var(--fg2); }
+/* Todo is a ring, not a fill: the state has not started. */
+.dot.s-todo, .s-todo .dot { background: none; box-shadow: inset 0 0 0 1.5px var(--x); }
 .s-doing { --x: var(--b); }
 .s-done { --x: var(--y); }
 .s-changes { --x: var(--o); }

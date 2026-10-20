@@ -215,7 +215,7 @@
     display: grid; grid-template-columns: 26px 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0 16px;
     min-height: 50px; border-bottom: 1px solid var(--sel); font-size: 14.5px; position: relative;
   }
-  .ix { font: 12px var(--mono); color: var(--fg3); }
+  .ix { font: 12px var(--mono); color: var(--fgm); }
   .tm { font: 11.5px var(--mono); color: var(--fg2); }
   .task.done { color: var(--fg2); }
   .task.todo .tx { color: var(--fg2); }
@@ -236,7 +236,7 @@
   .o.f { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
   .spec { padding: 16px 20px; overflow: auto; min-height: 0; font-size: 14.5px; }
   .chat { flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 18px; overflow: auto; font-size: 15px; line-height: 1.65; }
-  .ts { align-self: center; color: var(--fg3); font: 11.5px var(--mono); display: flex; align-items: center; gap: 10px; }
+  .ts { align-self: center; color: var(--fgm); font: 11.5px var(--mono); display: flex; align-items: center; gap: 10px; }
   .ts::before, .ts::after { content: ''; width: 50px; height: 1px; background: var(--sel); }
   .me { align-self: flex-end; max-width: 74%; background: var(--sel); border-radius: 14px 14px 4px 14px; padding: 9px 16px; }
   .ai { display: flex; gap: 14px; max-width: 92%; }
@@ -245,7 +245,7 @@
   .tool { display: flex; align-items: center; gap: 10px; padding: 5px 12px; border: 1px solid var(--sel); border-radius: 6px; font: 12px var(--mono); color: var(--fg2); width: max-content; max-width: 100%; margin-bottom: 6px; background: var(--bg); }
   .tool .spin { width: 12px; height: 12px; }
   .comp { margin: 0 16px 16px; border: 1px solid var(--sel); border-radius: 10px; background: var(--bg); padding: 12px 14px 8px; opacity: 0.6; }
-  .comp .in { color: var(--fg3); font-size: 14.5px; min-height: 26px; }
+  .comp .in { color: var(--fgm); font-size: 14.5px; min-height: 26px; }
   .bt { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--fg2); }
   .pill { border: 1px solid var(--sel); border-radius: 10px; padding: 0 8px; }
   .go { margin-left: auto; font-weight: 700; color: var(--bg); background: var(--ac); padding: 2px 10px; border-radius: 4px; }

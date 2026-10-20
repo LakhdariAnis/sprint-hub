@@ -60,7 +60,7 @@
   .name { font-weight: 600; }
   .y { color: var(--y); }
   .row { cursor: pointer; }
-  .row:hover, .row:focus { background: var(--lt); outline: none; }
+  .row:hover, .row:focus { background: var(--lt); }
   .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .warn td { color: var(--y); background: color-mix(in srgb, var(--y) 10%, var(--bg)); }
 </style>

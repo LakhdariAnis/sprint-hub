@@ -26,7 +26,7 @@
   .crumb :global(a:hover) { color: var(--fg); }
   .search {
     margin-left: auto; width: 300px; height: 34px; flex: none; border: 1px solid var(--sel); border-radius: 7px; background: var(--dk);
-    display: flex; align-items: center; gap: 10px; padding: 0 10px; color: var(--fg3); font-size: 13.5px;
+    display: flex; align-items: center; gap: 10px; padding: 0 10px; color: var(--fgm); font-size: 13.5px;
   }
   .search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
   .search .kb { margin-left: auto; }

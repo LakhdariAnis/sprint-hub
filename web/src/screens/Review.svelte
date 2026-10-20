@@ -181,7 +181,7 @@
   .gr:not(:first-child) { margin-top: 6px; border-top: 1px solid var(--sel); }
   .cnt { margin-left: auto; }
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--sel); cursor: pointer; font-size: 14px; }
-  .row:hover, .row:focus { background: var(--lt); outline: none; }
+  .row:hover, .row:focus { background: var(--lt); }
   .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .head { padding: 16px 20px; gap: 10px; }
   .top { display: flex; align-items: center; gap: 12px; }

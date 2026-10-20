@@ -61,13 +61,13 @@
   .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 14px; }
   .wm { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 3px; }
   .wm i { font-style: normal; background: var(--ac); color: var(--bg); border-radius: 5px; padding: 0 6px; line-height: 26px; }
-  .ver { font: 11px var(--mono); color: var(--fg3); margin-left: auto; }
+  .ver { font: 11px var(--mono); color: var(--fgm); margin-left: auto; }
   .newc {
     height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 7px;
     border: 1px dashed var(--mu); background: none; margin: 0 0 4px; cursor: default; text-align: left;
   }
   .newc b { color: var(--ac); }
-  .sg { font: 11px var(--mono); letter-spacing: 0.1em; color: var(--fg3); padding: 12px 8px 6px; }
+  .sg { font: 11px var(--mono); letter-spacing: 0.1em; color: var(--fgm); padding: 12px 8px 6px; }
   .tb {
     height: 36px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 6px;
     color: var(--fg2); text-decoration: none; position: relative;
@@ -80,7 +80,7 @@
   .tb svg { width: 17px; height: 17px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .tb b { font-size: 12px; font-weight: 400; }
   .tb .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .k { margin-left: auto; font: 11px var(--mono); color: var(--fg3); }
+  .k { margin-left: auto; font: 11px var(--mono); color: var(--fgm); }
   .bd { background: var(--y); color: var(--bg); border-radius: 8px; padding: 0 6px; font: 700 10.5px/16px var(--mono); }
   .bd + .k { margin-left: 0; }
   .sbf { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 10px 6px 0; font: 11.5px var(--mono); color: var(--fg2); }
