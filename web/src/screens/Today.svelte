@@ -6,9 +6,9 @@
   import { loadProjects, type Row } from '../projects'
 
   const groups = [
-    { id: 'running', title: 'RUNNING', mark: '●', color: 'ac', empty: 'Nothing is running.' },
-    { id: 'review', title: 'WAITING FOR YOU', mark: '◐', color: 'y', empty: 'Nothing to review.' },
-    { id: 'next', title: 'NEXT UP', mark: '○', color: 'mu', empty: 'Nothing ready to start.' },
+    { id: 'running', title: 'RUNNING', mark: '●', state: 'doing', empty: 'Nothing is running.' },
+    { id: 'review', title: 'WAITING FOR YOU', mark: '◐', state: 'done', empty: 'Nothing to review.' },
+    { id: 'next', title: 'NEXT UP', mark: '○', state: 'todo', empty: 'Nothing ready to start.' },
   ] as const
 
   // Re-read every 30 s: minutes since a run started, and "today" in the week.
@@ -85,8 +85,8 @@
         <span class="nm">{r.name}</span>
         <span class="pbar"><i style="width: {r.total ? (r.approved / r.total) * 100 : 0}%"></i></span>
         <span class="id">{r.approved}/{r.total}</span>
-        <span class="chip" class:x-g={r.running > 0} title="running">{r.running} running</span>
-        <span class="chip" class:x-y={r.review > 0} title="to review">{r.review} review</span>
+        <span class="chip" class:s-doing={r.running > 0} title="running">{r.running} running</span>
+        <span class="chip" class:s-done={r.review > 0} title="to review">{r.review} review</span>
         <span class="id">{r.todo} todo</span>
       </div>
     {:else}
@@ -121,7 +121,7 @@
     </div>
     {#each groups as g}
       {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
-      <div class="gr"><span style="color: var(--{g.color})">{g.mark}</span>{g.title}</div>
+      <div class="gr"><span class="s-{g.state}" style="color: var(--x)">{g.mark}</span>{g.title}</div>
       {#each list as s (s.project + '/' + s.step)}
         {@const k = `${s.project}/${s.step}`}
         {@const done = s.tasks.filter((t) => t.state === 'done').length}
@@ -129,7 +129,7 @@
         {@const extra = hub.demo?.steps[k]}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
-          <span class="dot" style="--x: var(--{g.color})"></span>
+          <span class="dot s-{g.state}"></span>
           <span class="id">{s.step}</span>
           <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: {cur.text}</span>{/if}</span>
           {#if g.id === 'running'}

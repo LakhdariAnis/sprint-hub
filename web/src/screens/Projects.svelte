@@ -37,9 +37,10 @@
           <td class="name">{r.name}</td>
           <td class="mono dim">{r.path}</td>
           <td class="n mono">{r.approved}/{r.total}</td>
-          <td class="n mono" class:y={r.running > 0}>{r.running}</td>
-          <td class="n mono" class:y={r.review > 0}>{r.review}</td>
-          <td class="n mono">{r.todo}</td>
+          <!-- State colours as everywhere else; a zero steps back. -->
+          <td class="n mono s-doing" class:z={!r.running}>{r.running}</td>
+          <td class="n mono s-done" class:z={!r.review}>{r.review}</td>
+          <td class="n mono" class:z={!r.todo}>{r.todo}</td>
         </tr>
       {/each}
       {#each hub.errors as e}
@@ -58,7 +59,8 @@
   td { padding: 0 20px; height: 34px; border-bottom: 1px solid var(--lt); }
   .n { text-align: right; }
   .name { font-weight: 600; }
-  .y { color: var(--y); }
+  .s-doing, .s-done { color: var(--x); }
+  .z { color: var(--fgm); }
   .row { cursor: pointer; }
   .row:hover, .row:focus { background: var(--lt); }
   .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
