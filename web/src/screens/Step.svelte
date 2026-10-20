@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
@@ -25,6 +26,7 @@
 
   // Close the tab (the sidebar's OPEN entry) and fall back to Today.
   let focus = $state<'c' | 't'>('c')
+  const chat = $derived(hub.demo && hub.demo.chat.step === key(project, id) ? hub.demo.chat : null)
   const q = $derived(hub.demo && hub.demo.question.step === key(project, id) ? hub.demo.question : null)
 
   const close = () => {
@@ -48,9 +50,11 @@
     : t.state === 'done' ? t.at.slice(11, 16)
     : `${Math.max(0, Math.floor((now - Date.parse(t.at)) / 60_000))}m`
 
-  const label = $derived(
-    s?.state === 'doing' ? `running · ${Math.max(0, Math.floor((now - Date.parse(s.runs.at(-1)?.started ?? '')) / 60_000)) || 0} min` : (s?.state ?? ''),
-  )
+  const label = $derived.by(() => {
+    if (s?.state !== 'doing') return s?.state ?? ''
+    const m = Math.floor((now - Date.parse(s.runs.at(-1)?.started ?? '')) / 60_000)
+    return m >= 0 ? `running · ${m < 60 ? `${m} min` : `${Math.floor(m / 60)} h`}` : 'running'
+  })
 
   $effect(() => {
     error = ''
@@ -124,15 +128,49 @@
       {/if}
     </section>
 
-    <section class="pn right">
-      <div class="ph">Spec</div>
-      <div class="pb pad">
-        {#if s.spec}
-          <Spec text={s.spec} />
-        {:else}
-          <p class="dim">No spec in the repo.</p>
-        {/if}
-      </div>
+    <section class="pn right" class:f={focus === 't'}>
+      {#if chat}
+        <div class="ph">
+          <span class="hk">t</span>Chat<span class="n">session {chat.session} · {chat.count} messages</span>
+          <span class="r"><span class="kb">^F</span> find <span class="kb">G</span> latest</span>
+        </div>
+        <div class="chat">
+          {#each chat.messages as m}
+            {#if m.kind === 'time'}
+              <div class="ts">{m.text}</div>
+            {:else if m.kind === 'me'}
+              <div class="me">{m.text}</div>
+            {:else}
+              <div class="ai">
+                <span class="av">C</span>
+                <div>
+                  <p><Inline text={m.text} /></p>
+                  {#if m.tool}
+                    <div class="tool">
+                      {#if m.tool.ok === null}<span class="spin"></span>{:else}<span style="color: var(--{m.tool.ok ? 'g' : 'r'})">{m.tool.ok ? '✓' : '✗'}</span>{/if}
+                      {m.tool.name} <span style="color: var(--fg)">{m.tool.arg}</span><span>{m.tool.info}</span>
+                    </div>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+          {/each}
+        </div>
+        <!-- Replies come with the chat in a later sprint: the composer only shows where it will be. -->
+        <div class="comp">
+          <div class="in">Reply… type / for commands</div>
+          <div class="bt"><span class="pill">{s.model ?? 'model'}</span><span>resumes {chat.session}</span><span class="go">^↵ send</span></div>
+        </div>
+      {:else}
+        <div class="ph"><span class="hk">t</span>Spec<span class="n">from the repo</span></div>
+        <div class="spec">
+          {#if s.spec}
+            <Spec text={s.spec} />
+          {:else}
+            <p class="dim">No spec in the repo.</p>
+          {/if}
+        </div>
+      {/if}
     </section>
   </div>
 {/if}
@@ -196,4 +234,19 @@
   .opt { display: flex; gap: 8px; margin-top: 10px; }
   .o { flex: 1; border: 1px solid var(--sel); border-radius: 6px; padding: 6px 10px; font-size: 13px; background: var(--dk); }
   .o.f { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
+  .spec { padding: 16px 20px; overflow: auto; min-height: 0; font-size: 14.5px; }
+  .chat { flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 18px; overflow: auto; font-size: 15px; line-height: 1.65; }
+  .ts { align-self: center; color: var(--fg3); font: 11.5px var(--mono); display: flex; align-items: center; gap: 10px; }
+  .ts::before, .ts::after { content: ''; width: 50px; height: 1px; background: var(--sel); }
+  .me { align-self: flex-end; max-width: 74%; background: var(--sel); border-radius: 14px 14px 4px 14px; padding: 9px 16px; }
+  .ai { display: flex; gap: 14px; max-width: 92%; }
+  .ai p { margin: 0 0 8px; }
+  .av { flex: none; width: 28px; height: 28px; border-radius: 7px; background: var(--ac); color: var(--bg); font: 700 12px var(--mono); display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .tool { display: flex; align-items: center; gap: 10px; padding: 5px 12px; border: 1px solid var(--sel); border-radius: 6px; font: 12px var(--mono); color: var(--fg2); width: max-content; max-width: 100%; margin-bottom: 6px; background: var(--bg); }
+  .tool .spin { width: 12px; height: 12px; }
+  .comp { margin: 0 16px 16px; border: 1px solid var(--sel); border-radius: 10px; background: var(--bg); padding: 12px 14px 8px; opacity: 0.6; }
+  .comp .in { color: var(--fg3); font-size: 14.5px; min-height: 26px; }
+  .bt { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--fg2); }
+  .pill { border: 1px solid var(--sel); border-radius: 10px; padding: 0 8px; }
+  .go { margin-left: auto; font-weight: 700; color: var(--bg); background: var(--ac); padding: 2px 10px; border-radius: 4px; }
 </style>
