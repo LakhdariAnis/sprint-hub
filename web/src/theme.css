@@ -66,6 +66,7 @@ kbd {
 .pbar i { display: block; height: 100%; border-radius: 3px; background: var(--x, var(--g)); }
 .x-g { --x: var(--g); }
 .x-r { --x: var(--r); }
+.x-y { --x: var(--y); }
 /* One colour per step state, used by every screen. */
 .s-todo { --x: var(--mu); }
 .s-doing { --x: var(--b); }

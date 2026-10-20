@@ -3,6 +3,7 @@
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { steps } from '../store.svelte'
+  import { loadProjects, type Row } from '../projects'
 
   const groups = [
     { id: 'running', title: 'RUNNING', mark: '●', color: 'ac', empty: 'Nothing is running.' },
@@ -40,13 +41,24 @@
 
   const open = (k: string) => (location.hash = `#/steps/${k}`)
 
-  // n / m / w focus a pane; j/k walk the Now pane's rows as one list.
-  let focus = $state<'n' | 'm' | 'w'>('n')
+  let projects = $state<Row[]>([])
+  loadProjects().then((d) => (projects = d), () => {})
+
+  // p / n / m / w focus a pane; j/k walk the rows of the Projects or Now pane.
+  let focus = $state<'p' | 'n' | 'm' | 'w'>('p')
   const keysAll = $derived(groups.flatMap((g) => hub.today[g.id].filter((k) => steps[k])))
   let sel = $state('')
   const at = $derived(keysAll.includes(sel) ? sel : keysAll[0])
-  const move = (n: number) => focus === 'n' && (sel = keysAll[Math.max(0, Math.min(keysAll.length - 1, keysAll.indexOf(at) + n))] ?? '')
-  useKeys({ n: () => (focus = 'n'), m: () => (focus = 'm'), w: () => (focus = 'w'), j: () => move(1), k: () => move(-1), Enter: () => focus === 'n' && at && open(at) })
+  let psel = $state(0)
+  const move = (n: number) => {
+    if (focus === 'n') sel = keysAll[Math.max(0, Math.min(keysAll.length - 1, keysAll.indexOf(at) + n))] ?? ''
+    else if (focus === 'p') psel = Math.max(0, Math.min(projects.length - 1, psel + n))
+  }
+  const openProject = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
+  useKeys({
+    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), w: () => (focus = 'w'), j: () => move(1), k: () => move(-1),
+    Enter: () => (focus === 'n' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
+  })
 
   const reminders = $derived(
     hub.demo && ([['OVERDUE', hub.demo.reminders.overdue, 'r'], ['TODAY', hub.demo.reminders.today, ''], ['LATER', hub.demo.reminders.later, '']] as const),
@@ -62,43 +74,28 @@
   <p class="dim pad">Cannot reach hubd.</p>
 {/if}
 <div class="body">
-  <section class="pn" class:f={focus === 'n'} style="grid-column: span 8">
+  <section class="pn" class:f={focus === 'p'} style="grid-column: span 8">
     <div class="ph">
-      <span class="hk">n</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
+      <span class="hk">p</span>Projects<span class="n">{projects.length} in the vault</span>
       <span class="r"><span class="kb">↵</span> open</span>
     </div>
-    {#each groups as g}
-      {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
-      <div class="gr"><span style="color: var(--{g.color})">{g.mark}</span>{g.title}</div>
-      {#each list as s (s.project + '/' + s.step)}
-        {@const k = `${s.project}/${s.step}`}
-        {@const done = s.tasks.filter((t) => t.state === 'done').length}
-        {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
-        {@const extra = hub.demo?.steps[k]}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
-          <span class="dot" style="--x: var(--{g.color})"></span>
-          <span class="id">{s.step}</span>
-          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: {cur.text}</span>{/if}</span>
-          {#if g.id === 'running'}
-            <span class="prog"><span class="pbar" style="flex: 1"><i style="width: {s.tasks.length ? (done / s.tasks.length) * 100 : 0}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
-            <span class="id">{s.model ?? '–'}</span>
-            <span class="id">{since(s.runs.at(-1)?.started)}</span>
-          {:else if g.id === 'review'}
-            <span class="id">{#if extra}<span style="color: var(--g)">+{extra.add}</span>{#if extra.del} <span style="color: var(--r)">−{extra.del}</span>{/if}{/if}</span>
-            {#if extra}<span class="chip {extra.check.ok ? 'x-g' : 'x-r'}">{extra.check.ok ? '✓' : '✗'} {extra.check.name}</span>{:else}<span></span>{/if}
-            <span class="id">{since(s.runs.at(-1)?.started)}</span>
-          {:else}
-            <span class="id">{s.project}</span>
-          {/if}
-        </div>
-      {:else}
-        <p class="dim pad">{g.empty}</p>
-      {/each}
+    {#each projects as r, i (r.id)}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div class="pr" class:f={focus === 'p' && i === psel} role="link" tabindex="0" onclick={() => openProject(r.id)} onfocus={() => ((psel = i), (focus = 'p'))}>
+        <span class="nm">{r.name}</span>
+        <span class="pbar"><i style="width: {r.total ? (r.approved / r.total) * 100 : 0}%"></i></span>
+        <span class="id">{r.approved}/{r.total}</span>
+        <span class="chip" class:x-g={r.running > 0} title="running">{r.running} running</span>
+        <span class="chip" class:x-y={r.review > 0} title="to review">{r.review} review</span>
+        <span class="id">{r.todo} todo</span>
+      </div>
+    {:else}
+      <p class="dim pad">No projects in the vault.</p>
     {/each}
   </section>
 
-  <section class="pn" class:f={focus === 'm'} style="grid-column: span 4; grid-row: span 2">
+  <div class="side" style="grid-column: span 4; grid-row: span 2">
+  <section class="pn" class:f={focus === 'm'}>
     <div class="ph"><span class="hk">m</span>Reminders</div>
     {#if reminders}
       {#each reminders as [title, list, c]}
@@ -117,6 +114,39 @@
       <p class="dim pad">No reminders yet.</p>
     {/if}
   </section>
+
+  <section class="pn" class:f={focus === 'n'}>
+    <div class="ph">
+      <span class="hk">n</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
+    </div>
+    {#each groups as g}
+      {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
+      <div class="gr"><span style="color: var(--{g.color})">{g.mark}</span>{g.title}</div>
+      {#each list as s (s.project + '/' + s.step)}
+        {@const k = `${s.project}/${s.step}`}
+        {@const done = s.tasks.filter((t) => t.state === 'done').length}
+        {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
+        {@const extra = hub.demo?.steps[k]}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
+          <span class="dot" style="--x: var(--{g.color})"></span>
+          <span class="id">{s.step}</span>
+          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: {cur.text}</span>{/if}</span>
+          {#if g.id === 'running'}
+            <span class="id">{done}/{s.tasks.length} · {since(s.runs.at(-1)?.started)}</span>
+          {:else if g.id === 'review'}
+            {#if extra}<span class="chip {extra.check.ok ? 'x-g' : 'x-r'}">{extra.check.ok ? '✓' : '✗'} {extra.check.name}</span>{:else}<span class="id">{since(s.runs.at(-1)?.started)}</span>{/if}
+          {:else}
+            <span class="id">{s.project}</span>
+          {/if}
+        </div>
+      {:else}
+        <p class="dim pad">{g.empty}</p>
+      {/each}
+    {/each}
+  </section>
+
+  </div>
 
   <section class="pn" class:f={focus === 'w'} style="grid-column: span 8">
     <div class="ph"><span class="hk">w</span>This week<span class="n">{range}</span></div>
@@ -143,11 +173,15 @@
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   .body { padding: 8px 28px 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto minmax(220px, 1fr); gap: 20px; }
-  .cols { display: grid; align-items: center; column-gap: 14px; padding: 0 16px; grid-template-columns: 14px 36px minmax(0, 1fr) 150px 90px 48px; cursor: pointer; font-size: 14px; }
+  .cols { display: grid; align-items: center; column-gap: 14px; padding: 0 16px; grid-template-columns: 14px 36px minmax(0, 1fr) auto auto; cursor: pointer; font-size: 14px; }
   .cols:hover { background: var(--lt); }
   .cols.f { background: var(--sel); }
+  .side { display: flex; flex-direction: column; gap: 20px; min-height: 0; }
+  .pr { display: grid; grid-template-columns: minmax(0, 1fr) 120px 48px auto auto 60px; align-items: center; column-gap: 14px; padding: 0 16px; height: 44px; border-bottom: 1px solid var(--sel); cursor: pointer; font-size: 14px; }
+  .pr:hover { background: var(--lt); }
+  .pr.f { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
+  .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .id { font: 12.5px var(--mono); color: var(--fg2); }
-  .prog { display: flex; align-items: center; gap: 8px; }
   .wk { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 36px 1fr; min-height: 0; }
   .dh { display: flex; flex-direction: column; align-items: center; justify-content: center; font: 10.5px var(--mono); color: var(--fg2); border-bottom: 1px solid var(--sel); line-height: 1.2; }
   .dh b { font-size: 13px; color: var(--fg); }
