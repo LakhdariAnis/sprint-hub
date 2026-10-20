@@ -61,6 +61,11 @@ kbd {
 .lr.f { background: var(--sel); }
 .lr.f::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--ac); }
 .lr .s { display: block; font-size: 12px; color: var(--fg2); }
+/* Column header band of a list pane (canvas Projects and Project). */
+.lh {
+  height: 32px; flex: none; font: 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--fgm); border-bottom: 1px solid var(--sel); background: var(--bg);
+}
 .chip {
   display: inline-block; font: 11.5px var(--mono); border-radius: 10px; padding: 0 8px; line-height: 20px;
   white-space: nowrap; justify-self: start; color: var(--x, var(--fg2)); background: color-mix(in srgb, var(--x, var(--fg2)) 16%, transparent);
