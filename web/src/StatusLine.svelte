@@ -50,4 +50,6 @@
   .md { background: var(--ac); color: var(--bg); font-weight: 700; padding: 0 8px; border-radius: 3px; line-height: 18px; }
   .keys > span { display: flex; align-items: center; gap: 4px; }
   .fc { margin-left: auto; }
+  /* Below 1200 px the hints fill the line: drop the focus name rather than cut it mid-word. */
+  @media (max-width: 1200px) { .fc { display: none; } }
 </style>

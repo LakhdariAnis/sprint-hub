@@ -82,7 +82,7 @@
   .tb .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .k { margin-left: auto; font: 11px var(--mono); color: var(--fgm); }
   .bd { background: var(--y); color: var(--bg); border-radius: 8px; padding: 0 6px; font: 700 10.5px/16px var(--mono); }
-  .bd + .k { margin-left: 0; }
+  .bd + .k { margin-left: 8px; }
   .sbf { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 10px 6px 0; font: 11.5px var(--mono); color: var(--fg2); }
   .sbf .lbl { display: flex; align-items: center; gap: 8px; }
   .hide { margin-left: auto; display: flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }

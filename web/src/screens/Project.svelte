@@ -102,6 +102,7 @@
   .pv h2 { font-size: 15px; margin: 6px 0 10px; }
   .pv h3 { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fgd); font-weight: 400; margin: 16px 0 6px; }
   .pv p { margin: 0; }
+  .pv p.dim { padding: 0; }
   dl { display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px; margin: 0; }
   dt { color: var(--fgd); }
   dd { margin: 0; }

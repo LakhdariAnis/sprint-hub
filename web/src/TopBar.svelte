@@ -24,7 +24,8 @@
     background: var(--dk); border-bottom: 1px solid var(--sel); font: 11.5px var(--mono);
     color: var(--fg2); white-space: nowrap;
   }
-  .slot { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  /* Narrow windows clip the demo numbers instead of pushing the bar wider than the page. */
+  .slot { margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }
   .cap { letter-spacing: .08em; }
   .sep { color: var(--mu); }
   b { color: var(--fg); font-weight: 700; }
