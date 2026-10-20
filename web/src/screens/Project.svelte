@@ -16,10 +16,11 @@
   }
 
   let sel = $state(0)
+  const href = (s: Step) => `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(s.step)}`
   useKeys({
     j: () => (sel = Math.min(sel + 1, steps.length - 1)),
     k: () => (sel = Math.max(sel - 1, 0)),
-    Enter: () => cur && (location.hash = `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(cur.step)}`),
+    Enter: () => cur && (location.hash = href(cur)),
     Escape: () => (location.hash = '#/projects'),
   })
   let detail = $state<Step | null>(null)
@@ -48,70 +49,98 @@
 </Header>
 
 {#if status === 'failed'}
-  <p class="dim">Cannot load {project}. Is hubd running?</p>
+  <p class="dim pad">Cannot load {project}. Is hubd running?</p>
 {:else if status === 'ready'}
   <div class="body">
-  <table>
-    <thead>
-      <tr><th>Id</th><th>Title</th><th>Model</th><th class="n">Hours</th><th class="n">Tasks</th><th>State</th></tr>
-    </thead>
-    <tbody>
+    <section class="pn f list">
+      <div class="ph">Steps<span class="n">{steps.length}</span><span class="r"><span class="kb">↵</span> open</span></div>
+      <div class="lh grid"><span></span><span>id</span><span>title</span><span>model</span><span>hours</span><span>tasks</span><span>state</span></div>
       {#each steps as s, i (s.step)}
-        <tr class="row" class:on={i === sel} onclick={() => (sel = i)}>
-          <td class="mono">{s.step}</td>
-          <td>{s.title}</td>
-          <td class="mono dim">{s.model ?? '–'}</td>
-          <td class="n mono">{hours(s)}</td>
-          <td class="n mono">{s.tasks.filter((t) => t.state === 'done').length}/{s.tasks.length}</td>
-          <td class="s-{s.state}" style="color: var(--x)"><span class="dot"></span> {s.state}</td>
-        </tr>
-      {/each}
-    </tbody>
-  </table>
-  {#if cur}
-    <aside class="pv">
-      <h2>{cur.step} · {cur.title}</h2>
-      <dl>
-        <dt>Model</dt><dd class="mono">{cur.model ?? '–'}</dd>
-        <dt>Branch</dt><dd class="mono">{cur.branch ?? '–'} {#if cur.branch}<Copy text={cur.branch} label="branch" />{/if}</dd>
-        <dt>State</dt><dd class="s-{cur.state}" style="color: var(--x)"><span class="dot"></span> {cur.state}</dd>
-      </dl>
-      <h3>Goal</h3>
-      <p>{#if detail}<Inline text={goal(detail.spec) || 'No goal in the spec.'} />{:else}…{/if}</p>
-      <h3>Checklist</h3>
-      {#each cur.tasks as t}
-        <div class="t {t.state}"><span class="mk">{t.state === 'done' ? '✓' : t.state === 'doing' ? '●' : '○'}</span><Inline text={t.text} /></div>
+        {@const done = s.tasks.filter((t) => t.state === 'done').length}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => (sel = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (sel = i)}>
+          <span class="dot s-{s.state}"></span>
+          <span class="id">{s.step}</span>
+          <span class="tt">{s.title}</span>
+          <span>{#if s.model}<span class="mdl">{s.model}</span>{/if}</span>
+          <span class="id">{hours(s)}</span>
+          {#if s.state === 'doing' && s.tasks.length}
+            <span class="prog"><span class="pbar" style="--x: var(--b)"><i style="width: {(done / s.tasks.length) * 100}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
+          {:else}
+            <span class="id">{done}/{s.tasks.length}</span>
+          {/if}
+          <span><span class="chip s-{s.state}">{s.state}</span></span>
+        </div>
       {:else}
-        <p class="dim">No checklist yet.</p>
+        <p class="dim pad">No steps in this project.</p>
       {/each}
-    </aside>
-  {/if}
+    </section>
+
+    {#if cur}
+      <section class="pn">
+        <div class="ph">Step preview<span class="r"><span class="kb">↵</span> open</span></div>
+        <div class="pv">
+          <div>
+            <span class="id">{cur.step}</span>
+            <h2>{cur.title}</h2>
+          </div>
+          <p class="desc">{#if detail}<Inline text={goal(detail.spec) || 'No goal in the spec.'} />{:else}…{/if}</p>
+          <div class="kv">
+            <div><span>STATE</span><b class="s-{cur.state}" style="color: var(--x)">{cur.state}</b></div>
+            <div><span>MODEL</span>{cur.model ?? '–'}</div>
+            <div><span>HOURS</span>{hours(cur)}</div>
+          </div>
+          {#if cur.branch}<div class="br"><span class="mono">{cur.branch}</span><Copy text={cur.branch} label="branch" /></div>{/if}
+          <div>
+            {#each cur.tasks as t}
+              <div class="ck {t.state}"><span class="box">{#if t.state === 'done'}✓{/if}</span><span><Inline text={t.text} />{#if t.state === 'doing'} · now{/if}</span></div>
+            {:else}
+              <p class="dim">No checklist yet.</p>
+            {/each}
+          </div>
+          <div class="sp"></div>
+          <div><a class="btn pri" href={href(cur)}>Open <span class="kb">↵</span></a></div>
+        </div>
+      </section>
+    {/if}
   </div>
-  {#if steps.length === 0}<p class="dim">No steps in this project.</p>{/if}
 {/if}
 
 <style>
   .dim { color: var(--fgd); }
-  p.dim { padding: 0 20px; }
-  .body { display: flex; align-items: flex-start; }
-  table { flex: 1; min-width: 0; }
-  .row { cursor: pointer; }
+  .pad { padding: 12px 16px; margin: 0; }
+  .body { padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 20px; align-items: start; }
+  /* Narrow windows: the fixed columns leave the title no room beside the preview, so the preview goes below. */
+  @media (max-width: 1300px) { .body { grid-template-columns: minmax(0, 1fr); } }
+  .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 76px 56px 120px 96px; }
+  .row { min-height: 40px; cursor: pointer; }
   .row:hover { background: var(--lt); }
-  .row.on { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
-  .pv { width: 340px; flex: none; padding: 0 20px 20px; border-left: 1px solid var(--lt); min-height: 100%; }
-  .pv h2 { font-size: 15px; margin: 6px 0 10px; }
-  .pv h3 { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fgd); font-weight: 400; margin: 16px 0 6px; }
-  .pv p { margin: 0; }
-  .pv p.dim { padding: 0; }
-  dl { display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px; margin: 0; }
-  dt { color: var(--fgd); }
-  dd { margin: 0; }
-  .t { padding: 2px 0; }
-  .mk { display: inline-block; width: 18px; color: var(--fgm); }
-  .done .mk { color: var(--g); }
-  .doing .mk { color: var(--ac); }
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fgd); font-weight: 400; padding: 6px 20px; border-bottom: 1px solid var(--lt); }
-  .n { text-align: right; }
-  td { padding: 0 20px; height: 34px; border-bottom: 1px solid var(--lt); }
+  .row.f:hover { background: var(--sel); }
+  .id { font: 12.5px var(--mono); color: var(--fg2); }
+  .tt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mdl { font: 11.5px var(--mono); border: 1px solid var(--mu); border-radius: 4px; padding: 0 6px; color: var(--fg2); }
+  .prog { display: flex; align-items: center; gap: 6px; }
+  .prog .pbar { flex: 1; }
+  /* Todo has not started: an outline, not a fill. */
+  .chip.s-todo { background: none; box-shadow: inset 0 0 0 1px var(--mu); }
+  .pv { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pv p.dim { margin: 0; }
+  h2 { font-size: 18px; font-weight: 600; line-height: 1.3; margin: 2px 0 0; }
+  .desc { margin: 0; font-size: 13.5px; color: var(--fg2); line-height: 1.55; }
+  .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .kv div { border: 1px solid var(--sel); border-radius: 7px; padding: 7px 10px; background: var(--bg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kv span { display: block; font: 10.5px var(--mono); color: var(--fg2); }
+  .kv b { font-weight: 500; }
+  .br { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg2); }
+  .ck { display: grid; grid-template-columns: 20px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sel); font-size: 13.5px; align-items: center; }
+  .ck:last-child { border-bottom: 0; }
+  .ck.todo { color: var(--fg2); }
+  .ck.doing { color: var(--ac); font-weight: 500; }
+  .box { width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px solid var(--mu); }
+  .done .box { background: var(--g); border-color: var(--g); color: var(--bg); }
+  .doing .box { border: 2px solid var(--ac); }
+  .sp { flex: 1; }
+  .btn { height: 34px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; text-decoration: none; }
+  .btn.pri { background: var(--ac); color: var(--bg); font-weight: 500; }
+  .btn.pri .kb { background: var(--bg); color: var(--ac); }
 </style>
