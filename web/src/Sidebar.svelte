@@ -6,9 +6,9 @@
 
   // Icons from the canvas. Chats and Settings come in later sprints.
   const tabs = [
+    { id: 'projects', label: 'Projects', icon: '<path d="M2 5.5h6l1.8 2H18v9H2z"/>' },
     { id: 'today', label: 'Today', icon: '<rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2.5v3M13 2.5v3"/>' },
     { id: 'review', label: 'Review', icon: '<circle cx="10" cy="10" r="7.5"/><path d="M6.5 10l2.5 2.5 4.5-5"/>' },
-    { id: 'projects', label: 'Projects', icon: '<path d="M2 5.5h6l1.8 2H18v9H2z"/>' },
     { id: 'chats', label: 'Chats', icon: '<path d="M3 4h14v10H8.5L5 17v-3H3z"/>', off: true },
     { id: 'settings', label: 'Settings', icon: '<path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/>', off: true },
   ]
@@ -25,13 +25,13 @@
   {#each tabs as t, i}
     {#if t.off}
       <span class="tb off" aria-disabled="true" title="{t.label} comes in a later sprint">
-        <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span><span class="k">^{i + 1}</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span><span class="k">{i + 1}</span>
       </span>
     {:else}
       <a class="tb" class:on={active === t.id} href="#/{t.id}" aria-label={t.label}>
         <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span>
         {#if t.id === 'review' && hub.review > 0}<span class="bd">{hub.review}</span>{/if}
-        <span class="k">^{i + 1}</span>
+        <span class="k">{i + 1}</span>
       </a>
     {/if}
   {/each}
@@ -41,14 +41,14 @@
       {@const [project, id] = [k.slice(0, k.lastIndexOf('/')), k.slice(k.lastIndexOf('/') + 1)]}
       <a class="tb" class:on={here === k} href="#/steps/{encodeURIComponent(project)}/{encodeURIComponent(id)}" aria-label="{project} {id}">
         <span class="dot s-{steps[k]?.state}"></span><b class="mono">{id}</b><span class="lbl">{steps[k]?.title ?? project}</span>
-        {#if i < 4}<span class="k">^{i + 6}</span>{/if}
+        {#if i < 4}<span class="k">{i + 6}</span>{/if}
       </a>
     {/each}
   {/if}
   <div class="sbf">
     <span class="lbl"><span class="dot" class:x-g={hub.live} class:x-r={hub.live === false}></span> hubd {hub.live === false ? 'down' : 'live'}</span>
     <button class="hide" type="button" onclick={() => (keys.rail = !keys.rail)} title={keys.rail ? 'Expand sidebar' : 'Hide sidebar'}>
-      <span class="kb">^B</span><span class="lbl"> hide</span>
+      <span class="kb">b</span><span class="lbl"> hide</span>
     </button>
   </div>
 </nav>

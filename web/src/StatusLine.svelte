@@ -3,13 +3,13 @@
   import { router } from './route.svelte'
 
   const hints: Record<string, [string, string][]> = {
-    today: [['j k', 'move'], ['↵', 'open']],
-    projects: [['j k', 'move'], ['↵', 'open project']],
-    project: [['j k', 'move'], ['↵', 'open step'], ['Esc', 'back']],
+    today: [['n m w', 'pane'], ['j k', 'move'], ['↵', 'open']],
+    projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
+    project: [['↑ ↓', 'move'], ['→ ↵', 'open step'], ['← Esc', 'back']],
     step: [['s', 'start'], ['Esc', 'back']],
     review: [['j k', 'move'], ['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']],
   }
-  const common: [string, string][] = [['^1 ^2 ^3', 'tab'], ['^B', 'sidebar'], ['?', 'help']]
+  const common: [string, string][] = [['1 2 3', 'tab'], ['b', 'sidebar'], ['?', 'help']]
   const list = $derived([...hints[router.route.name], ...common])
   const r = $derived(router.route)
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())

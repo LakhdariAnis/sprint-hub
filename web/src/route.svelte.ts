@@ -10,7 +10,7 @@ export function parse(hash: string): Route {
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
   if (a === 'review') return { name: 'review', project: b, id: c }
-  return { name: 'today' }
+  return a === 'today' ? { name: 'today' } : { name: 'projects' }
 }
 
 export const router = $state({ route: parse(location.hash), open: [] as string[] })

@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test'
 // The core loop on the demo vault: Today → start notes/301 → FakeRunner ticks it to done → approve.
 test('start a step, wait for done, approve it', async ({ page }) => {
   await page.goto('/')
+  await expect(page).toHaveURL(/#\/projects$|\/$/)
+  await page.goto('/#/today')
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Anis$/ })).toBeVisible()
 
   const next = page.locator('.pn', { hasText: 'Now' })
@@ -24,15 +26,15 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await expect(page.locator('.pane', { hasText: 'Approved' }).getByRole('link', { name: /301/ })).toBeVisible()
 })
 
-test('ctrl keys switch tabs, open steps and the sidebar rail', async ({ page }) => {
+test('plain keys switch tabs, open steps and the sidebar rail', async ({ page }) => {
   await page.goto('/#/steps/notes/301')
   const open = page.getByRole('link', { name: 'notes 301' })
   await expect(open).toBeVisible()
-  await page.keyboard.press('Control+3')
+  await page.keyboard.press('1')
   await expect(page).toHaveURL(/#\/projects$/)
-  await page.keyboard.press('Control+6')
+  await page.keyboard.press('6')
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
-  await page.keyboard.press('Control+b')
+  await page.keyboard.press('b')
   await expect(page.locator('nav.sb.rail')).toBeVisible()
-  await expect(open).toContainText('^6')
+  await expect(open).toContainText('6')
 })
