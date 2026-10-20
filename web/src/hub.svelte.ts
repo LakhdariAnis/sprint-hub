@@ -3,7 +3,7 @@ import { loadStep, type Step } from './steps'
 import { key, put, steps } from './store.svelte'
 
 // Live numbers for the frame: hubd health, the counts shown in the bar and the tabs, and broken vault files.
-export const hub = $state({ live: null as boolean | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[],
+export const hub = $state({ live: null as boolean | null, version: '', demo: false, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[],
   // `project/id` of the steps in each Today pane, in hubd's order; the steps themselves are in the store.
   today: { running: [], review: [], next: [] } as Record<'running' | 'review' | 'next', string[]>,
 })
@@ -11,7 +11,10 @@ export const hub = $state({ live: null as boolean | null, running: 0, review: 0,
 async function load() {
   try {
     const [h, t, p, e] = await Promise.all([fetch('/health'), fetch('/today'), fetch('/projects'), fetch('/errors')])
-    hub.live = h.ok && (await h.json())?.ok === true
+    const health = h.ok ? await h.json() : null
+    hub.live = health?.ok === true
+    hub.version = health?.version ?? ''
+    hub.demo = health?.demo === true
     const today: Record<'running' | 'review' | 'next', Step[]> = await t.json()
     for (const pane of ['running', 'review', 'next'] as const) {
       for (const s of today[pane]) put(s.project, s)

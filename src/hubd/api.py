@@ -32,7 +32,7 @@ class RunEnded(BaseModel):
     step: str
 
 
-def create_app(hub: Hub | None = None) -> FastAPI:
+def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if hub is None:
@@ -60,7 +60,7 @@ def create_app(hub: Hub | None = None) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": True, "version": version("hubd")}
+        return {"ok": True, "version": version("hubd"), "demo": demo}
 
     if hub is None:
         return _with_web(app)

@@ -17,6 +17,7 @@ def test_demo_vault_is_a_git_repo_without_broken() -> None:
 
 def test_demo_lists_projects_and_start_runs_fake_runner() -> None:
     with TestClient(demo_app()) as client:
+        assert client.get("/health").json()["demo"] is True
         assert [p["id"] for p in client.get("/projects").json()] == ["demo", "notes"]
         states = {
             s["state"] for p in ("demo", "notes") for s in client.get(f"/projects/{p}/steps").json()

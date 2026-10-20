@@ -2,19 +2,18 @@
   import { hub } from './hub.svelte'
 </script>
 
-<header class="tb">
+<header class="ub">
   <span class="dot" class:x-g={hub.live} class:x-r={hub.live === false}></span>
-  <span class="v">{hub.live === null ? 'checking hubd…' : hub.live ? 'hubd live' : 'hubd down'}</span>
-  · <span class="mono">:{location.port || 80}</span>
-  · <span class="mono v">{hub.running}</span> running
-  · <span class="mono v">{hub.review}</span> to review
+  <span>{hub.live === null ? 'checking hubd…' : hub.live ? 'hubd live' : 'hubd down'}{hub.demo ? ' · demo' : ''}</span>
+  <!-- Usage, agents and system numbers come in step 213b. -->
+  <span class="slot"></span>
 </header>
 
 <style>
-  .tb {
-    height: 30px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 14px;
-    background: var(--dkr); border-bottom: 1px solid var(--lt); font-size: 11.5px;
-    color: var(--fgd); white-space: nowrap;
+  .ub {
+    height: 30px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 20px;
+    background: var(--dk); border-bottom: 1px solid var(--sel); font: 11.5px var(--mono);
+    color: var(--fg2); white-space: nowrap;
   }
-  .v { color: var(--fg); }
+  .slot { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 </style>

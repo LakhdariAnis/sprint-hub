@@ -78,4 +78,4 @@ def git(cwd: Path, *args: str) -> None:
 
 
 def demo_app() -> FastAPI:
-    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()))
+    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()), demo=True)
