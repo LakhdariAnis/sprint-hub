@@ -38,3 +38,11 @@ test('plain keys switch tabs, open steps and the sidebar rail', async ({ page })
   await expect(page.locator('nav.sb.rail')).toBeVisible()
   await expect(open).toContainText('6')
 })
+
+test('Enter opens the selected row after a sidebar click', async ({ page }) => {
+  await page.goto('/#/today')
+  await page.getByRole('link', { name: 'Projects' }).click()
+  await expect(page).toHaveURL(/#\/projects$/)
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/projects\/demo$/)
+})

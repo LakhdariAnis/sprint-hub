@@ -33,6 +33,12 @@ for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
 let timer: ReturnType<typeof setTimeout>
 
+// A clicked sidebar tab keeps focus, so the next Enter would click it again instead of opening the selected row.
+addEventListener('hashchange', () => {
+  const el = document.activeElement
+  if (el instanceof HTMLElement && el.closest('nav')) el.blur()
+})
+
 addEventListener('keydown', (e) => {
   const el = e.target as HTMLElement
   // Off while typing; Enter on a focused button or link keeps its own click.
