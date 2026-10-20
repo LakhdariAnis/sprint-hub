@@ -1,17 +1,29 @@
 <script lang="ts">
   import { keys } from './keys.svelte'
+  import { hub } from './hub.svelte'
   import { router } from './route.svelte'
+  import { key, steps } from './store.svelte'
 
-  const hints: Record<string, [string, string][]> = {
+  const r = $derived(router.route)
+  // Only keys that do something now: start and approve depend on the step's state.
+  const cur = $derived(
+    r.name === 'step' ? steps[key(r.project, r.id)]
+    : r.name === 'review' && r.project && r.id ? steps[key(r.project, r.id)]
+    : undefined,
+  )
+  const canStart = $derived(!!cur && (cur.state === 'todo' || cur.state === 'changes') && cur.by !== 'me')
+  // Review without a step in the URL shows the oldest waiting one.
+  const canReview = $derived(cur ? cur.state === 'done' : r.name === 'review' && hub.review > 0)
+  const when = (on: boolean, h: [string, string][]) => (on ? h : [])
+  const hints = $derived<Record<string, [string, string][]>>({
     today: [['n m w', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
     project: [['↑ ↓', 'move'], ['→ ↵', 'open step'], ['← Esc', 'back']],
-    step: [['s', 'start'], ['Esc', 'back']],
-    review: [['j k', 'move'], ['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']],
-  }
+    step: [...when(canStart, [['s', 'start']]), ['Esc', 'back']],
+    review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
+  })
   const common: [string, string][] = [['1 2 3', 'tab'], ['b', 'sidebar'], ['?', 'help']]
-  const list = $derived([...hints[router.route.name], ...common])
-  const r = $derived(router.route)
+  const list = $derived([...hints[r.name], ...common])
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())
   // shortcut: focus names the route, not the selected row; screens set their own focus from step 213c on.
   const focus = $derived(
