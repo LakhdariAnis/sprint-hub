@@ -1,9 +1,11 @@
 <script lang="ts">
   import Header from '../Header.svelte'
+  import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { steps } from '../store.svelte'
   import { loadProjects, type Row } from '../projects'
+  import { ago } from '../steps'
 
   const groups = [
     { id: 'running', title: 'RUNNING', mark: '●', state: 'doing', empty: 'Nothing is running.' },
@@ -17,11 +19,7 @@
     const t = setInterval(() => (now = Date.now()), 30_000)
     return () => clearInterval(t)
   })
-  const since = (started?: string) => {
-    if (!started) return '–'
-    const m = Math.max(0, Math.floor((now - Date.parse(started)) / 60_000))
-    return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`
-  }
+  const since = (started?: string) => ago(started, now)
 
   const d = $derived(new Date(now))
   // ISO week number: the week of the Thursday.
@@ -131,7 +129,7 @@
         <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
           <span class="dot s-{g.state}"></span>
           <span class="id">{s.step}</span>
-          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: {cur.text}</span>{/if}</span>
+          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: <Inline text={cur.text} /></span>{/if}</span>
           {#if g.id === 'running'}
             <span class="id">{done}/{s.tasks.length} · {since(s.runs.at(-1)?.started)}</span>
           {:else if g.id === 'review'}

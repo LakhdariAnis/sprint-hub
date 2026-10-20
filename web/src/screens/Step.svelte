@@ -3,7 +3,7 @@
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { goal, loadStep, startStep } from '../steps'
+  import { ago, goal, loadStep, startStep } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps } from '../store.svelte'
 
@@ -52,8 +52,8 @@
 
   const label = $derived.by(() => {
     if (s?.state !== 'doing') return s?.state ?? ''
-    const m = Math.floor((now - Date.parse(s.runs.at(-1)?.started ?? '')) / 60_000)
-    return m >= 0 ? `running · ${m < 60 ? `${m} min` : `${Math.floor(m / 60)} h`}` : 'running'
+    const t = ago(s.runs.at(-1)?.started, now)
+    return t === '–' ? 'running' : `running · ${t}`
   })
 
   $effect(() => {
@@ -96,20 +96,22 @@
       </div>
     </section>
 
-    <section class="pn ck" class:f={focus === 'c'}>
+    <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !q}>
       <div class="ph"><span class="hk">c</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
-      <div class="big">
-        <b>{done}<span class="of"> / {s.tasks.length}</span></b>
-        <div class="segs">
-          {#each s.tasks as t}<i class={t.state}></i>{/each}
+      {#if s.tasks.length}
+        <div class="big">
+          <b>{done}<span class="of"> / {s.tasks.length}</span></b>
+          <div class="segs">
+            {#each s.tasks as t}<i class={t.state}></i>{/each}
+          </div>
         </div>
-      </div>
+      {/if}
       <div class="rows">
         {#each s.tasks as t, i}
           <div class="task {t.state}">
             <span class="ix">{i + 1}</span>
             <span class="box" aria-label={t.state}>{#if t.state === 'done'}✓{:else if t.state === 'doing'}<span class="spin"></span>{/if}</span>
-            <span class="tx">{t.text}</span>
+            <span class="tx"><Inline text={t.text} /></span>
             {#if t.state === 'doing'}<span class="chip" style="--x: var(--ac)">now</span>{:else}<span class="tm">{time(t)}</span>{/if}
           </div>
         {:else}
@@ -202,6 +204,8 @@
   .meta div { border: 1px solid var(--sel); border-radius: 7px; padding: 6px 10px; background: var(--bg); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta span { display: block; font: 10.5px var(--mono); color: var(--fg2); letter-spacing: 0.05em; }
   .ck { grid-column: 1; grid-row: 2; }
+  /* No checklist yet: the pane hugs its one line instead of filling the column. */
+  .ck.short { align-self: start; }
   .right { grid-column: 2; grid-row: 1 / span 2; }
   .big { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--sel); }
   .big b { font-size: 26px; font-weight: 500; line-height: 1; }

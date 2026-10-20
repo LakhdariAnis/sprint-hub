@@ -1,6 +1,7 @@
 <script lang="ts">
   import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
+  import Inline from '../Inline.svelte'
   import { useKeys } from '../keys.svelte'
   import { goal, loadStep, loadSteps, type Step } from '../steps'
 
@@ -79,7 +80,7 @@
       <p>{detail ? goal(detail.spec) || 'No goal in the spec.' : '…'}</p>
       <h3>Checklist</h3>
       {#each cur.tasks as t}
-        <div class="t"><span class="mono">{t.state === 'done' ? '[x]' : t.state === 'doing' ? '[~]' : '[ ]'}</span> {t.text}</div>
+        <div class="t"><span class="mono">{t.state === 'done' ? '[x]' : t.state === 'doing' ? '[~]' : '[ ]'}</span> <Inline text={t.text} /></div>
       {:else}
         <p class="dim">No checklist yet.</p>
       {/each}

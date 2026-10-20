@@ -38,6 +38,14 @@ export const approveStep = (project: string, id: string) => post(project, id, 'a
 export const requestChanges = (project: string, id: string, comment: string) => post(project, id, 'changes', { comment })
 
 // The text under `## Goal` in the repo spec, up to the next heading.
+// Time since `started` as one short unit (12m, 3h, 5d), the same on every screen.
+export const ago = (started: string | undefined, now: number) => {
+  const d = now - Date.parse(started ?? '')
+  if (Number.isNaN(d)) return '–'
+  const m = Math.max(0, Math.floor(d / 60_000))
+  return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`
+}
+
 export const goal = (spec: string | null | undefined) => spec?.match(/^## Goal\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1].trim() ?? ''
 
 // `git diff --stat main...branch` of the step; a refused read throws hubd's reason.
