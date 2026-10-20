@@ -77,7 +77,7 @@
         <dt>State</dt><dd class="s-{cur.state}" style="color: var(--x)"><span class="dot"></span> {cur.state}</dd>
       </dl>
       <h3>Goal</h3>
-      <p>{detail ? goal(detail.spec) || 'No goal in the spec.' : '…'}</p>
+      <p>{#if detail}<Inline text={goal(detail.spec) || 'No goal in the spec.'} />{:else}…{/if}</p>
       <h3>Checklist</h3>
       {#each cur.tasks as t}
         <div class="t {t.state}"><span class="mk">{t.state === 'done' ? '✓' : t.state === 'doing' ? '●' : '○'}</span><Inline text={t.text} /></div>

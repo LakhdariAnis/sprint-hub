@@ -60,6 +60,7 @@
 
 <style>
   .md { line-height: 1.65; }
+  .md > :first-child { margin-top: 0; }
   p { margin: 0 0 10px; }
   .h { font-weight: 600; margin: 16px 0 6px; }
   .h1 { font-size: 20px; }

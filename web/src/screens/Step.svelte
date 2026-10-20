@@ -87,7 +87,7 @@
     <section class="pn head">
       <div class="crumb">STEP {s.step}</div>
       <h1>{s.title}</h1>
-      {#if lead}<p>{lead}</p>{/if}
+      {#if lead}<p><Inline text={lead} /></p>{/if}
       <div class="meta">
         <div><span>MODEL</span>{s.model ?? '–'}</div>
         <div><span>EST.</span>{est}</div>

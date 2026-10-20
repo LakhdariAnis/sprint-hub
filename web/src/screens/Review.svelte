@@ -173,6 +173,7 @@
 <style>
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
+  .pad > p { margin: 0 0 10px; }
   .id { font: 12.5px var(--mono); color: var(--fg2); }
   .err { margin: 0 20px 14px; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
   .err.in { margin: 12px 16px; }

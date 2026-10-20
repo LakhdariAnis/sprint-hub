@@ -51,5 +51,5 @@
   .keys > span { display: flex; align-items: center; gap: 4px; }
   .fc { margin-left: auto; }
   /* Below 1200 px the hints fill the line: drop the focus name rather than cut it mid-word. */
-  @media (max-width: 1200px) { .fc { display: none; } }
+  @media (max-width: 1200px) { .keys > .fc { display: none; } }
 </style>
