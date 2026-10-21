@@ -8,7 +8,7 @@
     ['g t', 'go to Today'],
     ['g p', 'go to Projects'],
     ['g r', 'go to Review'],
-    ['1 2 3', 'Projects, Today, Review'],
+    ['1 2 3', 'Projects, Today, Review (also Ctrl+1 2 3 in the app window)'],
     ['6 … 9', 'the steps under OPEN in the sidebar'],
     ['b', 'hide / show the sidebar labels'],
     ['s', 'start the step (Step screen)'],
