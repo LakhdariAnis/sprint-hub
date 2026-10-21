@@ -46,3 +46,11 @@ test('Enter opens the selected row after a sidebar click', async ({ page }) => {
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/#\/projects\/demo$/)
 })
+
+test('Ctrl+2 opens Today, Ctrl+1 Projects', async ({ page }) => {
+  await page.goto('/#/projects')
+  await page.keyboard.press('Control+2')
+  await expect(page).toHaveURL(/#\/today$/)
+  await page.keyboard.press('Control+1')
+  await expect(page).toHaveURL(/#\/projects$/)
+})

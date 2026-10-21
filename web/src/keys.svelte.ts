@@ -21,7 +21,7 @@ const go: Handlers = {
   p: () => (location.hash = '#/projects'),
   r: () => (location.hash = '#/review'),
 }
-// Plain digits and `b`: Chrome keeps Ctrl+1…9 for its own tabs, a page cannot take them. 1–3 tabs, 6–9 the OPEN steps, b the icon rail.
+// Plain digits and `b`: 1–3 tabs, 6–9 the OPEN steps, b the icon rail. Ctrl+1–3 (app window only, see below) = the tabs too.
 const openStep = (n: number) => {
   const k = router.open[n]
   if (!k) return
@@ -30,6 +30,8 @@ const openStep = (n: number) => {
 }
 const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, b: () => (keys.rail = !keys.rail) }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
+// A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
+const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r }
 const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
 let timer: ReturnType<typeof setTimeout>
 
@@ -42,7 +44,14 @@ addEventListener('hashchange', () => {
 addEventListener('keydown', (e) => {
   const el = e.target as HTMLElement
   // Off while typing; Enter on a focused button or link keeps its own click.
-  if (el.closest('input, textarea, select, [contenteditable]') || e.ctrlKey || e.metaKey || e.altKey) return
+  if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.altKey) return
+  if (e.ctrlKey) {
+    if (!e.shiftKey && ctrl[e.key]) {
+      ctrl[e.key]()
+      e.preventDefault()
+    }
+    return
+  }
   if (e.key === 'Enter' && el.closest('a, button')) return
   const k = alias[e.key] ?? e.key
 

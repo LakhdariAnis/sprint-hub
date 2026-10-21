@@ -16,6 +16,15 @@ Needs `uv` and Node 24. No Claude, Omarchy or your own projects needed: the demo
 Open http://127.0.0.1:8765/. Keys: `1 2 3` switch screens, arrows walk the list, `Enter` opens, `s` starts a step
 (Step screen), `a` approves and `c` requests changes (Review), `?` shows all keys.
 
+### Open it as an app window
+
+`bin/sprint-hub-app` starts `hubd` if it is not running, then opens sprint-hub in its own Chromium `--app` window
+(no tabs, no URL bar), or focuses it if it is already open. On Omarchy (Hyprland), bind it in `~/.config/hypr/bindings.lua`:
+
+    o.bind("SUPER + SHIFT + P", "Sprint hub", "/path/to/sprint-hub/bin/sprint-hub-app")
+
+This runs the real `hubd` on your vault, not the demo. Closing the window leaves `hubd` running.
+
 ## Screenshots
 
 > **TODO(Anis): retake these from the 0.2.0 build before the release, or drop them.**
