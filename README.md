@@ -23,3 +23,13 @@ Open http://127.0.0.1:8765/. Keys: `1 2 3` switch screens, arrows walk the list,
 
 ![Today](sprint/screens/213c-today.png)
 ![Step spec](sprint/screens/213d-step-spec.png)
+
+## How it works
+
+<!-- TODO(Anis): write the state-machine section in your own words. Start from docs/states.md (the diagram).
+Guiding questions:
+1. Why may only the daemon move a step to `doing` and `done`, and only you to `approved` and `changes`?
+   What would go wrong if Claude could mark its own step `approved`?
+2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
+3. What is the review gate for, in one sentence?
+-->
