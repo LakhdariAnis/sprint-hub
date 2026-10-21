@@ -1,11 +1,10 @@
 # sprint-hub
 
-<!-- TODO(Anis): write the pitch in your own words (2–4 sentences). Guiding questions:
-1. What problem did you have that made you build this? Name one concrete moment.
-2. ROADMAP rule 1 says lead with the system: an event-driven daemon, a state machine over plain markdown files,
-   and a human review gate before anything is merged. Do you agree with that order, or does something else come first?
-3. What should a reader know after the first sentence, before they try the demo?
--->
+> **TODO(Anis): write the pitch in your own words (2–4 sentences).** Guiding questions:
+> 1. What problem did you have that made you build this? Name one concrete moment.
+> 2. ROADMAP rule 1 says lead with the system: an event-driven daemon, a state machine over plain markdown files,
+>    and a human review gate before anything is merged. Do you agree with that order, or does something else come first?
+> 3. What should a reader know after the first sentence, before they try the demo?
 
 ## Try it
 
@@ -19,20 +18,19 @@ Open http://127.0.0.1:8765/. Keys: `1 2 3` switch screens, arrows walk the list,
 
 ## Screenshots
 
-<!-- TODO(Anis): retake these from the 0.2.0 build before the release, or drop them. -->
+> **TODO(Anis): retake these from the 0.2.0 build before the release, or drop them.**
 
 ![Today](sprint/screens/213c-today.png)
 ![Step spec](sprint/screens/213d-step-spec.png)
 
 ## How it works
 
-<!-- TODO(Anis): write the state-machine section in your own words. Start from docs/states.md (the diagram).
-Guiding questions:
-1. Why may only the daemon move a step to `doing` and `done`, and only you to `approved` and `changes`?
-   What would go wrong if Claude could mark its own step `approved`?
-2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
-3. What is the review gate for, in one sentence?
--->
+> **TODO(Anis): write the state-machine section in your own words.** Start from [docs/states.md](docs/states.md) (the diagram).
+> Guiding questions:
+> 1. Why may only the daemon move a step to `doing` and `done`, and only you to `approved` and `changes`?
+>    What would go wrong if Claude could mark its own step `approved`?
+> 2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
+> 3. What is the review gate for, in one sentence?
 
 ## Tests and CI
 
