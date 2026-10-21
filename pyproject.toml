@@ -1,6 +1,6 @@
 [project]
 name = "hubd"
-version = "0.2.0.dev0"
+version = "0.2.0"
 description = "sprint-hub v2 daemon"
 requires-python = ">=3.12"
 dependencies = [
