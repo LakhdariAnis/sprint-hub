@@ -76,6 +76,11 @@ Tools (the only ones allowed in 0.2.0):
 Cut from HUB-DESIGN's MVP: SQLite (an in-memory index rebuilt from the files is enough for one user), APScheduler,
 markdown-it-py, Syncthing, Obsidian, ntfy, Tailscale, Remote Control. Each one can come back in a later version, with an ADR.
 
+### 0.2.1 — App window (Sprint 2, step `215`)
+sprint-hub opens as its own window (Chromium `--app`, no tabs or URL bar) with `SUPER + SHIFT + P`, and starts hubd if needed.
+Ctrl+1/2/3 for the screens if the app window allows it. No new tool: Chromium and Hyprland are already on the machine.
+A Rust/Tauri window can replace it later, with an ADR.
+
 ### 0.3.0 — Daily use (Sprints 3–4)
 Things that make Anis use it every day instead of v1:
 Omarchy theme and the Settings screen (both moved from 0.2.0 on 2026-10-19),
