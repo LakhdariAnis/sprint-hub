@@ -8,9 +8,9 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from hubd.daemon import Hub, NotFound, step_json, vault_path
+from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -22,12 +22,17 @@ PORT = 8765
 WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
 
 
+class Changes(BaseModel):
+    # One line: the comment is one `comment:` field in the step file.
+    comment: str = Field(min_length=1, pattern=r"^[^\r\n]*\S[^\r\n]*$")
+
+
 class RunEnded(BaseModel):
     session_id: str
     step: str
 
 
-def create_app(hub: Hub | None = None) -> FastAPI:
+def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if hub is None:
@@ -45,13 +50,17 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     async def conflict(_: Request, exc: InvalidTransition) -> JSONResponse:
         return JSONResponse({"detail": exc.reason}, status_code=409)
 
+    @app.exception_handler(MergeConflict)
+    async def merge_conflict(_: Request, exc: MergeConflict) -> JSONResponse:
+        return JSONResponse({"detail": exc.reason, "files": exc.files}, status_code=409)
+
     @app.exception_handler(NotFound)
     async def not_found(_: Request, exc: NotFound) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=404)
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": True, "version": version("hubd")}
+        return {"ok": True, "version": version("hubd"), "demo": demo}
 
     if hub is None:
         return _with_web(app)
@@ -71,6 +80,10 @@ def create_app(hub: Hub | None = None) -> FastAPI:
         entry = hub.entry(project, step_id)
         spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
         return {**step_json(entry), "spec": spec, "path": str(entry.path)}
+
+    @app.get("/steps/{project}/{step_id}/diffstat")
+    async def diffstat(project: str, step_id: str) -> dict:
+        return {"stat": await hub.diffstat(project, step_id)}
 
     @app.get("/today")
     def today() -> dict[str, list[dict]]:
@@ -97,6 +110,14 @@ def create_app(hub: Hub | None = None) -> FastAPI:
     @app.post("/steps/{project}/{step_id}/start")
     async def start(project: str, step_id: str) -> dict:
         return (await hub.start(project, step_id)).model_dump(mode="json")
+
+    @app.post("/steps/{project}/{step_id}/approve")
+    async def approve(project: str, step_id: str) -> dict:
+        return (await hub.approve(project, step_id)).model_dump(mode="json")
+
+    @app.post("/steps/{project}/{step_id}/changes")
+    async def changes(project: str, step_id: str, body: Changes) -> dict:
+        return (await hub.request_changes(project, step_id, body.comment)).model_dump(mode="json")
 
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:

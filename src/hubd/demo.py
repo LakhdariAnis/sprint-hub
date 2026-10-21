@@ -18,6 +18,8 @@ FIXTURE = Path(__file__).parents[2] / "tests" / "fixtures" / "vault"
 
 # Extra demo data on top of the fixture: (path under the vault, text).
 EXTRA = {
+    "demo-repo/sprint/103-ui.md": "# Step 103 — Show the list\n\n## Tasks\n"
+    "- Draw the list\n- Sort it\n",
     "demo-repo/sprint/104-docs.md": "# Step 104 — Write the docs\n\n## Tasks\n"
     "- Write the intro\n- Add the install section\n- Link the API\n",
     "demo-repo/sprint/progress/104.md": "# Step 104\n- [x] Write the intro\n"
@@ -38,6 +40,12 @@ EXTRA = {
     "notes-repo/sprint/progress/302.md": "# Step 302\n- [x] Index the text\n- [~] Add the query\n",
 }
 
+# The `branch:` of each demo step that is not approved yet, per repo.
+BRANCHES = {
+    "demo-repo": ["step/102-api", "step/103-ui", "step/104-docs"],
+    "notes-repo": ["step/301-parse", "step/302-search"],
+}
+
 
 def demo_vault() -> Path:
     """A throwaway vault: the fixture's good projects, a second project, a git repo for each."""
@@ -48,12 +56,26 @@ def demo_vault() -> Path:
         path = vault / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
-    git = ["git", "-c", "user.name=hubd demo", "-c", "user.email=demo@hubd.invalid"]
-    for repo in ("demo-repo", "notes-repo"):
-        for args in (["init", "-q", "-b", "main"], ["add", "."], ["commit", "-q", "-m", "demo"]):
-            subprocess.run([*git, *args], cwd=vault / repo, check=True)
+    for repo, branches in BRANCHES.items():
+        cwd = vault / repo
+        git(cwd, "init", "-q", "-b", "main")
+        git(cwd, "config", "user.name", "hubd demo")  # approve's merge commit needs a name too
+        git(cwd, "config", "user.email", "demo@hubd.invalid")
+        git(cwd, "add", ".")
+        git(cwd, "commit", "-q", "-m", "demo")
+        for branch in branches:  # one commit per step branch, so approve has something to merge
+            step_id = branch.removeprefix("step/").split("-")[0]
+            git(cwd, "checkout", "-q", "-b", branch)
+            (cwd / f"work-{step_id}.md").write_text(f"Work of step {step_id}.\n")
+            git(cwd, "add", ".")
+            git(cwd, "commit", "-q", "-m", f"step {step_id}")
+            git(cwd, "checkout", "-q", "main")
     return vault
 
 
+def git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True)
+
+
 def demo_app() -> FastAPI:
-    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()))
+    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()), demo=True)

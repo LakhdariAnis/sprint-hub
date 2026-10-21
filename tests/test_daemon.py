@@ -20,7 +20,8 @@ def test_start_ticks_then_done_saved(vault: Path, hub: Hub, notifier: Recorder) 
         saved = _load_step(step_file)
         assert saved.state == State.doing
         session = saved.runs[-1].session
-        assert (saved.runs[-1].model, session) == ("sonnet", step.runs[-1].session)
+        # `changes` resumes the last run's chat: same session, same model.
+        assert (saved.runs[-1].model, session) == ("haiku", "9c3d…e12")
         await hub.runner.tasks[session]
         assert hub.entry("demo", "104").step.state == State.done
 
@@ -62,6 +63,8 @@ def test_runner_failure_restores_the_file(vault: Path) -> None:
     class Broken(FakeRunner):
         async def start(self, *args: object) -> None:
             raise OSError("no terminal")
+
+        resume = start
 
     async def main() -> None:
         hub = Hub(vault, lambda ended: Broken(ended), Recorder())

@@ -34,4 +34,3 @@ def test_every_combination(state: State, event: Event, actor: Actor) -> None:
         else:
             assert f"no '{event}' from '{state}'" in err.value.reason
     assert step.state == state  # input never changed
-

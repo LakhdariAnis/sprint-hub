@@ -1,0 +1,66 @@
+import { onMount } from 'svelte'
+import { router } from './route.svelte'
+
+// The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
+// `rail`: the sidebar is collapsed to its icon rail (^B).
+export const keys = $state({ help: false, pending: false, rail: false })
+
+type Handlers = Record<string, () => void>
+let current: Handlers = {}
+
+// Keys of the screen on show, by `KeyboardEvent.key`. Handlers read state when called, so pass the map once.
+export function useKeys(map: Handlers) {
+  onMount(() => {
+    current = map
+    return () => current === map && (current = {})
+  })
+}
+
+const go: Handlers = {
+  t: () => (location.hash = '#/today'),
+  p: () => (location.hash = '#/projects'),
+  r: () => (location.hash = '#/review'),
+}
+// Plain digits and `b`: Chrome keeps Ctrl+1…9 for its own tabs, a page cannot take them. 1–3 tabs, 6–9 the OPEN steps, b the icon rail.
+const openStep = (n: number) => {
+  const k = router.open[n]
+  if (!k) return
+  const i = k.lastIndexOf('/')
+  location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
+}
+const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, b: () => (keys.rail = !keys.rail) }
+for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
+const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
+let timer: ReturnType<typeof setTimeout>
+
+// A clicked sidebar tab keeps focus, so the next Enter would click it again instead of opening the selected row.
+addEventListener('hashchange', () => {
+  const el = document.activeElement
+  if (el instanceof HTMLElement && el.closest('nav')) el.blur()
+})
+
+addEventListener('keydown', (e) => {
+  const el = e.target as HTMLElement
+  // Off while typing; Enter on a focused button or link keeps its own click.
+  if (el.closest('input, textarea, select, [contenteditable]') || e.ctrlKey || e.metaKey || e.altKey) return
+  if (e.key === 'Enter' && el.closest('a, button')) return
+  const k = alias[e.key] ?? e.key
+
+  let run: (() => void) | undefined
+  if (keys.help) {
+    if (k === 'Escape' || k === '?') keys.help = false
+  } else if (keys.pending) {
+    run = go[k]
+  } else if (k === 'g') {
+    keys.pending = true
+    clearTimeout(timer)
+    timer = setTimeout(() => (keys.pending = false), 1500)
+  } else if (k === '?') {
+    keys.help = true
+  } else {
+    run = plain[k] ?? current[k]
+  }
+  if (keys.pending && k !== 'g') keys.pending = false
+  if (run) run()
+  if (run || k === 'g' || k === '?' || keys.help) e.preventDefault()
+})
