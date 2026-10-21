@@ -33,3 +33,13 @@ Guiding questions:
 2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
 3. What is the review gate for, in one sentence?
 -->
+
+## Tests and CI
+
+    uv run pytest                  # API, model, runner and hook tests; no Claude needed
+    uv run ruff check              # lint
+    cd web && npm run build && npm run e2e   # one browser test of the demo loop (Playwright)
+
+The e2e test (`web/e2e/loop.spec.ts`) starts `hubd --demo` itself. `tests/fixtures/` holds anonymised samples of the
+outside formats (the vault files, the Claude Code hook input), so a change in those formats shows up as a failing test.
+CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull request.
