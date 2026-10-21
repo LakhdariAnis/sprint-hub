@@ -43,3 +43,8 @@ Guiding questions:
 The e2e test (`web/e2e/loop.spec.ts`) starts `hubd --demo` itself. `tests/fixtures/` holds anonymised samples of the
 outside formats (the vault files, the Claude Code hook input), so a change in those formats shows up as a failing test.
 CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull request.
+
+## Roadmap
+
+Versions and scope: [docs/ROADMAP.md](docs/ROADMAP.md). Long-term design: [docs/HUB-DESIGN.md](docs/HUB-DESIGN.md).
+Current version: 0.2.0 (core loop, laptop only). The v1 Textual app is on `main` (tag `v0.1.0`).
