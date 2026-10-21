@@ -16,3 +16,10 @@ Needs `uv` and Node 24. No Claude, Omarchy or your own projects needed: the demo
 
 Open http://127.0.0.1:8765/. Keys: `1 2 3` switch screens, arrows walk the list, `Enter` opens, `s` starts a step
 (Step screen), `a` approves and `c` requests changes (Review), `?` shows all keys.
+
+## Screenshots
+
+<!-- TODO(Anis): retake these from the 0.2.0 build before the release, or drop them. -->
+
+![Today](sprint/screens/213c-today.png)
+![Step spec](sprint/screens/213d-step-spec.png)
