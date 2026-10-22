@@ -24,6 +24,13 @@ EXTRA = {
     "- Write the intro\n- Add the install section\n- Link the API\n",
     "demo-repo/sprint/progress/104.md": "# Step 104\n- [x] Write the intro\n"
     "- [x] Add the install section\n- [x] Link the API\n",
+    # Sprint 2 (approved) next to the fixture's sprint 1: two groups for the Project screen to fold.
+    "projects/demo/steps/201.md": "---\nstep: 201\ntitle: Tag the release\nstate: approved\n"
+    "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
+    "comment:\n",
+    "projects/demo/steps/202.md": "---\nstep: 202\ntitle: Write the changelog\nstate: approved\n"
+    "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
+    "comment:\n",
     "projects/notes/project.md": "---\nname: notes\nrepo: notes-repo\nmodel: sonnet\n"
     "merge: manual\n---\nSecond demo project.\n",
     "projects/notes/steps/301.md": "---\nstep: 301\ntitle: Parse the notes\nstate: todo\n"

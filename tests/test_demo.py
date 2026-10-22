@@ -39,3 +39,11 @@ def test_demo_approve_merges_into_the_demo_repo() -> None:
         ["git", "log", "-1", "--format=%s"], cwd=repo, capture_output=True, text=True
     )
     assert log.stdout.strip() == "Merge branch 'step/103-ui'"
+
+
+def test_demo_has_two_sprints() -> None:
+    with TestClient(demo_app()) as client:
+        steps = client.get("/projects/demo/steps").json()
+        done = {s["state"] for s in steps if s["sprint"] == 2}
+        assert done == {"approved"}
+        assert {s["sprint"] for s in steps} == {1, 2}
