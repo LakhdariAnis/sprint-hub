@@ -32,6 +32,7 @@ def test_project_steps(hub: Hub) -> None:
         {"text": "Serve `/health`", "state": "doing"},
         {"text": "Test it", "state": "todo"},
     ]
+    assert {s["sprint"] for s in steps} == {1}
     assert client.get("/projects/nope/steps").status_code == 404
 
 
