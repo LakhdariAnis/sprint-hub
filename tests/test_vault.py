@@ -316,3 +316,28 @@ def test_save_never_writes_a_derived_sprint(tmp_path: Path) -> None:
     entry.step.state = State.done
     save_step(path, entry.step)
     assert "sprint" not in path.read_text()
+
+
+def test_archived_spec_checklist_and_sprint(tmp_path: Path) -> None:
+    (tmp_path / "projects" / "p" / "steps").mkdir(parents=True)
+    (tmp_path / "projects" / "p" / "project.md").write_text(
+        "---\nname: p\nrepo: r\nmodel: sonnet\nmerge: manual\n---\n"
+    )
+    for step_id, extra in (("01", ""), ("05", "sprint: 4\n"), ("02", "")):
+        (tmp_path / "projects" / "p" / "steps" / f"{step_id}.md").write_text(
+            f"---\nstep: {step_id}\ntitle: t\nstate: approved\n{extra}---\n"
+        )
+    archive = tmp_path / "r" / "sprint" / "archive" / "sprint-1"
+    (archive / "progress").mkdir(parents=True)
+    (tmp_path / "r" / "sprint" / "progress").mkdir()
+    for step_id in ("01", "05"):
+        (archive / f"{step_id}-x.md").write_text("# spec\n")
+        (archive / "progress" / f"{step_id}.md").write_text("# Step\n- [x] done\n")
+    (tmp_path / "r" / "sprint" / "02-live.md").write_text("# live\n")  # live file wins
+    entries = {e.step.step: e for e in load_vault(tmp_path).steps}
+    assert entries["01"].spec == archive / "01-x.md"
+    assert [t.text for t in entries["01"].tasks] == ["done"]
+    assert entries["01"].step.sprint == 1  # archive folder number, id has none
+    assert entries["05"].step.sprint == 4  # frontmatter wins
+    assert entries["02"].spec == tmp_path / "r" / "sprint" / "02-live.md"
+    assert entries["02"].tasks == [] and entries["02"].step.sprint is None

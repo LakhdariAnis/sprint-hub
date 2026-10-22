@@ -273,14 +273,33 @@ def sprint_of(step_id: str) -> int | None:
 
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
-    # Derived here, never in `_load_step`, so a saved step cannot write it back.
-    step.sprint = step.sprint or sprint_of(step.step)
+    archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
     if repo:
-        entry.spec = next(iter(sorted(repo.glob(f"sprint/{step.step}-*.md"))), None)
-        progress = repo / "sprint" / "progress" / f"{step.step}.md"
+        sprint = repo / "sprint"
+        entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
+        progress = sprint / "progress" / f"{step.step}.md"
+        if entry.spec is None:
+            entry.spec = archived = next(
+                iter(sorted(sprint.glob(f"archive/sprint-*/{step.step}-*.md"))), None
+            )
+        if not progress.is_file():
+            progress = next(
+                iter(sorted(sprint.glob(f"archive/sprint-*/progress/{step.step}.md"))), progress
+            )
+            archived = archived or (progress if progress.is_file() else None)
         if progress.is_file():
             entry.tasks = parse_tasks(progress.read_text())
+    # Derived here, never in `_load_step`, so a saved step cannot write it back.
+    step.sprint = step.sprint or _archive_sprint(archived) or sprint_of(step.step)
     return entry
+
+
+def _archive_sprint(path: Path | None) -> int | None:
+    """`.../archive/sprint-2/203-x.md` or `.../sprint-2/progress/203.md` -> 2."""
+    if path is None:
+        return None
+    folder = next(p for p in path.parents if p.name.startswith("sprint-"))
+    return int(folder.name.removeprefix("sprint-"))
 
 
 def _guard[T](index: Index, path: Path, load: Callable[[Path], T]) -> T | None:
