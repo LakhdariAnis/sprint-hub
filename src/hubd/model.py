@@ -76,6 +76,7 @@ class Step(BaseModel):
     model: str | None = None
     branch: str | None = None
     needs: list[str] = []
+    sprint: int | None = None
     due: date | None = None
     runs: list[Run] = []
     review: Review | None = None

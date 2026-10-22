@@ -22,6 +22,7 @@ _HEADING = re.compile(r"^## (.+?)\s*$")
 _COMMENT = re.compile(r"\s+#.*$")
 _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
+_STEP_DIGITS = re.compile(r"^\d+")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 
@@ -264,8 +265,16 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def sprint_of(step_id: str) -> int | None:
+    """Sprint of a step id: the digits before the last two (`213a` -> 2); None under 3 digits."""
+    digits = m[0] if (m := _STEP_DIGITS.match(step_id)) else ""
+    return int(digits[:-2]) if len(digits) > 2 else None
+
+
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
+    # Derived here, never in `_load_step`, so a saved step cannot write it back.
+    step.sprint = step.sprint or sprint_of(step.step)
     if repo:
         entry.spec = next(iter(sorted(repo.glob(f"sprint/{step.step}-*.md"))), None)
         progress = repo / "sprint" / "progress" / f"{step.step}.md"
