@@ -307,3 +307,12 @@ def test_loader_derives_sprint_and_explicit_wins(tmp_path: Path) -> None:
     path = _copy_step(tmp_path, "102")
     path.write_text(path.read_text().replace("by: claude\n", "by: claude\nsprint: 7\n", 1))
     assert _load_step(path).sprint == 7
+
+
+def test_save_never_writes_a_derived_sprint(tmp_path: Path) -> None:
+    entry = next(e for e in load_vault(VAULT).steps if e.project == "demo" and e.step.step == "102")
+    assert entry.step.sprint == 1
+    path = _copy_step(tmp_path, "102")
+    entry.step.state = State.done
+    save_step(path, entry.step)
+    assert "sprint" not in path.read_text()
