@@ -6,3 +6,5 @@ ui/dist/
 web/dist/
 web/test-results/
 web/playwright-report/
+sprint/
+.claude/commands/

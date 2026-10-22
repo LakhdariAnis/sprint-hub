@@ -29,8 +29,8 @@ This runs the real `hubd` on your vault, not the demo. Closing the window leaves
 
 > **TODO(Anis): retake these from the 0.2.0 build before the release, or drop them.**
 
-![Today](sprint/screens/213c-today.png)
-![Step spec](sprint/screens/213d-step-spec.png)
+![Today](docs/screens/213c-today.png)
+![Step spec](docs/screens/213d-step-spec.png)
 
 ## How it works
 
