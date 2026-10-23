@@ -75,3 +75,39 @@ def test_theme_warnings_in_errors(hub: Hub, tmp_path: Path) -> None:
         "line": None,
         "message": "theme file not found: default colours",
     }
+
+
+def test_theme_swap_emits_one_theme_event(tmp_path: Path) -> None:
+    import asyncio
+    import shutil
+
+    from hubd.theme import watch
+
+    current = tmp_path / "current"
+    (current / "theme").mkdir(parents=True)
+    shutil.copy(FIXTURE, current / "theme" / "colors.toml")
+    source = OmarchyTheme(current / "theme" / "colors.toml")
+
+    async def swap() -> list[dict]:
+        events: list[dict] = []
+        stop = asyncio.Event()
+        task = asyncio.create_task(watch(source, events.append, stop))
+        await asyncio.sleep(0.3)  # let the watcher start
+        # What omarchy-theme-set does: stage a new folder, delete the old, move it in.
+        (current / "next-theme").mkdir()
+        text = FIXTURE.read_text().replace('"#020800"', '"#fafafa"')
+        text = text.replace('mode = "dark"', 'mode = "light"')
+        (current / "next-theme" / "colors.toml").write_text(text)
+        shutil.rmtree(current / "theme")
+        (current / "next-theme").rename(current / "theme")
+        (current / "theme.name").write_text("paper")
+        await asyncio.sleep(0.8)
+        stop.set()
+        await task
+        return events
+
+    events = asyncio.run(swap())
+    assert len(events) == 1
+    assert events[0]["type"] == "theme"
+    assert events[0]["mode"] == "light"
+    assert events[0]["vars"]["--bg"] == "#fafafa"

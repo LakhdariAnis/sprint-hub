@@ -17,6 +17,7 @@ from hubd.settings import load_settings
 from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
+from hubd.theme import watch as watch_theme
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
@@ -45,10 +46,12 @@ def create_app(
             yield
             return
         stop = asyncio.Event()
-        watcher = asyncio.create_task(hub.watch(stop))
+        watchers = [asyncio.create_task(hub.watch(stop))]
+        if isinstance(theme, OmarchyTheme):  # FakeTheme (demo, tests) never changes
+            watchers.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
         yield
         stop.set()
-        await watcher
+        await asyncio.gather(*watchers)
 
     app = FastAPI(title="hubd", lifespan=lifespan)
 

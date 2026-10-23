@@ -1,9 +1,13 @@
 """App colours from the desktop theme behind one interface (docs/ROADMAP.md rule 4)."""
 
+import asyncio
 import re
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
+
+from watchfiles import awatch
 
 OMARCHY = Path.home() / ".local/state/omarchy/current/theme/colors.toml"
 
@@ -94,3 +98,22 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
             warnings.append(f"theme {name} = {value!r} is not #rrggbb: {var} keeps its default")
     mode = colors.get("mode")
     return {"vars": css, "mode": mode if mode in ("dark", "light") else "dark"}, warnings
+
+
+async def watch(source: OmarchyTheme, emit: Callable[[dict], None], stop: asyncio.Event) -> None:
+    """Emit a `theme` event when the colours change, until `stop`."""
+    # omarchy-theme-set does `rm -rf current/theme; mv next-theme current/theme`: the file is
+    # replaced, not edited, so watch its grandparent folder and re-read on any change under it.
+    root = source.path.parent.parent
+    if not root.is_dir():
+        return  # shortcut: no Omarchy at start means no watching; restart hubd after installing it
+    last = read(source)[0]
+
+    def relevant(_: object, path: str) -> bool:
+        return Path(path).name in ("theme", "theme.name", "colors.toml")
+
+    async for _ in awatch(root, watch_filter=relevant, debounce=100, stop_event=stop):
+        now = read(source)[0]
+        if now != last:  # a switch fires several file events; one theme event
+            last = now
+            emit({"type": "theme", **now})
