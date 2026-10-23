@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from hubd import reminders
 from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
@@ -33,17 +34,24 @@ class RunEnded(BaseModel):
     step: str
 
 
-def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
+def create_app(
+    hub: Hub | None = None, demo: bool = False, reminder_hour: int | None = None
+) -> FastAPI:
+    """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo)."""
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if hub is None:
             yield
             return
         stop = asyncio.Event()
-        watcher = asyncio.create_task(hub.watch(stop))
+        tasks = [asyncio.create_task(hub.watch(stop))]
+        if reminder_hour is not None:
+            path = reminders.state_path()
+            tasks.append(asyncio.create_task(reminders.loop(hub, path, reminder_hour, stop)))
         yield
         stop.set()
-        await watcher
+        await asyncio.gather(*tasks)
 
     app = FastAPI(title="hubd", lifespan=lifespan)
 
@@ -155,6 +163,7 @@ def _relative(path: Path, root: Path) -> Path:
 def serve_app() -> FastAPI:
     """`hubd serve`: the real vault, Claude runner and notify-send."""
     vault = vault_path()
-    terminal = load_settings(vault / "hub.toml").terminal
+    settings = load_settings(vault / "hub.toml")
     url = f"http://{HOST}:{PORT}"
-    return create_app(Hub(vault, lambda _: ClaudeCodeRunner(terminal, url), NotifySend()))
+    hub = Hub(vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend())
+    return create_app(hub, reminder_hour=settings.reminder_hour)

@@ -1,10 +1,13 @@
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
 from conftest import Recorder
+from fastapi.testclient import TestClient
 
+from hubd import reminders
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.reminders import check, loop
 from hubd.runners.fake import FakeRunner
@@ -87,3 +90,18 @@ def test_loop_checks_at_start_and_stops(vault: Path, notifier: Recorder, tmp_pat
 
     asyncio.run(main())
     assert notifier.sent == [("Deadline today", "Thesis")]
+
+
+def test_serve_lifespan_runs_the_loop(
+    vault: Path, notifier: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(reminders, "state_path", lambda: tmp_path / "r.json")
+    (vault / "deadlines.md").write_text(f"- [ ] {date.today()} Thesis\n")
+    hub = Hub(vault, lambda ended: FakeRunner(ended, delay=0), notifier)
+    with TestClient(create_app(hub, reminder_hour=0)):
+        pass
+    assert ("Deadline today", "Thesis") in notifier.sent
+    sent = len(notifier.sent)
+    with TestClient(create_app(hub, reminder_hour=0)):  # restart: nothing again
+        pass
+    assert len(notifier.sent) == sent
