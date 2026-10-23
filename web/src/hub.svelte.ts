@@ -2,6 +2,7 @@ import { demo } from './demo'
 import type { FileError } from './projects'
 import { loadStep, type OpenQuestion, type Step } from './steps'
 import { key, put, steps } from './store.svelte'
+import { applyTheme, loadTheme } from './theme'
 
 // Live numbers for the frame: hubd health, the fake demo data (`--demo` only), the counts shown in the bar and the tabs, and broken vault files.
 export const hub = $state({ live: null as boolean | null, version: '', demo: null as typeof demo | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[],
@@ -46,9 +47,11 @@ function connect() {
   events.addEventListener('step', (e) => (take(e), load()))
   // A fixed file comes back as a `step` event, so every load re-reads the error list.
   for (const type of ['error', 'removed', 'reload']) events.addEventListener(type, load)
+  events.addEventListener('theme', (e) => applyTheme(JSON.parse(e.data)))
   // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
   events.onopen = () => {
     load()
+    loadTheme()
     for (const s of Object.values(steps)) loadStep(s.project, s.step).then((d) => put(s.project, d), () => {})
   }
   events.onerror = () => {
