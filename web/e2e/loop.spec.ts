@@ -103,3 +103,15 @@ test('Today lists the overdue deadline first, in red', async ({ page }) => {
   await expect(rows.first()).toHaveAttribute('style', /var\(--r\)/)
   await expect(rows.nth(1)).toContainText('today')
 })
+
+test('Questions inbox lists the open demo questions', async ({ page }) => {
+  await page.goto('/#/today')
+  await page.keyboard.press('4')
+  await expect(page).toHaveURL(/#\/questions$/)
+  const rows = page.locator('.row')
+  await expect(rows).toHaveCount(2) // the answered one is not listed
+  await expect(rows.first()).toContainText('Should the search ignore case?')
+  await expect(rows.nth(1)).toContainText('Index the note titles too?')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/steps\/notes\/302$/)
+})
