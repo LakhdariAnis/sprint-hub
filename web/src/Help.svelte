@@ -13,6 +13,7 @@
     ['b', 'hide / show the sidebar labels'],
     ['Enter  l  h', 'sprint row: fold / open / close (Project)'],
     ['s', 'start the step (Step screen)'],
+    ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve; press a or y again to merge (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
     ['?', 'show / hide this help'],
