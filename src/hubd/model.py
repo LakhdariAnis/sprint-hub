@@ -80,3 +80,13 @@ class Step(BaseModel):
     due: date | None = None
     runs: list[Run] = []
     review: Review | None = None
+
+
+class Deadline(BaseModel):
+    """One line of `deadlines.md`, or a step's `due:`."""
+
+    date: date
+    text: str
+    done: bool = False
+    tags: list[str] = []
+    link: str | None = None  # `project/step`, from `[[project/step]]`

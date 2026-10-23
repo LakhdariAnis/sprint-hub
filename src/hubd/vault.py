@@ -14,7 +14,7 @@ import frontmatter
 import yaml
 from pydantic import ValidationError
 
-from hubd.model import Project, Review, Run, Step, Task
+from hubd.model import Deadline, Project, Review, Run, Step, Task
 
 _HEADING = re.compile(r"^## (.+?)\s*$")
 # ` # ...` after a value is a YAML-style comment, e.g. `verdict: changes  # approve | changes`.
@@ -25,6 +25,10 @@ _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
 _STEP_DIGITS = re.compile(r"^\d+")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
+# `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
+_DEADLINE = re.compile(r"^- (?:\[(?P<mark>[ xX])\] )?(?P<date>\S+)(?P<rest>.*)$")
+_TAG = re.compile(r"(?<!\S)#([\w/-]+)")
+_LINK = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 @dataclass
@@ -51,6 +55,7 @@ class StepEntry:
 class Index:
     projects: dict[str, Project] = field(default_factory=dict)
     steps: list[StepEntry] = field(default_factory=list)
+    deadlines: list[Deadline] = field(default_factory=list)
     errors: list[FileError] = field(default_factory=list)
 
 
@@ -119,6 +124,7 @@ def parse_tasks(text: str) -> list[Task]:
 def load_vault(path: Path) -> Index:
     """Read every project and step under `path/projects`. A broken file becomes one FileError."""
     index = Index()
+    index.deadlines, index.errors = load_deadlines(path / "deadlines.md")
     if not (path / "projects").is_dir():
         index.errors.append(FileError(path / "projects", None, "no projects folder"))
         return index
@@ -132,6 +138,44 @@ def load_vault(path: Path) -> Index:
             if step:
                 index.steps.append(_join(project_dir.name, step_path, step, repo))
     return index
+
+
+def load_deadlines(path: Path) -> tuple[list[Deadline], list[FileError]]:
+    """Every `- ` line of `deadlines.md`; a bad line is skipped with a FileError. No file = none."""
+    if not path.is_file():
+        return [], []
+    deadlines, errors = [], []
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.startswith("- "):
+            continue  # headings, notes and blank lines
+        try:
+            deadlines.append(parse_deadline(line))
+        except ValueError as exc:
+            errors.append(FileError(path, number, str(exc)))
+    return deadlines, errors
+
+
+def parse_deadline(line: str) -> Deadline:
+    m = _DEADLINE.match(line.rstrip())
+    if not m:
+        raise ValueError("not a deadline line")
+    try:
+        when = date.fromisoformat(m["date"])
+    except ValueError:
+        raise ValueError(f"bad date {m['date']!r}, use YYYY-MM-DD") from None
+    rest = m["rest"]
+    links = _LINK.findall(rest)
+    tags = _TAG.findall(_LINK.sub("", rest))
+    text = " ".join(_TAG.sub("", _LINK.sub("", rest)).split())
+    if not text:
+        raise ValueError("no text after the date")
+    return Deadline(
+        date=when,
+        text=text,
+        done=m["mark"] in ("x", "X"),
+        tags=tags,
+        link=links[0] if links else None,
+    )
 
 
 def _load_project(path: Path) -> Project:
