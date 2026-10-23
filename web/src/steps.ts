@@ -36,6 +36,7 @@ async function post(project: string, id: string, move: string, body?: object): P
 
 export const startStep = (project: string, id: string) => post(project, id, 'start')
 export const approveStep = (project: string, id: string) => post(project, id, 'approve')
+export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
 export const requestChanges = (project: string, id: string, comment: string) => post(project, id, 'changes', { comment })
 
 // The text under `## Goal` in the repo spec, up to the next heading.
