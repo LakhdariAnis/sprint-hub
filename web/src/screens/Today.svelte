@@ -43,7 +43,7 @@
   loadProjects().then((d) => (projects = d), () => {})
 
   // p / n / m / w focus a pane; j/k walk the rows of the Projects or Now pane.
-  let focus = $state<'p' | 'n' | 'm' | 'w'>('p')
+  let focus = $state<'p' | 'n' | 'm' | 'w' | 'd'>('p')
   const keysAll = $derived(groups.flatMap((g) => hub.today[g.id].filter((k) => steps[k])))
   let sel = $state('')
   const at = $derived(keysAll.includes(sel) ? sel : keysAll[0])
@@ -54,9 +54,16 @@
   }
   const openProject = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   useKeys({
-    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), w: () => (focus = 'w'), j: () => move(1), k: () => move(-1),
+    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), w: () => (focus = 'w'), d: () => (focus = 'd'), j: () => move(1), k: () => move(-1),
     Enter: () => (focus === 'n' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
   })
+
+  // Whole days from today (local) to the deadline: negative = late. UTC math, so a DST change never skews it.
+  const late = (iso: string) => {
+    const [y, m, dd] = iso.split('-').map(Number)
+    return Math.round((Date.UTC(y, m - 1, dd) - Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86_400_000)
+  }
+  const when = (n: number) => (n < 0 ? `${-n} d late` : n === 0 ? 'today' : `in ${n} d`)
 
   const reminders = $derived(
     hub.demo && ([['OVERDUE', hub.demo.reminders.overdue, 'r'], ['TODAY', hub.demo.reminders.today, ''], ['LATER', hub.demo.reminders.later, '']] as const),
@@ -111,6 +118,20 @@
     {:else}
       <p class="dim pad">No reminders yet.</p>
     {/if}
+  </section>
+
+  <section class="pn" class:f={focus === 'd'}>
+    <div class="ph"><span class="hk">d</span>Deadlines<span class="n">next 7 days</span></div>
+    {#each hub.deadlines as dl (dl.date + dl.text)}
+      {@const n = late(dl.date)}
+      <div class="dl" style={dl.overdue ? 'color: var(--r)' : ''}>
+        <span class="id" style={dl.overdue ? 'color: var(--r)' : ''} title={dl.date}>{when(n)}</span>
+        <span>{dl.text}{#each dl.tags as t}<span class="chip">{t}</span>{/each}</span>
+        {#if dl.link}<a class="id" href="#/steps/{dl.link}">{dl.link}</a>{/if}
+      </div>
+    {:else}
+      <p class="dim pad">Nothing due in the next 7 days.</p>
+    {/each}
   </section>
 
   <section class="pn" class:f={focus === 'n'}>
@@ -191,5 +212,7 @@
   .ev { border-radius: 5px; padding: 4px 7px; font-size: 12px; line-height: 1.35; background: var(--bg); border-left: 3px solid var(--fg3); }
   .ev .t { display: block; font: 10.5px var(--mono); color: var(--fg2); }
   .rm { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); }
+  .dl { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); font-size: 14px; }
+  .dl .chip { margin-left: 8px; }
   .ck { width: 16px; height: 16px; border: 1.5px solid var(--mu); border-radius: 4px; }
 </style>
