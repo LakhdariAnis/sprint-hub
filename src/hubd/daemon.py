@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd.model import Deadline, Review, Run, State, Step
+from hubd.model import Deadline, Review, Run, State, Step, TaskState
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
@@ -25,6 +25,8 @@ from hubd.vault import (
     load_vault,
     parse_tasks,
     save_step,
+    step_tasks,
+    tick_task,
 )
 
 # shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
@@ -189,7 +191,7 @@ class Hub:
         async with self.lock:
             entry = self.entry(project, step_id)
             if entry.step.by == "me":
-                raise InvalidTransition(f"step {step_id}: by: me, hubd does not run it")
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
             settings = self.index.projects[project]
             repo = self.repo(project)
             if repo is None:
@@ -219,6 +221,34 @@ class Hub:
                 raise
             self.emit({"type": "step", **step_json(entry)})
             return new
+
+    async def tick(self, project: str, step_id: str, n: int) -> StepEntry:
+        """Toggle task `n` of a `by: me` step; first tick -> doing, all done -> done."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by != "me":
+                raise InvalidTransition(f"step {step_id}: by: claude, its run ticks the tasks")
+            tasks = step_tasks(entry.path)  # the file, not the index: it may be newer
+            if not 0 <= n < len(tasks):
+                raise NotFound(f"step {project}/{step_id}: no task {n}")
+            done = [t.state == TaskState.done for t in tasks]
+            done[n] = not done[n]
+            new = entry.step
+            if new.state != State.doing:
+                new = transition(new, Event.tick, Actor.me)
+            if all(done):
+                new = transition(new, Event.all_ticked, Actor.me)
+            before = entry.path.read_bytes()
+            try:
+                tick_task(entry.path, n)
+                save_step(entry.path, new)
+            except BaseException:
+                _write_atomic(entry.path, before)  # half a tick: put the file back
+                raise
+            entry.step, entry.tasks = new, step_tasks(entry.path)
+            entry.seen[tasks[n].text] = datetime.now()
+            self.emit({"type": "step", **step_json(entry)})
+            return entry
 
     async def run_ended(self, session_id: str, step_id: str) -> Step:
         async with self.lock:

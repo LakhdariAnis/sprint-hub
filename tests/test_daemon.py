@@ -36,7 +36,7 @@ def test_invalid_starts(hub: Hub) -> None:
     async def main() -> None:
         with pytest.raises(InvalidTransition, match="no 'start' from 'done'"):
             await hub.start("demo", "103")
-        with pytest.raises(InvalidTransition, match="by: me"):
+        with pytest.raises(InvalidTransition, match="manual step, tick its tasks"):
             await hub.start("demo", "101")
         with pytest.raises(NotFound):
             await hub.start("demo", "999")
@@ -74,3 +74,46 @@ def test_runner_failure_restores_the_file(vault: Path) -> None:
 
     asyncio.run(main())
     assert step_file.read_bytes() == before
+
+
+def test_tick_manual_step(vault: Path, hub: Hub) -> None:
+    step_file = vault / "projects" / "demo" / "steps" / "101.md"  # `by: me`, 3 tasks, todo
+    before = step_file.read_text()
+
+    async def tick(n: int) -> tuple[str, list[str]]:
+        entry = await hub.tick("demo", "101", n)
+        return entry.step.state, [t.state.name for t in entry.tasks]
+
+    async def main() -> None:
+        assert await tick(1) == ("doing", ["todo", "done", "todo"])
+        assert await tick(1) == ("doing", ["todo", "todo", "todo"])  # untick: stays doing
+        await tick(0)
+        await tick(1)
+        assert await tick(2) == ("done", ["done", "done", "done"])
+        assert await tick(2) == ("doing", ["done", "done", "todo"])  # untick a done step
+        assert await tick(2) == ("done", ["done", "done", "done"])
+
+    asyncio.run(main())
+    # Only the state line and the three marks changed.
+    expected = before.replace("state: todo", "state: done").replace("- [ ]", "- [x]")
+    assert step_file.read_text() == expected
+    assert _load_step(step_file).state == State.done
+
+
+def test_invalid_ticks(vault: Path, hub: Hub) -> None:
+    step_file = vault / "projects" / "demo" / "steps" / "101.md"
+
+    async def main() -> None:
+        with pytest.raises(InvalidTransition, match="by: claude"):
+            await hub.tick("demo", "102", 0)
+        with pytest.raises(NotFound, match="no task 3"):
+            await hub.tick("demo", "101", 3)
+        for n in range(3):
+            await hub.tick("demo", "101", n)
+        await hub.approve("demo", "101")  # no branch: nothing to merge
+        before = step_file.read_bytes()
+        with pytest.raises(InvalidTransition, match="no 'tick' from 'approved'"):
+            await hub.tick("demo", "101", 0)
+        assert step_file.read_bytes() == before
+
+    asyncio.run(main())

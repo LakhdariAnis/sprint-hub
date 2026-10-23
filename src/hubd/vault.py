@@ -126,6 +126,23 @@ def step_tasks(path: Path) -> list[Task]:
     return parse_tasks("\n".join(split_sections(path.read_text()).get("Tasks", [])))
 
 
+def tick_task(path: Path, n: int) -> None:
+    """Toggle task `n` (0-based) of `## Tasks` between `[ ]` and `[x]`; every other byte stays."""
+    lines = path.read_bytes().decode().split("\n")
+    heading = _find_heading(lines, "Tasks")
+    tasks: list[int] = []  # line numbers of the task lines
+    for i in range(len(lines) if heading is None else heading + 1, len(lines)):
+        if _HEADING.match(lines[i]):
+            break
+        if _TASK.match(lines[i]):
+            tasks.append(i)
+    if not 0 <= n < len(tasks):
+        raise ValueError(f"{path}: no task {n}")
+    line = lines[tasks[n]]  # `- [m] text`: the mark is at index 3
+    lines[tasks[n]] = line[:3] + (" " if line[3] == "x" else "x") + line[4:]
+    _write_atomic(path, "\n".join(lines).encode())
+
+
 def load_vault(path: Path) -> Index:
     """Read every project and step under `path/projects`. A broken file becomes one FileError."""
     index = Index()
