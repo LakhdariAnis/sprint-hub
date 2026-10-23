@@ -156,7 +156,7 @@
           {:else if g.id === 'review'}
             {#if extra}<span class="chip {extra.check.ok ? 'x-g' : 'x-r'}">{extra.check.ok ? '✓' : '✗'} {extra.check.name}</span>{:else}<span class="id">{since(s.runs.at(-1)?.started)}</span>{/if}
           {:else}
-            <span class="id">{s.project}</span>
+            <span class="id">{s.project} · {s.by === 'me' ? 'me' : (s.model ?? '–')}</span>
           {/if}
         </div>
       {:else}
