@@ -124,3 +124,21 @@ def test_file_edit_shows_in_get_within_1s(vault: Path, hub: Hub) -> None:
         while client.get("/steps/demo/101").json()["state"] != "doing":
             assert time.monotonic() - written < 1, "edit not seen within 1 s"
             time.sleep(0.02)
+
+
+def test_deadlines_edit_reloads_them(vault: Path, hub: Hub) -> None:
+    path = hub.vault / "deadlines.md"
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text("- 2026-11-03 Apply #internship\n- someday Oops\n")
+            await hub.reload(path)
+            return drain(queue)
+
+    assert [e["type"] for e in asyncio.run(main())] == ["reload"]
+    assert [d.text for d in hub.index.deadlines] == ["Apply"]
+    assert [e.line for e in hub.index.errors if e.path == path] == [2]
+    path.unlink()
+    asyncio.run(hub.reload(path))
+    assert hub.index.deadlines == []
+    assert not [e for e in hub.index.errors if e.path == path]

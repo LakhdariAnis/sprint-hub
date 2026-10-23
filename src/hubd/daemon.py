@@ -21,6 +21,7 @@ from hubd.vault import (
     _join,
     _load_step,
     _write_atomic,
+    load_deadlines,
     load_vault,
     parse_tasks,
     save_step,
@@ -94,6 +95,11 @@ class Hub:
             elif len(parts) == 3 and parts[0] == "projects" and parts[2] == "project.md":
                 # shortcut: a project.md edit reloads the whole vault; fine for a few projects.
                 self.index = load_vault(self.vault)
+                self.emit({"type": "reload"})
+            elif parts == ("deadlines.md",):
+                deadlines, errors = load_deadlines(path)
+                kept = [e for e in self.index.errors if e.path != path]
+                self.index.deadlines, self.index.errors = deadlines, kept + errors
                 self.emit({"type": "reload"})
             else:
                 self._reload_tasks(path)
