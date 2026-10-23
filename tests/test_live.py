@@ -124,3 +124,19 @@ def test_file_edit_shows_in_get_within_1s(vault: Path, hub: Hub) -> None:
         while client.get("/steps/demo/101").json()["state"] != "doing":
             assert time.monotonic() - written < 1, "edit not seen within 1 s"
             time.sleep(0.02)
+
+
+def test_questions_change_emits_tasks(vault: Path, hub: Hub) -> None:
+    path = hub.vault / "demo-repo" / "sprint" / "questions" / "102.md"
+    path.parent.mkdir()
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text("# Step 102\n- [ ] Why?\n")
+            await hub.reload(path)
+            await hub.reload(path)  # same content again: no second event
+            return drain(queue)
+
+    [event] = asyncio.run(main())
+    assert event["questions"] == [{"text": "Why?", "answered": False, "answer": None}]
+    assert hub.entry("demo", "102").questions[0].text == "Why?"

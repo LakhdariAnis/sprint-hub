@@ -22,6 +22,7 @@ from hubd.vault import (
     _load_step,
     _write_atomic,
     load_vault,
+    parse_questions,
     parse_tasks,
     save_step,
 )
@@ -130,6 +131,11 @@ class Hub:
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
             repo = self.repo(entry.project)
+            if repo and path == repo / "sprint" / "questions" / f"{entry.step.step}.md":
+                questions = parse_questions(path.read_text()) if path.exists() else []
+                if questions != entry.questions:
+                    entry.questions = questions
+                    self.emit({"type": "tasks", **step_json(entry)})
             if repo and path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
                 tasks = parse_tasks(path.read_text()) if path.exists() else []
                 if tasks != entry.tasks:
