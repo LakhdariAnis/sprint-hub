@@ -1,8 +1,10 @@
 """`hubd --demo`: the whole loop on built-in data. Never touches the real vault or settings."""
 
+import re
 import shutil
 import subprocess
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -24,6 +26,13 @@ EXTRA = {
     "- Write the intro\n- Add the install section\n- Link the API\n",
     "demo-repo/sprint/progress/104.md": "# Step 104\n- [x] Write the intro\n"
     "- [x] Add the install section\n- [x] Link the API\n",
+    # Sprint 2 (approved) next to the fixture's sprint 1: two groups for the Project screen to fold.
+    "projects/demo/steps/201.md": "---\nstep: 201\ntitle: Tag the release\nstate: approved\n"
+    "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
+    "comment:\n",
+    "projects/demo/steps/202.md": "---\nstep: 202\ntitle: Write the changelog\nstate: approved\n"
+    "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
+    "comment:\n",
     "projects/notes/project.md": "---\nname: notes\nrepo: notes-repo\nmodel: sonnet\n"
     "merge: manual\n---\nSecond demo project.\n",
     "projects/notes/steps/301.md": "---\nstep: 301\ntitle: Parse the notes\nstate: todo\n"
@@ -37,6 +46,9 @@ EXTRA = {
     "- Read the files\n- Split into sections\n- Test it\n",
     "notes-repo/sprint/302-search.md": "# Step 302 — Search the notes\n\n## Tasks\n"
     "- Index the text\n- Add the query\n",
+    "notes-repo/sprint/questions/302.md": "# Step 302\n"
+    "- [ ] Should the search ignore case?\n- [ ] Index the note titles too?\n"
+    "- [x] Plain text or regex? → plain text\n",
     "notes-repo/sprint/progress/302.md": "# Step 302\n- [x] Index the text\n- [~] Add the query\n",
 }
 
@@ -56,6 +68,12 @@ def demo_vault() -> Path:
         path = vault / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+    (vault / "deadlines.md").write_text(demo_deadlines(date.today()))
+    # The step files have fixed `due:` dates: date them from today, so the overdue one stays first.
+    for name, days in (("projects/demo/steps/102.md", 1), ("projects/notes/steps/301.md", 5)):
+        path = vault / name
+        due = f"due: {date.today() + timedelta(days=days)}"
+        path.write_text(re.sub(r"^due: .*$", due, path.read_text(), flags=re.M))
     for repo, branches in BRANCHES.items():
         cwd = vault / repo
         git(cwd, "init", "-q", "-b", "main")
@@ -71,6 +89,18 @@ def demo_vault() -> Path:
             git(cwd, "commit", "-q", "-m", f"step {step_id}")
             git(cwd, "checkout", "-q", "main")
     return vault
+
+
+def demo_deadlines(today: date) -> str:
+    """One overdue, one today, one in 3 days, one done: dated from today so the demo never ages."""
+    d = [today + timedelta(days=n) for n in (-2, 0, 3, -1)]
+    return (
+        "# Deadlines\n\n"
+        f"- [ ] {d[0]} Compilation TP report #school\n"
+        f"- [ ] {d[1]} Fraunhofer IPA application #internship\n"
+        f"- [ ] {d[2]} Release notes for the demo #work [[demo/104]]\n"
+        f"- [x] {d[3]} PFE topic form #school\n"
+    )
 
 
 def git(cwd: Path, *args: str) -> None:

@@ -1,11 +1,11 @@
-"""`hubd doctor`: check the Claude Code setup hubd depends on. One ✔/✘ line per check."""
+"""`hubd doctor`: check the Claude Code setup and theme hubd depends on. One ✔/✘ line per check."""
 
 import json
 import shutil
 import subprocess
 from pathlib import Path
 
-from hubd import install
+from hubd import install, theme
 from hubd.runners import claude
 
 
@@ -43,8 +43,14 @@ def _hook(settings: Path) -> list[tuple[bool, str]]:
     return [(False, f"{install.EVENT} hook missing: run hubd install-hook")]
 
 
-def main(settings: Path = install.SETTINGS) -> int:
-    results = checks(settings)
+def _theme(path: Path) -> tuple[bool, str]:
+    if path.is_file():
+        return True, f"theme at {path}"
+    return False, f"theme {path} not found: the app uses its default colours"
+
+
+def main(settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY) -> int:
+    results = [*checks(settings), _theme(theme_file)]
     for ok, text in results:
         print(f"{'✔' if ok else '✘'} {text}")
     return 0 if all(ok for ok, _ in results) else 1

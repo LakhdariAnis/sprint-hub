@@ -3,7 +3,7 @@
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import { useKeys } from '../keys.svelte'
-  import { goal, loadStep, loadSteps, type Step } from '../steps'
+  import { goal, groupBySprint, loadStep, loadSteps, type Group, type Step } from '../steps'
 
   let { project }: { project: string } = $props()
   let steps = $state<Step[]>([])
@@ -15,16 +15,34 @@
     return m ? (m / 60).toFixed(1) : '–'
   }
 
+  const hrs = (min: number) => (min ? (min / 60).toFixed(1) : '–')
+
+  // Fold state per project: {sprint key: open}. A group without an entry is open only when it is the current one.
+  const foldKey = () => `sprint-hub:folds:${project}`
+  let folds = $state<Record<string, boolean>>({})
+  const isOpen = (g: Group) => folds[g.key] ?? g.state === 'current'
+  const toggle = (g: Group, open = !isOpen(g)) => {
+    folds[g.key] = open
+    try { localStorage.setItem(foldKey(), JSON.stringify(folds)) } catch {}
+  }
+
+  const groups = $derived(groupBySprint(steps))
+  type Row = { g: Group; s?: Step }
+  const rows = $derived(groups.flatMap((g): Row[] => [{ g }, ...(isOpen(g) ? g.steps.map((s) => ({ g, s })) : [])]))
+
   let sel = $state(0)
   const href = (s: Step) => `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(s.step)}`
+  const row = $derived(rows[sel])
+  const cur = $derived(row?.s)
   useKeys({
-    j: () => (sel = Math.min(sel + 1, steps.length - 1)),
+    j: () => (sel = Math.min(sel + 1, rows.length - 1)),
     k: () => (sel = Math.max(sel - 1, 0)),
-    Enter: () => cur && (location.hash = href(cur)),
+    Enter: () => (cur ? (location.hash = href(cur)) : row && toggle(row.g)),
+    l: () => row && !cur && toggle(row.g, true),
+    h: () => row && !cur && toggle(row.g, false),
     Escape: () => (location.hash = '#/projects'),
   })
   let detail = $state<Step | null>(null)
-  const cur = $derived(steps[sel])
 
   // The list has no spec text, so the preview loads the selected step on its own.
   $effect(() => {
@@ -35,6 +53,7 @@
 
   $effect(() => {
     sel = 0
+    try { folds = JSON.parse(localStorage.getItem(foldKey()) ?? '{}') } catch { folds = {} }
     status = 'loading'
     loadSteps(project).then(
       (s) => ((steps = s), (status = 'ready')),
@@ -55,28 +74,54 @@
     <section class="pn f list">
       <div class="ph">Steps<span class="n">{steps.length}</span><span class="r"><span class="kb">↵</span> open</span></div>
       <div class="lh grid"><span></span><span>id</span><span>title</span><span>model</span><span>hours</span><span>tasks</span><span>state</span></div>
-      {#each steps as s, i (s.step)}
-        {@const done = s.tasks.filter((t) => t.state === 'done').length}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => (sel = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (sel = i)}>
-          <span class="dot s-{s.state}"></span>
-          <span class="id">{s.step}</span>
-          <span class="tt">{s.title}</span>
-          <span>{#if s.model}<span class="mdl">{s.model}</span>{/if}</span>
-          <span class="id">{hours(s)}</span>
-          {#if s.state === 'doing' && s.tasks.length}
-            <span class="prog"><span class="pbar" style="--x: var(--b)"><i style="width: {(done / s.tasks.length) * 100}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
-          {:else}
-            <span class="id">{done}/{s.tasks.length}</span>
-          {/if}
-          <span><span class="chip s-{s.state}">{s.state}</span></span>
-        </div>
+      {#each rows as r, i (r.s ? r.s.step : 'g' + r.g.key)}
+        {#if r.s}
+          {@const s = r.s}
+          {@const done = s.tasks.filter((t) => t.state === 'done').length}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => (sel = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (sel = i)}>
+            <span class="dot s-{s.state}"></span>
+            <span class="id">{s.step}</span>
+            <span class="tt">{s.title}</span>
+            <span>{#if s.model}<span class="mdl">{s.model}</span>{/if}</span>
+            <span class="id">{hours(s)}</span>
+            {#if s.state === 'doing' && s.tasks.length}
+              <span class="prog"><span class="pbar" style="--x: var(--b)"><i style="width: {(done / s.tasks.length) * 100}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
+            {:else}
+              <span class="id">{done}/{s.tasks.length}</span>
+            {/if}
+            <span><span class="chip s-{s.state}">{s.state}</span></span>
+          </div>
+        {:else}
+          {@const g = r.g}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div class="lr gh row" class:f={i === sel} role="button" tabindex="0" aria-expanded={isOpen(g)} onclick={() => (sel = i, toggle(g))} onfocus={() => (sel = i)}>
+            <span class="arrow">{isOpen(g) ? '▾' : '▸'}</span>
+            <b>{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</b>
+            <span class="chip g-{g.state}">{g.state}</span>
+            <span class="id">{g.done}/{g.steps.length}</span>
+            <span class="id">{g.minutes ? `${hrs(g.minutes)} h` : ''}</span>
+          </div>
+        {/if}
       {:else}
         <p class="dim pad">No steps in this project.</p>
       {/each}
     </section>
 
-    {#if cur}
+    {#if row && !cur}
+      <section class="pn">
+        <div class="ph">Sprint summary</div>
+        <div class="pv">
+          <h2>{row.g.sprint === null ? 'Steps' : `Sprint ${row.g.sprint}`}</h2>
+          <div class="kv">
+            <div><span>STATE</span>{row.g.state}</div>
+            <div><span>STEPS</span>{row.g.done}/{row.g.steps.length}</div>
+            <div><span>HOURS</span>{hrs(row.g.minutes)}</div>
+          </div>
+          <p class="dim"><span class="kb">↵</span> fold / unfold</p>
+        </div>
+      </section>
+    {:else if cur}
       <section class="pn">
         <div class="ph">Step preview<span class="r"><span class="kb">↵</span> open</span></div>
         <div class="pv">
@@ -113,6 +158,9 @@
   /* Narrow windows: the fixed columns leave the title no room beside the preview, so the preview goes below. */
   @media (max-width: 1300px) { .body { grid-template-columns: minmax(0, 1fr); } }
   .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 76px 56px 120px 96px; }
+  .gh { display: flex; align-items: center; gap: 12px; padding: 0 16px; }
+  .gh .arrow { width: 10px; color: var(--fg2); }
+  .chip.g-planned { background: none; box-shadow: inset 0 0 0 1px var(--mu); }
   .row { min-height: 40px; cursor: pointer; }
   .row:hover { background: var(--lt); }
   .row.f:hover { background: var(--sel); }

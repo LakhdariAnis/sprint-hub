@@ -16,14 +16,15 @@
   const canReview = $derived(cur ? cur.state === 'done' : r.name === 'review' && hub.review > 0)
   const when = (on: boolean, h: [string, string][]) => (on ? h : [])
   const hints = $derived<Record<string, [string, string][]>>({
-    today: [['n m w', 'pane'], ['j k', 'move'], ['↵', 'open']],
+    today: [['p n m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
     project: [['↑ ↓', 'move'], ['→ ↵', 'open step'], ['← Esc', 'back']],
-    step: [...when(canStart, [['s', 'start']]), ['Esc', 'back']],
+    step: [...when(canStart, [['s', 'start']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['Esc', 'back']],
+    questions: [['j k', 'move'], ['↵', 'open step']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
-  const common: [string, string][] = [['1 2 3', 'tab'], ['b', 'sidebar'], ['?', 'help']]
-  const list = $derived([...hints[r.name], ...common])
+  const common: [string, string][] = [['1 2 3 4', 'tab'], ['b', 'sidebar'], ['?', 'help']]
+  const list = $derived([...(hints[r.name] ?? []), ...common])
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())
   // shortcut: focus names the route, not the selected row; screens set their own focus from step 213c on.
   const focus = $derived(

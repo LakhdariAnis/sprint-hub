@@ -33,6 +33,19 @@ def test_step_edit_reloads_that_step(vault: Path, hub: Hub) -> None:
     assert len(hub.index.steps) == 5
 
 
+def test_manual_task_edit_emits_the_step(vault: Path, hub: Hub) -> None:
+    path = hub.vault / STEPS / "101.md"  # `by: me`: ticked in the step file, e.g. from Obsidian
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text(path.read_text().replace("- [ ] Add a README", "- [x] Add a README"))
+            await hub.reload(path)
+            return drain(queue)
+
+    [event] = asyncio.run(main())
+    assert [t["state"] for t in event["tasks"]] == ["todo", "done", "todo"]
+
+
 def test_checklist_tick_emits_tasks(vault: Path, hub: Hub) -> None:
     path = hub.vault / "demo-repo" / "sprint" / "progress" / "102.md"
 
@@ -124,3 +137,37 @@ def test_file_edit_shows_in_get_within_1s(vault: Path, hub: Hub) -> None:
         while client.get("/steps/demo/101").json()["state"] != "doing":
             assert time.monotonic() - written < 1, "edit not seen within 1 s"
             time.sleep(0.02)
+
+
+def test_questions_change_emits_tasks(vault: Path, hub: Hub) -> None:
+    path = hub.vault / "demo-repo" / "sprint" / "questions" / "102.md"
+    path.parent.mkdir()
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text("# Step 102\n- [ ] Why?\n")
+            await hub.reload(path)
+            await hub.reload(path)  # same content again: no second event
+            return drain(queue)
+
+    [event] = asyncio.run(main())
+    assert event["questions"] == [{"text": "Why?", "answered": False, "answer": None}]
+    assert hub.entry("demo", "102").questions[0].text == "Why?"
+
+
+def test_deadlines_edit_reloads_them(vault: Path, hub: Hub) -> None:
+    path = hub.vault / "deadlines.md"
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text("- 2026-11-03 Apply #internship\n- someday Oops\n")
+            await hub.reload(path)
+            return drain(queue)
+
+    assert [e["type"] for e in asyncio.run(main())] == ["reload"]
+    assert [d.text for d in hub.index.deadlines] == ["Apply"]
+    assert [e.line for e in hub.index.errors if e.path == path] == [2]
+    path.unlink()
+    asyncio.run(hub.reload(path))
+    assert hub.index.deadlines == []
+    assert not [e for e in hub.index.errors if e.path == path]

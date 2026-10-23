@@ -44,6 +44,14 @@ class Task(BaseModel):
     state: TaskState
 
 
+class Question(BaseModel):
+    """One line in `sprint/questions/<id>.md`; `answer` is the text after ` → `."""
+
+    text: str
+    answered: bool
+    answer: str | None = None
+
+
 class Run(BaseModel):
     """One line under `## Runs` in a vault step file."""
 
@@ -76,6 +84,17 @@ class Step(BaseModel):
     model: str | None = None
     branch: str | None = None
     needs: list[str] = []
+    sprint: int | None = None
     due: date | None = None
     runs: list[Run] = []
     review: Review | None = None
+
+
+class Deadline(BaseModel):
+    """One line of `deadlines.md`, or a step's `due:`."""
+
+    date: date
+    text: str
+    done: bool = False
+    tags: list[str] = []
+    link: str | None = None  # `project/step`, from `[[project/step]]`

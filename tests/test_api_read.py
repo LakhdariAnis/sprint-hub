@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from conftest import Recorder
@@ -32,6 +33,7 @@ def test_project_steps(hub: Hub) -> None:
         {"text": "Serve `/health`", "state": "doing"},
         {"text": "Test it", "state": "todo"},
     ]
+    assert {s["sprint"] for s in steps} == {1}
     assert client.get("/projects/nope/steps").status_code == 404
 
 
@@ -80,4 +82,16 @@ def test_errors_show_the_broken_files(hub: Hub) -> None:
             "message": "state: Input should be 'todo', 'doing', 'done', 'changes' or 'approved'",
         },
         {"path": "projects/broken/steps/203.md", "line": None, "message": "title: Field required"},
+    ]
+
+
+def test_questions_lists_open_ones_only(hub: Hub) -> None:
+    client = TestClient(create_app(hub))
+    assert client.get("/questions").json() == []  # no questions files = none
+    path = hub.vault / "demo-repo" / "sprint" / "questions" / "102.md"
+    path.parent.mkdir()
+    path.write_text("# Step 102\n- [ ] Why?\n- [x] Done? → yes\n")
+    asyncio.run(hub.reload(path))
+    assert client.get("/questions").json() == [
+        {"project": "demo", "step": "102", "title": "Serve the API", "text": "Why?"}
     ]

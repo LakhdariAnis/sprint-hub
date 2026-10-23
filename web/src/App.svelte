@@ -4,6 +4,7 @@
   import { router } from './route.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
+  import Questions from './screens/Questions.svelte'
   import Projects from './screens/Projects.svelte'
   import Step from './screens/Step.svelte'
   import Today from './screens/Today.svelte'
@@ -22,6 +23,7 @@
     <TopBar />
     <main>
       {#if r.name === 'today'}<Today />
+      {:else if r.name === 'questions'}<Questions />
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />

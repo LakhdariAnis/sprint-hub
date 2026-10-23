@@ -16,6 +16,15 @@ Needs `uv` and Node 24. No Claude, Omarchy or your own projects needed: the demo
 Open http://127.0.0.1:8765/. Keys: `1 2 3` switch screens, arrows walk the list, `Enter` opens, `s` starts a step
 (Step screen), `a` approves and `c` requests changes (Review), `?` shows all keys.
 
+On your own vault (`~/Hub`, or `HUB_VAULT`):
+
+- **Deadlines**: one line each in `~/Hub/deadlines.md`, `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub/301]]`
+  (tag and step link optional, `[x]` = done). Today lists the next 7 days, overdue first in red.
+- **Manual steps**: `by: me` in a step's frontmatter; its `## Tasks` are the checklist, `x` on the Step screen ticks one.
+- **Questions**: an agent writes `- [ ] question` to `sprint/questions/<id>.md` in the repo; answer with
+  `- [x] question → answer`. Key `4` opens the inbox of open ones.
+- **Theme**: `hubd serve` takes the colours of the current Omarchy theme and follows a theme switch live.
+
 ### Open it as an app window
 
 `bin/sprint-hub-app` starts `hubd` if it is not running, then opens sprint-hub in its own Chromium `--app` window

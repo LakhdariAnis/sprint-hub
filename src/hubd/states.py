@@ -10,6 +10,8 @@ class Event(StrEnum):
     run_ended = "run_ended"
     approve = "approve"
     request_changes = "request_changes"
+    tick = "tick"  # a `by: me` step: a task was ticked or unticked
+    all_ticked = "all_ticked"
 
 
 class Actor(StrEnum):
@@ -24,6 +26,11 @@ TABLE: dict[tuple[State, Event], tuple[State, frozenset[Actor]]] = {
     (State.doing, Event.run_ended): (State.done, frozenset({Actor.daemon})),
     (State.done, Event.approve): (State.approved, frozenset({Actor.me})),
     (State.done, Event.request_changes): (State.changes, frozenset({Actor.me})),
+    # `by: me` steps: hubd never runs them, I tick their tasks.
+    (State.todo, Event.tick): (State.doing, frozenset({Actor.me})),
+    (State.changes, Event.tick): (State.doing, frozenset({Actor.me})),
+    (State.done, Event.tick): (State.doing, frozenset({Actor.me})),  # unticked after all done
+    (State.doing, Event.all_ticked): (State.done, frozenset({Actor.me})),
 }
 
 

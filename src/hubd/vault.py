@@ -14,7 +14,7 @@ import frontmatter
 import yaml
 from pydantic import ValidationError
 
-from hubd.model import Project, Review, Run, Step, Task
+from hubd.model import Deadline, Project, Question, Review, Run, Step, Task
 
 _HEADING = re.compile(r"^## (.+?)\s*$")
 # ` # ...` after a value is a YAML-style comment, e.g. `verdict: changes  # approve | changes`.
@@ -22,8 +22,14 @@ _HEADING = re.compile(r"^## (.+?)\s*$")
 _COMMENT = re.compile(r"\s+#.*$")
 _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
+_QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.*))?$", re.M)
+_STEP_DIGITS = re.compile(r"^\d+")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
+# `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
+_DEADLINE = re.compile(r"^- (?:\[(?P<mark>[ xX])\] )?(?P<date>\S+)(?P<rest>.*)$")
+_TAG = re.compile(r"(?<!\S)#([\w/-]+)")
+_LINK = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 @dataclass
@@ -42,6 +48,7 @@ class StepEntry:
     step: Step
     spec: Path | None = None
     tasks: list[Task] = field(default_factory=list)
+    questions: list[Question] = field(default_factory=list)
     # When hubd saw each task (by text) reach its state; only changes seen while it runs.
     seen: dict[str, datetime | None] = field(default_factory=dict)
 
@@ -50,6 +57,7 @@ class StepEntry:
 class Index:
     projects: dict[str, Project] = field(default_factory=dict)
     steps: list[StepEntry] = field(default_factory=list)
+    deadlines: list[Deadline] = field(default_factory=list)
     errors: list[FileError] = field(default_factory=list)
 
 
@@ -115,9 +123,39 @@ def parse_tasks(text: str) -> list[Task]:
     return [Task(state=m["mark"], text=m["text"]) for m in _TASK.finditer(text)]
 
 
+def parse_questions(text: str) -> list[Question]:
+    return [
+        Question(text=m["text"], answered=m["mark"] == "x", answer=m["answer"] or None)
+        for m in _QUESTION.finditer(text)
+    ]
+
+
+def step_tasks(path: Path) -> list[Task]:
+    """The checklist of a `by: me` step: the `## Tasks` section of its vault step file."""
+    return parse_tasks("\n".join(split_sections(path.read_text()).get("Tasks", [])))
+
+
+def tick_task(path: Path, n: int) -> None:
+    """Toggle task `n` (0-based) of `## Tasks` between `[ ]` and `[x]`; every other byte stays."""
+    lines = path.read_bytes().decode().split("\n")
+    heading = _find_heading(lines, "Tasks")
+    tasks: list[int] = []  # line numbers of the task lines
+    for i in range(len(lines) if heading is None else heading + 1, len(lines)):
+        if _HEADING.match(lines[i]):
+            break
+        if _TASK.match(lines[i]):
+            tasks.append(i)
+    if not 0 <= n < len(tasks):
+        raise ValueError(f"{path}: no task {n}")
+    line = lines[tasks[n]]  # `- [m] text`: the mark is at index 3
+    lines[tasks[n]] = line[:3] + (" " if line[3] == "x" else "x") + line[4:]
+    _write_atomic(path, "\n".join(lines).encode())
+
+
 def load_vault(path: Path) -> Index:
     """Read every project and step under `path/projects`. A broken file becomes one FileError."""
     index = Index()
+    index.deadlines, index.errors = load_deadlines(path / "deadlines.md")
     if not (path / "projects").is_dir():
         index.errors.append(FileError(path / "projects", None, "no projects folder"))
         return index
@@ -131,6 +169,44 @@ def load_vault(path: Path) -> Index:
             if step:
                 index.steps.append(_join(project_dir.name, step_path, step, repo))
     return index
+
+
+def load_deadlines(path: Path) -> tuple[list[Deadline], list[FileError]]:
+    """Every `- ` line of `deadlines.md`; a bad line is skipped with a FileError. No file = none."""
+    if not path.is_file():
+        return [], []
+    deadlines, errors = [], []
+    for number, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.startswith("- "):
+            continue  # headings, notes and blank lines
+        try:
+            deadlines.append(parse_deadline(line))
+        except ValueError as exc:
+            errors.append(FileError(path, number, str(exc)))
+    return deadlines, errors
+
+
+def parse_deadline(line: str) -> Deadline:
+    m = _DEADLINE.match(line.rstrip())
+    if not m:
+        raise ValueError("not a deadline line")
+    try:
+        when = date.fromisoformat(m["date"])
+    except ValueError:
+        raise ValueError(f"bad date {m['date']!r}, use YYYY-MM-DD") from None
+    rest = m["rest"]
+    links = _LINK.findall(rest)
+    tags = _TAG.findall(_LINK.sub("", rest))
+    text = " ".join(_TAG.sub("", _LINK.sub("", rest)).split())
+    if not text:
+        raise ValueError("no text after the date")
+    return Deadline(
+        date=when,
+        text=text,
+        done=m["mark"] in ("x", "X"),
+        tags=tags,
+        link=links[0] if links else None,
+    )
 
 
 def _load_project(path: Path) -> Project:
@@ -264,14 +340,46 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def sprint_of(step_id: str) -> int | None:
+    """Sprint of a step id: the digits before the last two (`213a` -> 2); None under 3 digits."""
+    digits = m[0] if (m := _STEP_DIGITS.match(step_id)) else ""
+    return int(digits[:-2]) if len(digits) > 2 else None
+
+
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
+    archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
+    if step.by == "me":
+        entry.tasks = step_tasks(path)
     if repo:
-        entry.spec = next(iter(sorted(repo.glob(f"sprint/{step.step}-*.md"))), None)
-        progress = repo / "sprint" / "progress" / f"{step.step}.md"
-        if progress.is_file():
+        sprint = repo / "sprint"
+        entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
+        progress = sprint / "progress" / f"{step.step}.md"
+        if entry.spec is None:
+            entry.spec = archived = next(
+                iter(sorted(sprint.glob(f"archive/sprint-*/{step.step}-*.md"))), None
+            )
+        if not progress.is_file():
+            progress = next(
+                iter(sorted(sprint.glob(f"archive/sprint-*/progress/{step.step}.md"))), progress
+            )
+            archived = archived or (progress if progress.is_file() else None)
+        if progress.is_file() and step.by == "claude":
             entry.tasks = parse_tasks(progress.read_text())
+        questions = repo / "sprint" / "questions" / f"{step.step}.md"
+        if questions.is_file():
+            entry.questions = parse_questions(questions.read_text())
+    # Derived here, never in `_load_step`, so a saved step cannot write it back.
+    step.sprint = step.sprint or _archive_sprint(archived) or sprint_of(step.step)
     return entry
+
+
+def _archive_sprint(path: Path | None) -> int | None:
+    """`.../archive/sprint-2/203-x.md` or `.../sprint-2/progress/203.md` -> 2."""
+    if path is None:
+        return None
+    folder = next(p for p in path.parents if p.name.startswith("sprint-"))
+    return int(folder.name.removeprefix("sprint-"))
 
 
 def _guard[T](index: Index, path: Path, load: Callable[[Path], T]) -> T | None:

@@ -20,18 +20,19 @@ const go: Handlers = {
   t: () => (location.hash = '#/today'),
   p: () => (location.hash = '#/projects'),
   r: () => (location.hash = '#/review'),
+  q: () => (location.hash = '#/questions'),
 }
-// Plain digits and `b`: 1–3 tabs, 6–9 the OPEN steps, b the icon rail. Ctrl+1–3 (app window only, see below) = the tabs too.
+// Plain digits and `b`: 1–4 tabs, 6–9 the OPEN steps, b the icon rail. Ctrl+1–4 (app window only, see below) = the tabs too.
 const openStep = (n: number) => {
   const k = router.open[n]
   if (!k) return
   const i = k.lastIndexOf('/')
   location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
 }
-const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, b: () => (keys.rail = !keys.rail) }
+const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: () => (keys.rail = !keys.rail) }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
-const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r }
+const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q }
 const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
 let timer: ReturnType<typeof setTimeout>
 
