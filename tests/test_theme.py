@@ -1,6 +1,10 @@
 import re
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from hubd.api import create_app
+from hubd.daemon import Hub
 from hubd.theme import VARS, FakeTheme, OmarchyTheme, read
 
 FIXTURE = Path(__file__).parent / "fixtures" / "theme" / "colors.toml"
@@ -51,3 +55,23 @@ def test_missing_key_and_bad_value_keep_defaults(tmp_path: Path) -> None:
         "theme accent = 'blue' is not #rrggbb: --ac keeps its default",
         "theme has no red: --r keeps its default",
     ]
+
+
+def test_get_theme_defaults_to_fake() -> None:
+    body = TestClient(create_app()).get("/theme").json()
+    assert body == {"vars": read(FakeTheme())[0]["vars"], "mode": "dark"}
+
+
+def test_get_theme_omarchy() -> None:
+    body = TestClient(create_app(theme=OmarchyTheme(FIXTURE))).get("/theme").json()
+    assert body["vars"]["--ac"] == "#4c7dff"
+
+
+def test_theme_warnings_in_errors(hub: Hub, tmp_path: Path) -> None:
+    missing = tmp_path / "colors.toml"
+    errors = TestClient(create_app(hub, theme=OmarchyTheme(missing))).get("/errors").json()
+    assert errors[-1] == {
+        "path": str(missing),
+        "line": None,
+        "message": "theme file not found: default colours",
+    }

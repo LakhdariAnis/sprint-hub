@@ -15,6 +15,8 @@ from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
 from hubd.states import InvalidTransition
+from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
+from hubd.theme import read as read_theme
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
@@ -32,7 +34,11 @@ class RunEnded(BaseModel):
     step: str
 
 
-def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
+def create_app(
+    hub: Hub | None = None, demo: bool = False, theme: ThemeSource | None = None
+) -> FastAPI:
+    theme = theme or FakeTheme()
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if hub is None:
@@ -61,6 +67,10 @@ def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"ok": True, "version": version("hubd"), "demo": demo}
+
+    @app.get("/theme")
+    def get_theme() -> dict:
+        return read_theme(theme)[0]  # read per request: the next reload picks up a theme switch
 
     if hub is None:
         return _with_web(app)
@@ -103,7 +113,7 @@ def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
         return [
             {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
             for e in hub.index.errors
-        ]
+        ] + [{"path": str(theme.path), "line": None, "message": m} for m in read_theme(theme)[1]]
 
     @app.get("/events")
     async def events() -> StreamingResponse:
@@ -153,8 +163,9 @@ def _relative(path: Path, root: Path) -> Path:
 
 
 def serve_app() -> FastAPI:
-    """`hubd serve`: the real vault, Claude runner and notify-send."""
+    """`hubd serve`: the real vault, Claude runner, notify-send and Omarchy theme."""
     vault = vault_path()
     terminal = load_settings(vault / "hub.toml").terminal
     url = f"http://{HOST}:{PORT}"
-    return create_app(Hub(vault, lambda _: ClaudeCodeRunner(terminal, url), NotifySend()))
+    hub = Hub(vault, lambda _: ClaudeCodeRunner(terminal, url), NotifySend())
+    return create_app(hub, theme=OmarchyTheme())
