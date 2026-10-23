@@ -54,3 +54,18 @@ test('Ctrl+2 opens Today, Ctrl+1 Projects', async ({ page }) => {
   await page.keyboard.press('Control+1')
   await expect(page).toHaveURL(/#\/projects$/)
 })
+
+test('Project screen folds done sprints and remembers it', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  const s2 = page.getByRole('button', { name: /Sprint 2/ })
+  await expect(page.getByRole('button', { name: /Sprint 1/ })).toHaveAttribute('aria-expanded', 'true')
+  await expect(s2).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByText('Tag the release')).toHaveCount(0)
+  await s2.click()
+  await expect(page.getByText('Tag the release')).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('button', { name: /Sprint 2/ })).toHaveAttribute('aria-expanded', 'true')
+  await page.getByRole('button', { name: /Sprint 2/ }).focus()
+  await page.keyboard.press('h')
+  await expect(page.getByText('Tag the release')).toHaveCount(0)
+})
