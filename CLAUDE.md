@@ -16,6 +16,18 @@ When working on a sprint step, after the plan write `sprint/progress/NN.md` (NN 
 - Never commit broken tests. If a task can't pass yet, split it.
 - Never push. Never amend or rebase commits already made in a step.
 
+## Questions
+
+When a run raises a question for Anis, write it to `sprint/questions/NN.md` (NN = step id), one line each, and do not wait for an answer if the step can go on:
+
+```
+# Step NN
+- [ ] Should a step without an id number get sprint 0 or none?
+- [x] Keep `hours` in the header? → yes, sum of runs
+```
+
+`[ ]` = open. Anis answers by changing it to `[x]` and adding ` → answer`. Never edit an answered line. The folder is gitignored like the rest of `sprint/`.
+
 ## Never write these for Anis
 
 The README pitch, the README state-machine section, and the "Decision" and "Why" parts of ADRs in `docs/decisions/`. Write questions or options for them, leave a `TODO(Anis)` marker, and list them in the step report.
