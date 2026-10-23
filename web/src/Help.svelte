@@ -11,6 +11,7 @@
     ['1 2 3', 'Projects, Today, Review (also Ctrl+1 2 3 in the app window)'],
     ['6 … 9', 'the steps under OPEN in the sidebar'],
     ['b', 'hide / show the sidebar labels'],
+    ['Enter  l  h', 'sprint row: fold / open / close (Project)'],
     ['s', 'start the step (Step screen)'],
     ['a', 'approve; press a or y again to merge (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
