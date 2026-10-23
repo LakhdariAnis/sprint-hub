@@ -44,3 +44,31 @@ def test_run_ended_from_the_hook(hub: Hub) -> None:
 def test_missing_vault_is_an_error_not_a_crash(tmp_path: Path) -> None:
     index = load_vault(tmp_path / "nothing")
     assert [e.message for e in index.errors] == ["no projects folder"]
+
+
+def test_tick_manual_task(vault: Path, hub: Hub) -> None:
+    step_file = vault / "projects" / "demo" / "steps" / "101.md"
+    before = step_file.read_text()
+    client = TestClient(create_app(hub))
+    response = client.post("/steps/demo/101/tasks/0/tick")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"] == "doing"
+    assert [t["state"] for t in body["tasks"]] == ["done", "todo", "todo"]
+    assert "at" in body["tasks"][0]
+    untick = client.post("/steps/demo/101/tasks/0/tick").json()
+    assert (untick["state"], untick["tasks"][0]["state"]) == ("doing", "todo")
+    assert step_file.read_text() == before.replace("state: todo", "state: doing")
+
+
+def test_tick_and_start_errors(hub: Hub) -> None:
+    client = TestClient(create_app(hub))
+    claude = client.post("/steps/demo/102/tasks/0/tick")
+    assert claude.status_code == 409
+    assert claude.json() == {"detail": "step 102: by: claude, its run ticks the tasks"}
+    manual = client.post("/steps/demo/101/start")
+    assert manual.status_code == 409
+    assert manual.json() == {"detail": "step 101: manual step, tick its tasks"}
+    assert client.post("/steps/demo/101/tasks/9/tick").status_code == 404
+    assert client.post("/steps/demo/101/tasks/x/tick").status_code == 422
+    assert client.post("/steps/demo/999/tasks/0/tick").status_code == 404

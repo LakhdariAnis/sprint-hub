@@ -136,6 +136,10 @@ def create_app(
     async def changes(project: str, step_id: str, body: Changes) -> dict:
         return (await hub.request_changes(project, step_id, body.comment)).model_dump(mode="json")
 
+    @app.post("/steps/{project}/{step_id}/tasks/{n}/tick")
+    async def tick(project: str, step_id: str, n: int) -> dict:
+        return step_json(await hub.tick(project, step_id, n))
+
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
         return (await hub.run_ended(body.session_id, body.step)).model_dump(mode="json")
