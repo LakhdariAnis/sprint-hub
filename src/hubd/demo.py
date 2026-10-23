@@ -37,6 +37,9 @@ EXTRA = {
     "- Read the files\n- Split into sections\n- Test it\n",
     "notes-repo/sprint/302-search.md": "# Step 302 — Search the notes\n\n## Tasks\n"
     "- Index the text\n- Add the query\n",
+    "notes-repo/sprint/questions/302.md": "# Step 302\n"
+    "- [ ] Should the search ignore case?\n- [ ] Index the note titles too?\n"
+    "- [x] Plain text or regex? → plain text\n",
     "notes-repo/sprint/progress/302.md": "# Step 302\n- [x] Index the text\n- [~] Add the query\n",
 }
 
