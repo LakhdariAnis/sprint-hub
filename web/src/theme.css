@@ -1,4 +1,4 @@
-/* All colours live here as variables. Sprint 3 swaps these for the Omarchy theme. */
+/* All colours live here as variables. These are the defaults (Everforest); theme.ts sets the desktop theme's over them at start. */
 :root {
   --bg: #2d353b;
   --dk: #21272c;

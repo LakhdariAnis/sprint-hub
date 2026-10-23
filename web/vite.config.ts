@@ -7,6 +7,6 @@ const hubd = 'http://127.0.0.1:8765'
 export default defineConfig({
   plugins: [svelte()],
   server: {
-    proxy: { '^/(health|projects|steps|today|errors|events|runs)': hubd },
+    proxy: { '^/(health|projects|steps|today|errors|events|runs|theme)': hubd },
   },
 })
