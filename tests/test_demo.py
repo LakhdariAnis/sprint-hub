@@ -1,5 +1,6 @@
 import subprocess
 import time
+from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -65,6 +66,10 @@ def test_demo_deadlines_overdue_first() -> None:
     ]
     assert items[0]["overdue"] is True
     assert "PFE topic form" not in [i["text"] for i in items]
+    # Step `due:` dates follow today too: only the overdue file deadline is late, on any day.
+    assert [i["overdue"] for i in items] == [True] + [False] * (len(items) - 1)
+    last = (items[-1]["link"], items[-1]["date"])
+    assert last == ("notes/301", str(date.today() + timedelta(days=5)))
 
 
 def test_demo_manual_step_ticks() -> None:

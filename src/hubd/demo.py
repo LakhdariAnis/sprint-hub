@@ -1,5 +1,6 @@
 """`hubd --demo`: the whole loop on built-in data. Never touches the real vault or settings."""
 
+import re
 import shutil
 import subprocess
 import tempfile
@@ -68,6 +69,11 @@ def demo_vault() -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     (vault / "deadlines.md").write_text(demo_deadlines(date.today()))
+    # The step files have fixed `due:` dates: date them from today, so the overdue one stays first.
+    for name, days in (("projects/demo/steps/102.md", 1), ("projects/notes/steps/301.md", 5)):
+        path = vault / name
+        due = f"due: {date.today() + timedelta(days=days)}"
+        path.write_text(re.sub(r"^due: .*$", due, path.read_text(), flags=re.M))
     for repo, branches in BRANCHES.items():
         cwd = vault / repo
         git(cwd, "init", "-q", "-b", "main")
