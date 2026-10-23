@@ -60,3 +60,10 @@ def test_demo_deadlines_overdue_first() -> None:
     ]
     assert items[0]["overdue"] is True
     assert "PFE topic form" not in [i["text"] for i in items]
+
+
+def test_demo_manual_step_ticks() -> None:
+    with TestClient(demo_app()) as client:
+        step = client.get("/steps/demo/101").json()
+        assert (step["by"], step["state"], len(step["tasks"])) == ("me", "todo", 3)
+        assert client.post("/steps/demo/101/tasks/0/tick").json()["state"] == "doing"
