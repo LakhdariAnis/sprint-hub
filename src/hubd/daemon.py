@@ -124,13 +124,15 @@ class Hub:
             entry.seen = old.seen
         self.index.steps.append(entry)
         self.index.steps.sort(key=lambda e: (e.project, e.path))
-        if old is None or old.step != step:
+        if old is None or old.step != step or old.tasks != entry.tasks:
             self.emit({"type": "step", **step_json(entry)})
 
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
             repo = self.repo(entry.project)
-            if repo and path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
+            if entry.step.by == "me" or repo is None:
+                continue  # a `by: me` checklist is in the step file, reloaded with it
+            if path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
                 tasks = parse_tasks(path.read_text()) if path.exists() else []
                 if tasks != entry.tasks:
                     before, now = {t.text: t.state for t in entry.tasks}, datetime.now()

@@ -33,6 +33,19 @@ def test_step_edit_reloads_that_step(vault: Path, hub: Hub) -> None:
     assert len(hub.index.steps) == 5
 
 
+def test_manual_task_edit_emits_the_step(vault: Path, hub: Hub) -> None:
+    path = hub.vault / STEPS / "101.md"  # `by: me`: ticked in the step file, e.g. from Obsidian
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text(path.read_text().replace("- [ ] Add a README", "- [x] Add a README"))
+            await hub.reload(path)
+            return drain(queue)
+
+    [event] = asyncio.run(main())
+    assert [t["state"] for t in event["tasks"]] == ["todo", "done", "todo"]
+
+
 def test_checklist_tick_emits_tasks(vault: Path, hub: Hub) -> None:
     path = hub.vault / "demo-repo" / "sprint" / "progress" / "102.md"
 

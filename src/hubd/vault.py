@@ -121,6 +121,11 @@ def parse_tasks(text: str) -> list[Task]:
     return [Task(state=m["mark"], text=m["text"]) for m in _TASK.finditer(text)]
 
 
+def step_tasks(path: Path) -> list[Task]:
+    """The checklist of a `by: me` step: the `## Tasks` section of its vault step file."""
+    return parse_tasks("\n".join(split_sections(path.read_text()).get("Tasks", [])))
+
+
 def load_vault(path: Path) -> Index:
     """Read every project and step under `path/projects`. A broken file becomes one FileError."""
     index = Index()
@@ -318,6 +323,8 @@ def sprint_of(step_id: str) -> int | None:
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
     archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
+    if step.by == "me":
+        entry.tasks = step_tasks(path)
     if repo:
         sprint = repo / "sprint"
         entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
@@ -331,7 +338,7 @@ def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
                 iter(sorted(sprint.glob(f"archive/sprint-*/progress/{step.step}.md"))), progress
             )
             archived = archived or (progress if progress.is_file() else None)
-        if progress.is_file():
+        if progress.is_file() and step.by == "claude":
             entry.tasks = parse_tasks(progress.read_text())
     # Derived here, never in `_load_step`, so a saved step cannot write it back.
     step.sprint = step.sprint or _archive_sprint(archived) or sprint_of(step.step)

@@ -20,6 +20,15 @@ stateDiagram-v2
 
 `[*] --> todo` and `approved --> [*]` mark where a step begins and ends; they are not moves in the table.
 
+## Manual steps (`by: me`)
+
+hubd never runs a `by: me` step (`start` is a 409). Its checklist is the `## Tasks` section of its
+vault step file (`projects/<project>/steps/<id>.md`), also when the project has a repo: the vault is
+what syncs to the phone. `POST /steps/<project>/<id>/tasks/<n>/tick` toggles task `n` (0-based)
+between `- [ ]` and `- [x]`. The first tick moves the step to `doing` (`tick`); when every task is
+done it moves to `done` (`all_ticked`); unticking a task of a `done` step moves it back to `doing`.
+Approve and request changes work as for Claude steps.
+
 ## Why the rules look like this
 
 <!-- TODO(Anis): write this part in your own words. Guiding questions:

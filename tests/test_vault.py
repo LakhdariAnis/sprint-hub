@@ -82,7 +82,10 @@ def test_step_joined_with_spec_and_checklist() -> None:
     doing = entries["102"]
     assert doing.spec == VAULT / "demo-repo" / "sprint" / "102-api.md"
     assert [t.state for t in doing.tasks] == [TaskState.done, TaskState.doing, TaskState.todo]
-    assert (entries["101"].spec, entries["101"].tasks) == (None, [])
+    manual = entries["101"]  # `by: me`: its tasks are in the vault step file
+    assert manual.spec is None
+    assert [t.text for t in manual.tasks] == ["Create the repo", "Add a README", "Add a licence"]
+    assert {t.state for t in manual.tasks} == {TaskState.todo}
 
 
 def test_step_id_keeps_leading_zero(tmp_path: Path) -> None:
