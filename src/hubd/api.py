@@ -89,6 +89,15 @@ def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
     def today() -> dict[str, list[dict]]:
         return {k: [step_json(e) for e in v] for k, v in hub.today().items()}
 
+    @app.get("/questions")
+    def questions() -> list[dict]:
+        return [
+            {"project": e.project, "step": e.step.step, "title": e.step.title, "text": q.text}
+            for e in hub.index.steps
+            for q in e.questions
+            if not q.answered
+        ]
+
     @app.get("/errors")
     def errors() -> list[dict]:
         return [
