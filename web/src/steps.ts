@@ -56,3 +56,32 @@ export async function loadDiffstat(project: string, id: string): Promise<string>
   if (!r.ok) throw new Error(body?.detail ?? `hubd answered ${r.status}`)
   return body.stat
 }
+
+export type Group = {
+  key: string // 'n' for sprint n, '' for steps without a sprint
+  sprint: number | null
+  state: 'current' | 'planned' | 'done'
+  steps: Step[]
+  done: number
+  minutes: number
+}
+
+const closed = (s: Step) => s.state === 'approved' || s.state === 'done'
+
+// Groups by `sprint`: current first (the lowest sprint with an open step), then planned ascending, then done newest first.
+// Steps without a sprint form one group, ordered as the sprint they would be: current if open, else done.
+export function groupBySprint(steps: Step[]): Group[] {
+  const by = new Map<number | null, Step[]>()
+  for (const s of steps) by.set(s.sprint, [...(by.get(s.sprint) ?? []), s])
+  const open = [...by].filter(([, v]) => !v.every(closed)).map(([k]) => k)
+  const cur = Math.min(...open.filter((k): k is number => k !== null))
+  const groups = [...by].map(([sprint, v]): Group => {
+    const isDone = v.every(closed)
+    const state = isDone ? 'done' : sprint === null || sprint === cur ? 'current' : 'planned'
+    const minutes = v.reduce((a, s) => a + s.runs.reduce((b, r) => b + (r.minutes ?? 0), 0), 0)
+    return { key: sprint === null ? '' : String(sprint), sprint, state, steps: v, done: v.filter(closed).length, minutes }
+  })
+  const rank = { current: 0, planned: 1, done: 2 }
+  const n = (g: Group) => g.sprint ?? 0
+  return groups.sort((a, b) => rank[a.state] - rank[b.state] || (a.state === 'done' ? n(b) - n(a) : n(a) - n(b)))
+}
