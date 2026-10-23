@@ -5,13 +5,13 @@ import os
 import subprocess
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd.model import Review, Run, State, Step
+from hubd.model import Deadline, Review, Run, State, Step
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
@@ -161,6 +161,21 @@ class Hub:
             "review": [e for e in steps if e.step.state == State.done],
             "next": ready,
         }
+
+    def deadlines(self, days: int, today: date | None = None) -> list[Deadline]:
+        """Open deadlines up to `today + days`, overdue ones included, by date.
+
+        A step's `due:` counts too, linked to the step, until the step is approved.
+        """
+        today = today or date.today()
+        steps = [
+            Deadline(date=e.step.due, text=e.step.title, link=f"{e.project}/{e.step.step}")
+            for e in self.index.steps
+            if e.step.due and e.step.state != State.approved
+        ]
+        end = today + timedelta(days=days)
+        due = [d for d in [*self.index.deadlines, *steps] if not d.done and d.date <= end]
+        return sorted(due, key=lambda d: (d.date, d.text))
 
     async def start(self, project: str, step_id: str) -> Step:
         async with self.lock:

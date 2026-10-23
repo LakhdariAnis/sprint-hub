@@ -1,7 +1,13 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+from hubd.api import create_app
+from hubd.daemon import Hub
 from hubd.model import Deadline
+from hubd.notify import NullNotifier
+from hubd.runners.fake import FakeRunner
 from hubd.vault import FileError, load_deadlines, load_vault
 
 LINES = """# Deadlines
@@ -50,3 +56,64 @@ def test_vault_keeps_deadlines_and_errors(vault: Path) -> None:
     index = load_vault(vault)
     assert [d.text for d in index.deadlines] == ["Apply"]
     assert (vault / "deadlines.md", 2) in [(e.path, e.line) for e in index.errors]
+
+
+def test_hub_deadlines_window_and_steps(vault: Path) -> None:
+    (vault / "deadlines.md").write_text(
+        "- 2026-10-20 Overdue thing\n"
+        "- [x] 2026-10-21 Done thing\n"
+        "- 2026-10-30 In a week\n"
+        "- 2026-10-31 Too far\n"
+    )
+    approved = vault / "projects" / "demo" / "steps" / "105.md"
+    approved.write_text(
+        approved.read_text().replace("state: approved", "state: approved\ndue: 2026-10-25")
+    )
+    hub = Hub(vault, lambda ended: FakeRunner(ended, delay=0), NullNotifier())
+    got = hub.deadlines(7, today=date(2026, 10, 23))
+    # Step 102 (doing) has `due: 2026-10-24`; approved 105 is left out.
+    assert [(d.date.isoformat(), d.text, d.link) for d in got] == [
+        ("2026-10-20", "Overdue thing", None),
+        ("2026-10-24", "Serve the API", "demo/102"),
+        ("2026-10-30", "In a week", None),
+    ]
+
+
+def test_get_deadlines(vault: Path) -> None:
+    today = date.today()
+    (vault / "deadlines.md").write_text(
+        f"- [ ] {today - timedelta(days=1)} Late #school\n"
+        f"- [ ] {today} Today\n"
+        f"- [ ] {today + timedelta(days=3)} Soon [[demo/101]]\n"
+    )
+    client = TestClient(create_app(Hub(vault, lambda e: FakeRunner(e), NullNotifier())))
+    items = client.get("/deadlines?days=3").json()
+    files = [i for i in items if i["link"] != "demo/102"]  # the fixture step's own `due:`
+    assert files == [
+        {
+            "date": str(today - timedelta(days=1)),
+            "text": "Late",
+            "done": False,
+            "tags": ["school"],
+            "link": None,
+            "overdue": True,
+        },
+        {
+            "date": str(today),
+            "text": "Today",
+            "done": False,
+            "tags": [],
+            "link": None,
+            "overdue": False,
+        },
+        {
+            "date": str(today + timedelta(days=3)),
+            "text": "Soon",
+            "done": False,
+            "tags": [],
+            "link": "demo/101",
+            "overdue": False,
+        },
+    ]
+    assert [i["date"] for i in items] == sorted(i["date"] for i in items)
+    assert client.get("/deadlines?days=-1").status_code == 422

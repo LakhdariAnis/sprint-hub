@@ -2,10 +2,11 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from importlib.metadata import version
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -88,6 +89,14 @@ def create_app(hub: Hub | None = None, demo: bool = False) -> FastAPI:
     @app.get("/today")
     def today() -> dict[str, list[dict]]:
         return {k: [step_json(e) for e in v] for k, v in hub.today().items()}
+
+    @app.get("/deadlines")
+    def deadlines(days: int = Query(7, ge=0)) -> list[dict]:
+        today = date.today()
+        return [
+            {**d.model_dump(mode="json"), "overdue": d.date < today}
+            for d in hub.deadlines(days, today)
+        ]
 
     @app.get("/errors")
     def errors() -> list[dict]:
