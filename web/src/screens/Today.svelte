@@ -43,7 +43,7 @@
   loadProjects().then((d) => (projects = d), () => {})
 
   // p / n / m / w focus a pane; j/k walk the rows of the Projects or Now pane.
-  let focus = $state<'p' | 'n' | 'm' | 'w'>('p')
+  let focus = $state<'p' | 'n' | 'm' | 'w' | 'q'>('p')
   const keysAll = $derived(groups.flatMap((g) => hub.today[g.id].filter((k) => steps[k])))
   let sel = $state('')
   const at = $derived(keysAll.includes(sel) ? sel : keysAll[0])
@@ -54,8 +54,8 @@
   }
   const openProject = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   useKeys({
-    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), w: () => (focus = 'w'), j: () => move(1), k: () => move(-1),
-    Enter: () => (focus === 'n' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
+    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), q: () => (focus = 'q'), w: () => (focus = 'w'), j: () => move(1), k: () => move(-1),
+    Enter: () => (focus === 'q' ? (location.hash = '#/questions') : focus === 'n' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
   })
 
   const reminders = $derived(
@@ -111,6 +111,18 @@
     {:else}
       <p class="dim pad">No reminders yet.</p>
     {/if}
+  </section>
+
+  <section class="pn" class:f={focus === 'q'}>
+    <div class="ph">
+      <span class="hk">q</span><a class="qa" href="#/questions">Questions</a><span class="n">{hub.questions.length} open</span>
+    </div>
+    {#each hub.questions.slice(0, 3) as q (q.project + '/' + q.step + q.text)}
+      <a class="rm qr" href="#/questions"><span class="id">{q.step}</span><span class="qx">{q.text}</span></a>
+    {:else}
+      <p class="dim pad">No open questions.</p>
+    {/each}
+    {#if hub.questions.length > 3}<a class="dim pad more" href="#/questions">+{hub.questions.length - 3} more</a>{/if}
   </section>
 
   <section class="pn" class:f={focus === 'n'}>
@@ -191,5 +203,10 @@
   .ev { border-radius: 5px; padding: 4px 7px; font-size: 12px; line-height: 1.35; background: var(--bg); border-left: 3px solid var(--fg3); }
   .ev .t { display: block; font: 10.5px var(--mono); color: var(--fg2); }
   .rm { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); }
+  .qa { color: inherit; text-decoration: none; }
+  .qr { grid-template-columns: 36px minmax(0, 1fr); color: inherit; text-decoration: none; }
+  .qr:hover { background: var(--lt); }
+  .qx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .more { display: block; font-size: 13px; }
   .ck { width: 16px; height: 16px; border: 1.5px solid var(--mu); border-radius: 4px; }
 </style>
