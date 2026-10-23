@@ -1,5 +1,8 @@
 // `at`: when hubd saw the task reach its state (ISO time); missing if that was before hubd started.
 export type Task = { text: string; state: 'todo' | 'doing' | 'done'; at?: string }
+export type Question = { text: string; answered: boolean; answer: string | null }
+// One row of GET /questions.
+export type OpenQuestion = { project: string; step: string; title: string; text: string }
 export type Step = {
   project: string
   step: string
@@ -10,6 +13,7 @@ export type Step = {
   branch: string | null
   runs: { started?: string; minutes: number | null }[]
   tasks: Task[]
+  questions: Question[]
   review?: { verdict: 'approve' | 'changes' | null; comment: string } | null
   spec?: string | null
   path?: string

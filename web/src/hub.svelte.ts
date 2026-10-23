@@ -1,17 +1,19 @@
 import { demo } from './demo'
 import type { FileError } from './projects'
-import { loadStep, type Step } from './steps'
+import { loadStep, type OpenQuestion, type Step } from './steps'
 import { key, put, steps } from './store.svelte'
 
 // Live numbers for the frame: hubd health, the fake demo data (`--demo` only), the counts shown in the bar and the tabs, and broken vault files.
 export const hub = $state({ live: null as boolean | null, version: '', demo: null as typeof demo | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[],
+  // Open questions of every step (GET /questions), in hubd's order.
+  questions: [] as OpenQuestion[],
   // `project/id` of the steps in each Today pane, in hubd's order; the steps themselves are in the store.
   today: { running: [], review: [], next: [] } as Record<'running' | 'review' | 'next', string[]>,
 })
 
 async function load() {
   try {
-    const [h, t, p, e] = await Promise.all([fetch('/health'), fetch('/today'), fetch('/projects'), fetch('/errors')])
+    const [h, t, p, e, q] = await Promise.all([fetch('/health'), fetch('/today'), fetch('/projects'), fetch('/errors'), fetch('/questions')])
     const health = h.ok ? await h.json() : null
     hub.live = health?.ok === true
     hub.version = health?.version ?? ''
@@ -26,6 +28,7 @@ async function load() {
     hub.next = today.next.length
     hub.projects = (await p.json()).length
     hub.errors = await e.json()
+    hub.questions = await q.json()
   } catch {
     hub.live = false
   }
@@ -38,7 +41,8 @@ function connect() {
     const { type: _, ...s } = JSON.parse(e.data)
     put(s.project, s)
   }
-  events.addEventListener('tasks', take)
+  // Questions ride on `tasks` events, so the inbox re-reads there too.
+  events.addEventListener('tasks', (e) => (take(e), load()))
   events.addEventListener('step', (e) => (take(e), load()))
   // A fixed file comes back as a `step` event, so every load re-reads the error list.
   for (const type of ['error', 'removed', 'reload']) events.addEventListener(type, load)

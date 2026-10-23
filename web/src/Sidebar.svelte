@@ -9,6 +9,7 @@
     { id: 'projects', label: 'Projects', icon: '<path d="M2 5.5h6l1.8 2H18v9H2z"/>' },
     { id: 'today', label: 'Today', icon: '<rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2.5v3M13 2.5v3"/>' },
     { id: 'review', label: 'Review', icon: '<circle cx="10" cy="10" r="7.5"/><path d="M6.5 10l2.5 2.5 4.5-5"/>' },
+    { id: 'questions', label: 'Questions', icon: '<circle cx="10" cy="10" r="7.5"/><path d="M7.8 8a2.3 2.3 0 114 1.5c-.8.7-1.8 1-1.8 2.2M10 14.2v.1"/>' },
     { id: 'chats', label: 'Chats', icon: '<path d="M3 4h14v10H8.5L5 17v-3H3z"/>', off: true },
     { id: 'settings', label: 'Settings', icon: '<path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/>', off: true },
   ]
@@ -25,12 +26,13 @@
   {#each tabs as t, i}
     {#if t.off}
       <span class="tb off" aria-disabled="true" title="{t.label} comes in a later sprint">
-        <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span><span class="k">{i + 1}</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span>
       </span>
     {:else}
       <a class="tb" class:on={active === t.id} href="#/{t.id}" aria-label={t.label}>
         <svg viewBox="0 0 20 20" aria-hidden="true">{@html t.icon}</svg><span class="lbl">{t.label}</span>
         {#if t.id === 'review' && hub.review > 0}<span class="bd">{hub.review}</span>{/if}
+        {#if t.id === 'questions' && hub.questions.length > 0}<span class="bd">{hub.questions.length}</span>{/if}
         <span class="k">{i + 1}</span>
       </a>
     {/if}
