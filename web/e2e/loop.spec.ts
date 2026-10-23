@@ -92,3 +92,14 @@ test('x ticks the tasks of a manual step: todo, doing, done', async ({ page }) =
   await page.keyboard.press('x') // unticks the third task again
   await expect(tasks.nth(2)).not.toHaveClass(/done/)
 })
+
+test('Today lists the overdue deadline first, in red', async ({ page }) => {
+  await page.goto('/#/today')
+  const rows = page.locator('.pn', { hasText: 'Deadlines' }).locator('.dl')
+  await expect(rows.nth(2)).toBeVisible()
+  await expect(rows.filter({ hasText: 'PFE topic form' })).toHaveCount(0) // done
+  await expect(rows.first()).toContainText('Compilation TP report')
+  await expect(rows.first()).toContainText('2 d late')
+  await expect(rows.first()).toHaveAttribute('style', /var\(--r\)/)
+  await expect(rows.nth(1)).toContainText('today')
+})
