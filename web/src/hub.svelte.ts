@@ -4,14 +4,16 @@ import { loadStep, type Step } from './steps'
 import { key, put, steps } from './store.svelte'
 
 // Live numbers for the frame: hubd health, the fake demo data (`--demo` only), the counts shown in the bar and the tabs, and broken vault files.
-export const hub = $state({ live: null as boolean | null, version: '', demo: null as typeof demo | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[],
+export type Deadline = { date: string; text: string; tags: string[]; link: string | null; overdue: boolean }
+
+export const hub = $state({ live: null as boolean | null, version: '', demo: null as typeof demo | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[], deadlines: [] as Deadline[],
   // `project/id` of the steps in each Today pane, in hubd's order; the steps themselves are in the store.
   today: { running: [], review: [], next: [] } as Record<'running' | 'review' | 'next', string[]>,
 })
 
 async function load() {
   try {
-    const [h, t, p, e] = await Promise.all([fetch('/health'), fetch('/today'), fetch('/projects'), fetch('/errors')])
+    const [h, t, p, e, dl] = await Promise.all([fetch('/health'), fetch('/today'), fetch('/projects'), fetch('/errors'), fetch('/deadlines')])
     const health = h.ok ? await h.json() : null
     hub.live = health?.ok === true
     hub.version = health?.version ?? ''
@@ -26,6 +28,7 @@ async function load() {
     hub.next = today.next.length
     hub.projects = (await p.json()).length
     hub.errors = await e.json()
+    hub.deadlines = await dl.json()
   } catch {
     hub.live = false
   }
