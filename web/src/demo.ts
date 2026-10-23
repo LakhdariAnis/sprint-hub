@@ -35,7 +35,7 @@ export const demo = {
     { day: 3, time: 'step', text: '104 Write the docs', color: 'ac' },
     { day: 4, time: '17:00', text: 'Sprint 2 review', color: 'g' },
   ],
-  // One running step's chat and its open question.
+  // One running step's chat.
   chat: {
     step: 'notes/302', session: '5d4c', count: 14,
     messages: [
@@ -51,11 +51,6 @@ export const demo = {
         tool: { ok: null, name: 'Bash', arg: 'uv run pytest -q', info: 'running…' },
       },
     ] as Msg[],
-  },
-  question: {
-    step: 'notes/302', at: '09:23',
-    text: 'Should the query wait for the parser in 301?',
-    answers: ['Yes, wait for 301', 'No, search plain text'],
   },
   // Per step: lines added/removed on its branch and the check chip shown in Today and Review.
   steps: {

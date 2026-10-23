@@ -27,7 +27,8 @@
   // Close the tab (the sidebar's OPEN entry) and fall back to Today.
   let focus = $state<'c' | 't'>('c')
   const chat = $derived(hub.demo && hub.demo.chat.step === key(project, id) ? hub.demo.chat : null)
-  const q = $derived(hub.demo && hub.demo.question.step === key(project, id) ? hub.demo.question : null)
+  // Open questions first, answered ones after (stable sort keeps file order).
+  const qs = $derived([...(s?.questions ?? [])].sort((a, b) => +a.answered - +b.answered))
 
   const close = () => {
     router.open = router.open.filter((k) => k !== key(project, id))
@@ -96,7 +97,7 @@
       </div>
     </section>
 
-    <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !q}>
+    <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !qs.length}>
       <div class="ph"><span class="hk">c</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
       {#if s.tasks.length}
         <div class="big">
@@ -118,14 +119,14 @@
           <p class="dim pad">No checklist yet.</p>
         {/each}
       </div>
-      {#if q}
+      {#if qs.length}
         <div class="qa">
-          <div class="l">? CLAUDE ASKS · {q.at}</div>
-          <div class="qt">{q.text}</div>
-          <!-- Answering comes with the chat in a later sprint. -->
-          <div class="opt">
-            {#each q.answers as a, i}<span class="o" class:f={i === 0}>{a} <span class="kb">{i + 1}</span></span>{/each}
-          </div>
+          <div class="l">? QUESTIONS · {qs.filter((q) => !q.answered).length} open<span class="from">from sprint/questions/{s.step}.md</span></div>
+          {#each qs as q}
+            <div class="qt" class:ans={q.answered}>
+              {q.text}{#if q.answered && q.answer}<span class="a"> → {q.answer}</span>{/if}
+            </div>
+          {/each}
         </div>
       {/if}
     </section>
@@ -234,10 +235,10 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .qa { margin: 14px 16px; border: 1px solid var(--y); border-radius: 8px; padding: 12px 14px; background: color-mix(in srgb, var(--y) 8%, transparent); }
   .qa .l { font: 11px var(--mono); color: var(--y); letter-spacing: 0.06em; }
-  .qt { margin-top: 4px; font-size: 14px; }
-  .opt { display: flex; gap: 8px; margin-top: 10px; }
-  .o { flex: 1; border: 1px solid var(--sel); border-radius: 6px; padding: 6px 10px; font-size: 13px; background: var(--dk); }
-  .o.f { border-color: var(--ac); box-shadow: 0 0 0 1px var(--ac); }
+  .qa .from { margin-left: 8px; color: var(--fgm); letter-spacing: 0; }
+  .qt { margin-top: 6px; font-size: 14px; }
+  .qt.ans { color: var(--fgm); }
+  .qt .a { color: var(--fg2); }
   .spec { padding: 16px 20px; overflow: auto; min-height: 0; font-size: 14.5px; }
   .chat { flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 18px; overflow: auto; font-size: 15px; line-height: 1.65; }
   .ts { align-self: center; color: var(--fgm); font: 11.5px var(--mono); display: flex; align-items: center; gap: 10px; }
