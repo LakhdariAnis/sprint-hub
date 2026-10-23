@@ -15,6 +15,7 @@ from hubd.vault import (
     parse_run,
     save_step,
     split_sections,
+    sprint_of,
 )
 
 VAULT = Path(__file__).parent / "fixtures" / "vault"
@@ -82,7 +83,10 @@ def test_step_joined_with_spec_and_checklist() -> None:
     doing = entries["102"]
     assert doing.spec == VAULT / "demo-repo" / "sprint" / "102-api.md"
     assert [t.state for t in doing.tasks] == [TaskState.done, TaskState.doing, TaskState.todo]
-    assert (entries["101"].spec, entries["101"].tasks) == (None, [])
+    manual = entries["101"]  # `by: me`: its tasks are in the vault step file
+    assert manual.spec is None
+    assert [t.text for t in manual.tasks] == ["Create the repo", "Add a README", "Add a licence"]
+    assert {t.state for t in manual.tasks} == {TaskState.todo}
 
 
 def test_step_id_keeps_leading_zero(tmp_path: Path) -> None:
@@ -298,3 +302,67 @@ def test_questions_file_loads_next_to_progress(tmp_path: Path) -> None:
     steps = {e.step.step: e for e in load_vault(tmp_path).steps if e.project == "demo"}
     assert [q.text for q in steps["102"].questions] == ["Why?"]
     assert steps["101"].questions == []  # no file = no questions
+
+
+@pytest.mark.parametrize(
+    ("step_id", "sprint"),
+    [
+        ("101", 1),
+        ("213a", 2),
+        ("1201", 12),
+        ("999", 9),
+        ("02", None),
+        ("01a", None),
+        ("7", None),
+        ("x", None),
+    ],
+)
+def test_sprint_of(step_id: str, sprint: int | None) -> None:
+    assert sprint_of(step_id) == sprint
+
+
+def test_loader_derives_sprint_and_explicit_wins(tmp_path: Path) -> None:
+    assert {e.step.step: e.step.sprint for e in load_vault(VAULT).steps if e.project == "demo"} == {
+        "101": 1,
+        "102": 1,
+        "103": 1,
+        "104": 1,
+        "105": 1,
+    }
+    path = _copy_step(tmp_path, "102")
+    path.write_text(path.read_text().replace("by: claude\n", "by: claude\nsprint: 7\n", 1))
+    assert _load_step(path).sprint == 7
+
+
+def test_save_never_writes_a_derived_sprint(tmp_path: Path) -> None:
+    entry = next(e for e in load_vault(VAULT).steps if e.project == "demo" and e.step.step == "102")
+    assert entry.step.sprint == 1
+    path = _copy_step(tmp_path, "102")
+    entry.step.state = State.done
+    save_step(path, entry.step)
+    assert "sprint" not in path.read_text()
+
+
+def test_archived_spec_checklist_and_sprint(tmp_path: Path) -> None:
+    (tmp_path / "projects" / "p" / "steps").mkdir(parents=True)
+    (tmp_path / "projects" / "p" / "project.md").write_text(
+        "---\nname: p\nrepo: r\nmodel: sonnet\nmerge: manual\n---\n"
+    )
+    for step_id, extra in (("01", ""), ("05", "sprint: 4\n"), ("02", "")):
+        (tmp_path / "projects" / "p" / "steps" / f"{step_id}.md").write_text(
+            f"---\nstep: {step_id}\ntitle: t\nstate: approved\n{extra}---\n"
+        )
+    archive = tmp_path / "r" / "sprint" / "archive" / "sprint-1"
+    (archive / "progress").mkdir(parents=True)
+    (tmp_path / "r" / "sprint" / "progress").mkdir()
+    for step_id in ("01", "05"):
+        (archive / f"{step_id}-x.md").write_text("# spec\n")
+        (archive / "progress" / f"{step_id}.md").write_text("# Step\n- [x] done\n")
+    (tmp_path / "r" / "sprint" / "02-live.md").write_text("# live\n")  # live file wins
+    entries = {e.step.step: e for e in load_vault(tmp_path).steps}
+    assert entries["01"].spec == archive / "01-x.md"
+    assert [t.text for t in entries["01"].tasks] == ["done"]
+    assert entries["01"].step.sprint == 1  # archive folder number, id has none
+    assert entries["05"].step.sprint == 4  # frontmatter wins
+    assert entries["02"].spec == tmp_path / "r" / "sprint" / "02-live.md"
+    assert entries["02"].tasks == [] and entries["02"].step.sprint is None

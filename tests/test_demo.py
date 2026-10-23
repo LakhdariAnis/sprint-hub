@@ -44,3 +44,31 @@ def test_demo_approve_merges_into_the_demo_repo() -> None:
 def test_demo_has_two_open_questions() -> None:
     questions = TestClient(demo_app()).get("/questions").json()
     assert [(q["project"], q["step"]) for q in questions] == [("notes", "302")] * 2
+
+
+def test_demo_has_two_sprints() -> None:
+    with TestClient(demo_app()) as client:
+        steps = client.get("/projects/demo/steps").json()
+        done = {s["state"] for s in steps if s["sprint"] == 2}
+        assert done == {"approved"}
+        assert {s["sprint"] for s in steps} == {1, 2}
+
+
+def test_demo_deadlines_overdue_first() -> None:
+    with TestClient(demo_app()) as client:
+        items = client.get("/deadlines?days=7").json()
+    texts = [i["text"] for i in items if i["link"] is None or i["link"] == "demo/104"]
+    assert texts == [
+        "Compilation TP report",
+        "Fraunhofer IPA application",
+        "Release notes for the demo",
+    ]
+    assert items[0]["overdue"] is True
+    assert "PFE topic form" not in [i["text"] for i in items]
+
+
+def test_demo_manual_step_ticks() -> None:
+    with TestClient(demo_app()) as client:
+        step = client.get("/steps/demo/101").json()
+        assert (step["by"], step["state"], len(step["tasks"])) == ("me", "todo", 3)
+        assert client.post("/steps/demo/101/tasks/0/tick").json()["state"] == "doing"

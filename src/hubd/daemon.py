@@ -5,13 +5,13 @@ import os
 import subprocess
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd.model import Review, Run, State, Step
+from hubd.model import Deadline, Review, Run, State, Step, TaskState
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
@@ -21,10 +21,13 @@ from hubd.vault import (
     _join,
     _load_step,
     _write_atomic,
+    load_deadlines,
     load_vault,
     parse_questions,
     parse_tasks,
     save_step,
+    step_tasks,
+    tick_task,
 )
 
 # shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
@@ -102,6 +105,11 @@ class Hub:
                 # shortcut: a project.md edit reloads the whole vault; fine for a few projects.
                 self.index = load_vault(self.vault)
                 self.emit({"type": "reload"})
+            elif parts == ("deadlines.md",):
+                deadlines, errors = load_deadlines(path)
+                kept = [e for e in self.index.errors if e.path != path]
+                self.index.deadlines, self.index.errors = deadlines, kept + errors
+                self.emit({"type": "reload"})
             else:
                 self._reload_tasks(path)
 
@@ -125,18 +133,22 @@ class Hub:
             entry.seen = old.seen
         self.index.steps.append(entry)
         self.index.steps.sort(key=lambda e: (e.project, e.path))
-        if old is None or old.step != step:
+        if old is None or old.step != step or old.tasks != entry.tasks:
             self.emit({"type": "step", **step_json(entry)})
 
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
             repo = self.repo(entry.project)
-            if repo and path == repo / "sprint" / "questions" / f"{entry.step.step}.md":
+            if repo is None:
+                continue
+            if path == repo / "sprint" / "questions" / f"{entry.step.step}.md":
                 questions = parse_questions(path.read_text()) if path.exists() else []
                 if questions != entry.questions:
                     entry.questions = questions
                     self.emit({"type": "tasks", **step_json(entry)})
-            if repo and path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
+            if entry.step.by == "me":
+                continue  # a `by: me` checklist is in the step file, reloaded with it
+            if path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
                 tasks = parse_tasks(path.read_text()) if path.exists() else []
                 if tasks != entry.tasks:
                     before, now = {t.text: t.state for t in entry.tasks}, datetime.now()
@@ -174,11 +186,26 @@ class Hub:
             "next": ready,
         }
 
+    def deadlines(self, days: int, today: date | None = None) -> list[Deadline]:
+        """Open deadlines up to `today + days`, overdue ones included, by date.
+
+        A step's `due:` counts too, linked to the step, until the step is approved.
+        """
+        today = today or date.today()
+        steps = [
+            Deadline(date=e.step.due, text=e.step.title, link=f"{e.project}/{e.step.step}")
+            for e in self.index.steps
+            if e.step.due and e.step.state != State.approved
+        ]
+        end = today + timedelta(days=days)
+        due = [d for d in [*self.index.deadlines, *steps] if not d.done and d.date <= end]
+        return sorted(due, key=lambda d: (d.date, d.text))
+
     async def start(self, project: str, step_id: str) -> Step:
         async with self.lock:
             entry = self.entry(project, step_id)
             if entry.step.by == "me":
-                raise InvalidTransition(f"step {step_id}: by: me, hubd does not run it")
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
             settings = self.index.projects[project]
             repo = self.repo(project)
             if repo is None:
@@ -208,6 +235,34 @@ class Hub:
                 raise
             self.emit({"type": "step", **step_json(entry)})
             return new
+
+    async def tick(self, project: str, step_id: str, n: int) -> StepEntry:
+        """Toggle task `n` of a `by: me` step; first tick -> doing, all done -> done."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by != "me":
+                raise InvalidTransition(f"step {step_id}: by: claude, its run ticks the tasks")
+            tasks = step_tasks(entry.path)  # the file, not the index: it may be newer
+            if not 0 <= n < len(tasks):
+                raise NotFound(f"step {project}/{step_id}: no task {n}")
+            done = [t.state == TaskState.done for t in tasks]
+            done[n] = not done[n]
+            new = entry.step
+            if new.state != State.doing:
+                new = transition(new, Event.tick, Actor.me)
+            if all(done):
+                new = transition(new, Event.all_ticked, Actor.me)
+            before = entry.path.read_bytes()
+            try:
+                tick_task(entry.path, n)
+                save_step(entry.path, new)
+            except BaseException:
+                _write_atomic(entry.path, before)  # half a tick: put the file back
+                raise
+            entry.step, entry.tasks = new, step_tasks(entry.path)
+            entry.seen[tasks[n].text] = datetime.now()
+            self.emit({"type": "step", **step_json(entry)})
+            return entry
 
     async def run_ended(self, session_id: str, step_id: str) -> Step:
         async with self.lock:

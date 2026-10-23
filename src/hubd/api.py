@@ -2,14 +2,16 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from importlib.metadata import version
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from hubd import reminders
 from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
@@ -36,8 +38,12 @@ class RunEnded(BaseModel):
 
 
 def create_app(
-    hub: Hub | None = None, demo: bool = False, theme: ThemeSource | None = None
+    hub: Hub | None = None,
+    demo: bool = False,
+    theme: ThemeSource | None = None,
+    reminder_hour: int | None = None,
 ) -> FastAPI:
+    """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo)."""
     theme = theme or FakeTheme()
 
     @asynccontextmanager
@@ -46,12 +52,15 @@ def create_app(
             yield
             return
         stop = asyncio.Event()
-        watchers = [asyncio.create_task(hub.watch(stop))]
+        tasks = [asyncio.create_task(hub.watch(stop))]
         if isinstance(theme, OmarchyTheme):  # FakeTheme (demo, tests) never changes
-            watchers.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
+            tasks.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
+        if reminder_hour is not None:
+            path = reminders.state_path()
+            tasks.append(asyncio.create_task(reminders.loop(hub, path, reminder_hour, stop)))
         yield
         stop.set()
-        await asyncio.gather(*watchers)
+        await asyncio.gather(*tasks)
 
     app = FastAPI(title="hubd", lifespan=lifespan)
 
@@ -111,6 +120,14 @@ def create_app(
             if not q.answered
         ]
 
+    @app.get("/deadlines")
+    def deadlines(days: int = Query(7, ge=0)) -> list[dict]:
+        today = date.today()
+        return [
+            {**d.model_dump(mode="json"), "overdue": d.date < today}
+            for d in hub.deadlines(days, today)
+        ]
+
     @app.get("/errors")
     def errors() -> list[dict]:
         return [
@@ -141,6 +158,10 @@ def create_app(
     async def changes(project: str, step_id: str, body: Changes) -> dict:
         return (await hub.request_changes(project, step_id, body.comment)).model_dump(mode="json")
 
+    @app.post("/steps/{project}/{step_id}/tasks/{n}/tick")
+    async def tick(project: str, step_id: str, n: int) -> dict:
+        return step_json(await hub.tick(project, step_id, n))
+
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
         return (await hub.run_ended(body.session_id, body.step)).model_dump(mode="json")
@@ -168,7 +189,7 @@ def _relative(path: Path, root: Path) -> Path:
 def serve_app() -> FastAPI:
     """`hubd serve`: the real vault, Claude runner, notify-send and Omarchy theme."""
     vault = vault_path()
-    terminal = load_settings(vault / "hub.toml").terminal
+    settings = load_settings(vault / "hub.toml")
     url = f"http://{HOST}:{PORT}"
-    hub = Hub(vault, lambda _: ClaudeCodeRunner(terminal, url), NotifySend())
-    return create_app(hub, theme=OmarchyTheme())
+    hub = Hub(vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend())
+    return create_app(hub, theme=OmarchyTheme(), reminder_hour=settings.reminder_hour)

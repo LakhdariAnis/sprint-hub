@@ -3,7 +3,7 @@
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { ago, goal, loadStep, startStep } from '../steps'
+  import { ago, goal, loadStep, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps } from '../store.svelte'
 
@@ -14,7 +14,8 @@
   const done = $derived(s?.tasks.filter((t) => t.state === 'done').length ?? 0)
 
   // Only these states have a `start` move in the state table (src/hubd/states.py); hubd never runs `by: me` steps.
-  const canStart = $derived(s && (s.state === 'todo' || s.state === 'changes') && s.by !== 'me')
+  const manual = $derived(s?.by === 'me')
+  const canStart = $derived(s && (s.state === 'todo' || s.state === 'changes') && !manual)
   let busy = $state(false)
   const start = () => {
     busy = true
@@ -23,6 +24,16 @@
       .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
+
+  // `by: me`: j/k pick a task (first open one until then), x or a click ticks it; hubd moves the step.
+  let pick = $state<number | null>(null)
+  const sel = $derived(pick ?? Math.max(0, s?.tasks.findIndex((t) => t.state !== 'done') ?? 0))
+  const tick = (n: number) => {
+    error = ''
+    pick = n
+    tickTask(project, id, n).then((d) => put(project, d), (e: Error) => (error = `Tick failed: ${e.message}`))
+  }
+  const walk = (d: number) => manual && s && (pick = Math.max(0, Math.min(s.tasks.length - 1, sel + d)))
 
   // Close the tab (the sidebar's OPEN entry) and fall back to Today.
   let focus = $state<'c' | 't'>('c')
@@ -38,7 +49,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), Escape: () => (location.hash = `#/projects/${encodeURIComponent(project)}`) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), Escape: () => (location.hash = `#/projects/${encodeURIComponent(project)}`) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -69,7 +80,7 @@
 <div class="page">
 <div class="hd">
   <div class="crumb"><a href="#/projects/{encodeURIComponent(project)}">{project}</a> › <span class="cur">{id}</span></div>
-  {#if s}<span class="chip s-{s.state}">● {label}</span>{/if}
+  {#if s}<span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
   <span class="acts">
     {#if canStart}
       <button class="btn pri" type="button" disabled={busy} onclick={start}>Start <span class="kb">s</span></button>
@@ -109,7 +120,8 @@
       {/if}
       <div class="rows">
         {#each s.tasks as t, i}
-          <div class="task {t.state}">
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events -->
+          <div class="task {t.state}" class:man={manual} class:sel={manual && i === sel} role={manual ? "button" : undefined} tabindex={manual ? 0 : undefined} onclick={manual ? () => tick(i) : undefined}>
             <span class="ix">{i + 1}</span>
             <span class="box" aria-label={t.state}>{#if t.state === 'done'}✓{:else if t.state === 'doing'}<span class="spin"></span>{/if}</span>
             <span class="tx"><Inline text={t.text} /></span>
@@ -222,6 +234,8 @@
   }
   .ix { font: 12px var(--mono); color: var(--fgm); }
   .tm { font: 11.5px var(--mono); color: var(--fg2); }
+  .task.man { cursor: pointer; }
+  .task.sel { box-shadow: inset 3px 0 0 var(--ac); background: var(--sel); }
   .task.done { color: var(--fg2); }
   .task.todo .tx { color: var(--fg2); }
   .task.doing { background: color-mix(in srgb, var(--ac) 12%, transparent); }
