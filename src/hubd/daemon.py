@@ -47,7 +47,13 @@ def step_json(entry: StepEntry) -> dict:
         | ({"at": at.isoformat(timespec="seconds")} if (at := entry.seen.get(t.text)) else {})
         for t in entry.tasks
     ]
-    return {"project": entry.project, **entry.step.model_dump(mode="json"), "tasks": tasks}
+    questions = [q.model_dump() for q in entry.questions]
+    return {
+        "project": entry.project,
+        **entry.step.model_dump(mode="json"),
+        "tasks": tasks,
+        "questions": questions,
+    }
 
 
 class Hub:

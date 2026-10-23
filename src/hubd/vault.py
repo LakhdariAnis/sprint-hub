@@ -14,7 +14,7 @@ import frontmatter
 import yaml
 from pydantic import ValidationError
 
-from hubd.model import Project, Review, Run, Step, Task
+from hubd.model import Project, Question, Review, Run, Step, Task
 
 _HEADING = re.compile(r"^## (.+?)\s*$")
 # ` # ...` after a value is a YAML-style comment, e.g. `verdict: changes  # approve | changes`.
@@ -22,6 +22,7 @@ _HEADING = re.compile(r"^## (.+?)\s*$")
 _COMMENT = re.compile(r"\s+#.*$")
 _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
+_QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.*))?$", re.M)
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 
@@ -42,6 +43,7 @@ class StepEntry:
     step: Step
     spec: Path | None = None
     tasks: list[Task] = field(default_factory=list)
+    questions: list[Question] = field(default_factory=list)
     # When hubd saw each task (by text) reach its state; only changes seen while it runs.
     seen: dict[str, datetime | None] = field(default_factory=dict)
 
@@ -113,6 +115,13 @@ def parse_body(body: str) -> tuple[list[Run], Review | None]:
 
 def parse_tasks(text: str) -> list[Task]:
     return [Task(state=m["mark"], text=m["text"]) for m in _TASK.finditer(text)]
+
+
+def parse_questions(text: str) -> list[Question]:
+    return [
+        Question(text=m["text"], answered=m["mark"] == "x", answer=m["answer"] or None)
+        for m in _QUESTION.finditer(text)
+    ]
 
 
 def load_vault(path: Path) -> Index:
@@ -271,6 +280,9 @@ def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
         progress = repo / "sprint" / "progress" / f"{step.step}.md"
         if progress.is_file():
             entry.tasks = parse_tasks(progress.read_text())
+        questions = repo / "sprint" / "questions" / f"{step.step}.md"
+        if questions.is_file():
+            entry.questions = parse_questions(questions.read_text())
     return entry
 
 

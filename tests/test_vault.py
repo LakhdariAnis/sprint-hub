@@ -4,13 +4,14 @@ from pathlib import Path
 import frontmatter
 import pytest
 
-from hubd.model import Review, Run, State, TaskState
+from hubd.model import Question, Review, Run, State, TaskState
 from hubd.vault import (
     FileError,
     _load_step,
     format_run,
     load_vault,
     parse_body,
+    parse_questions,
     parse_run,
     save_step,
     split_sections,
@@ -276,3 +277,24 @@ def test_save_refuses_to_rewrite_runs(tmp_path: Path) -> None:
     step.runs = [NEW_RUN]
     with pytest.raises(ValueError, match="appended"):
         save_step(path, step)
+
+
+def test_parse_questions() -> None:
+    text = "# Step 301\n- [ ] Open one?\n- [x] Keep `hours`? → yes, sum of runs\n- [x] No answer\n"
+    assert parse_questions(text) == [
+        Question(text="Open one?", answered=False),
+        Question(text="Keep `hours`?", answered=True, answer="yes, sum of runs"),
+        Question(text="No answer", answered=True),
+    ]
+
+
+def test_questions_file_loads_next_to_progress(tmp_path: Path) -> None:
+    import shutil
+
+    shutil.copytree(VAULT, tmp_path, dirs_exist_ok=True)
+    questions = tmp_path / "demo-repo" / "sprint" / "questions"
+    questions.mkdir()
+    (questions / "102.md").write_text("# Step 102\n- [ ] Why?\n")
+    steps = {e.step.step: e for e in load_vault(tmp_path).steps if e.project == "demo"}
+    assert [q.text for q in steps["102"].questions] == ["Why?"]
+    assert steps["101"].questions == []  # no file = no questions

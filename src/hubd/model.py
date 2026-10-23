@@ -44,6 +44,14 @@ class Task(BaseModel):
     state: TaskState
 
 
+class Question(BaseModel):
+    """One line in `sprint/questions/<id>.md`; `answer` is the text after ` → `."""
+
+    text: str
+    answered: bool
+    answer: str | None = None
+
+
 class Run(BaseModel):
     """One line under `## Runs` in a vault step file."""
 
