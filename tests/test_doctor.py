@@ -5,6 +5,8 @@ import pytest
 
 from hubd import doctor, install
 
+THEME = Path(__file__).parent / "fixtures" / "theme" / "colors.toml"
+
 HELP = """Usage: claude [options] [command] [prompt]
   --model <model>        Model for the current session.
   --session-id <uuid>    Use a specific session ID
@@ -34,16 +36,16 @@ def settings(tmp_path: Path, data: dict) -> Path:
 def test_all_good(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     fake_claude(tmp_path, monkeypatch, HELP)
     path = settings(tmp_path, install.with_hook({}))
-    assert doctor.main(path) == 0
+    assert doctor.main(path, THEME) == 0
     out = capsys.readouterr().out.splitlines()
     assert all(line.startswith("✔") for line in out)
     assert "✔ version 9.9.9 (Claude Code)" in out
-    assert len(out) == 6  # path, version, 3 flags, hook
+    assert len(out) == 7  # path, version, 3 flags, hook, theme
 
 
 def test_missing_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     fake_claude(tmp_path, monkeypatch, HELP.replace("--session-id", "--session"))
-    assert doctor.main(settings(tmp_path, install.with_hook({}))) == 1
+    assert doctor.main(settings(tmp_path, install.with_hook({})), THEME) == 1
     out = capsys.readouterr().out
     assert "✘ flag --session-id missing from claude --help" in out
     assert "✔ flag --model in claude --help" in out
@@ -51,17 +53,18 @@ def test_missing_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -
 
 def test_no_claude_and_no_hook(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
-    assert doctor.main(tmp_path / "missing.json") == 1
+    assert doctor.main(tmp_path / "missing.json", tmp_path / "colors.toml") == 1
     assert capsys.readouterr().out.splitlines() == [
         "✘ claude not on PATH",
         "✘ SessionEnd hook missing: run hubd install-hook",
+        f"✘ theme {tmp_path / 'colors.toml'} not found: the app uses its default colours",
     ]
 
 
 def test_claude_that_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     fake_claude(tmp_path, monkeypatch, HELP)
     (tmp_path / "bin" / "claude").write_text("#!/bin/sh\nexit 3\n")
-    assert doctor.main(tmp_path / "missing.json") == 1
+    assert doctor.main(tmp_path / "missing.json", THEME) == 1
     assert "✘ claude does not run" in capsys.readouterr().out
 
 
