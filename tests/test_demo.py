@@ -47,3 +47,16 @@ def test_demo_has_two_sprints() -> None:
         done = {s["state"] for s in steps if s["sprint"] == 2}
         assert done == {"approved"}
         assert {s["sprint"] for s in steps} == {1, 2}
+
+
+def test_demo_deadlines_overdue_first() -> None:
+    with TestClient(demo_app()) as client:
+        items = client.get("/deadlines?days=7").json()
+    texts = [i["text"] for i in items if i["link"] is None or i["link"] == "demo/104"]
+    assert texts == [
+        "Compilation TP report",
+        "Fraunhofer IPA application",
+        "Release notes for the demo",
+    ]
+    assert items[0]["overdue"] is True
+    assert "PFE topic form" not in [i["text"] for i in items]

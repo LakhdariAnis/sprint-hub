@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 import tempfile
+from datetime import date, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -63,6 +64,7 @@ def demo_vault() -> Path:
         path = vault / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+    (vault / "deadlines.md").write_text(demo_deadlines(date.today()))
     for repo, branches in BRANCHES.items():
         cwd = vault / repo
         git(cwd, "init", "-q", "-b", "main")
@@ -78,6 +80,18 @@ def demo_vault() -> Path:
             git(cwd, "commit", "-q", "-m", f"step {step_id}")
             git(cwd, "checkout", "-q", "main")
     return vault
+
+
+def demo_deadlines(today: date) -> str:
+    """One overdue, one today, one in 3 days, one done: dated from today so the demo never ages."""
+    d = [today + timedelta(days=n) for n in (-2, 0, 3, -1)]
+    return (
+        "# Deadlines\n\n"
+        f"- [ ] {d[0]} Compilation TP report #school\n"
+        f"- [ ] {d[1]} Fraunhofer IPA application #internship\n"
+        f"- [ ] {d[2]} Release notes for the demo #work [[demo/104]]\n"
+        f"- [x] {d[3]} PFE topic form #school\n"
+    )
 
 
 def git(cwd: Path, *args: str) -> None:
