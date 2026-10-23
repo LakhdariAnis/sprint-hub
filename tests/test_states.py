@@ -12,6 +12,10 @@ ALLOWED = {
     (State.doing, Event.run_ended, Actor.daemon): State.done,
     (State.done, Event.approve, Actor.me): State.approved,
     (State.done, Event.request_changes, Actor.me): State.changes,
+    (State.todo, Event.tick, Actor.me): State.doing,
+    (State.changes, Event.tick, Actor.me): State.doing,
+    (State.done, Event.tick, Actor.me): State.doing,
+    (State.doing, Event.all_ticked, Actor.me): State.done,
 }
 # Pairs that are moves, but only for the other actor.
 WRONG_ACTOR = {(s, e) for s, e, _ in ALLOWED}

@@ -11,6 +11,10 @@ stateDiagram-v2
     doing --> done: run_ended (daemon)
     done --> approved: approve (me)
     done --> changes: request_changes (me)
+    todo --> doing: tick (me)
+    changes --> doing: tick (me)
+    done --> doing: tick (me)
+    doing --> done: all_ticked (me)
     approved --> [*]
 ```
 
