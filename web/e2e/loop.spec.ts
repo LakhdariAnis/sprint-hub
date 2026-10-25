@@ -67,7 +67,7 @@ test('Project screen: a sprint lists only its steps, a step shows its info', asy
   await expect(steps.getByText('Tag the release')).toBeVisible()
   await expect(steps.getByText('Show the list')).toHaveCount(0)
   await steps.getByText('Write the changelog').click()
-  await expect(info.getByRole('heading', { name: 'Write the changelog' })).toBeVisible()
+  await expect(info.getByText('Write the changelog')).toBeVisible()
   // Nothing jumps: the Steps column keeps its place and width.
   expect(await steps.boundingBox()).toMatchObject({ x: box!.x, y: box!.y, width: box!.width })
 })
@@ -102,7 +102,21 @@ test('Project screen: the cursor starts on the doing step, h l j k move it', asy
   await expect(page).toHaveURL(/#\/projects\/demo$/)
   await expect(sprints.locator('.lr.f')).toContainText('Sprint 2')
   await expect(steps.locator('.lr.f')).toContainText('202')
-  await expect(info.getByRole('heading', { name: 'Write the changelog' })).toBeVisible()
+  await expect(info.getByText('Write the changelog')).toBeVisible()
+})
+
+test('Project screen: the info column keeps its bottom bar in view', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 520 })
+  await page.goto('/#/projects/demo')
+  const info = page.locator('.pn', { hasText: /^Step info/ })
+  await expect(info.getByText('Open', { exact: false }).first()).toBeVisible()
+  const bar = await info.locator('.bar').boundingBox()
+  expect(bar!.y + bar!.height).toBeLessThanOrEqual(520)
+  expect(await page.locator('main').evaluate((m) => m.scrollHeight <= m.clientHeight)).toBe(true)
+  // Same place for every step.
+  const y = (await info.locator('.ti').boundingBox())!.y
+  await page.keyboard.press('j')
+  expect((await info.locator('.ti').boundingBox())!.y).toBe(y)
 })
 
 test('Step screen: the cursor starts on the current task', async ({ page }) => {
