@@ -187,3 +187,34 @@ test('Questions inbox lists the open demo questions', async ({ page }) => {
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/#\/steps\/notes\/302$/)
 })
+
+test('Project → Step → back: no blank frame, no loading text', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  await expect(page.locator('.pn', { hasText: /^Step info/ }).locator('.desc')).not.toHaveText('…')
+  // Every painted frame: the screen has its body and the info column is not waiting for its text.
+  await page.evaluate(() => {
+    const w = window as unknown as { bad: string[] }
+    w.bad = []
+    const frame = () => {
+      const main = document.querySelector('main')!
+      if (!main.querySelector('.body')) w.bad.push(`blank at ${location.hash}`)
+      if ([...main.querySelectorAll('.desc')].some((d) => d.textContent === '…')) w.bad.push(`… at ${location.hash}`)
+      requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  })
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/steps\/demo\/102$/)
+  await expect(page.locator('.hd .cur')).toHaveText('102')
+  await page.keyboard.press('Escape')
+  await expect(page).toHaveURL(/#\/projects\/demo$/)
+  await expect(page.locator('.pn .lr.grid.f')).toContainText('102')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.hd .cur')).toHaveText('102')
+  expect(await page.evaluate(() => (window as unknown as { bad: string[] }).bad)).toEqual([])
+})
+
+test('a missing step still says so', async ({ page }) => {
+  await page.goto('/#/steps/demo/999')
+  await expect(page.getByText('No step 999 in demo.')).toBeVisible()
+})
