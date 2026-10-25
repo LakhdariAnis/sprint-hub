@@ -188,11 +188,9 @@ test('Questions inbox lists the open demo questions', async ({ page }) => {
   await expect(page).toHaveURL(/#\/steps\/notes\/302$/)
 })
 
-test('Project → Step → back: no blank frame, no loading text', async ({ page }) => {
-  await page.goto('/#/projects/demo')
-  await expect(page.locator('.pn', { hasText: /^Step info/ }).locator('.desc')).not.toHaveText('…')
-  // Every painted frame: the screen has its body and the info column is not waiting for its text.
-  await page.evaluate(() => {
+// Every painted frame: the screen has its body and the info column is not waiting for its text.
+const watchFrames = (page: import('@playwright/test').Page) =>
+  page.evaluate(() => {
     const w = window as unknown as { bad: string[] }
     w.bad = []
     const frame = () => {
@@ -203,6 +201,12 @@ test('Project → Step → back: no blank frame, no loading text', async ({ page
     }
     requestAnimationFrame(frame)
   })
+const badFrames = (page: import('@playwright/test').Page) => page.evaluate(() => (window as unknown as { bad: string[] }).bad)
+
+test('Project → Step → back: no blank frame, no loading text', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  await expect(page.locator('.pn', { hasText: /^Step info/ }).locator('.desc')).not.toHaveText('…')
+  await watchFrames(page)
   // The step under the cursor: earlier tests move the demo steps on.
   const id = (await page.locator('.pn .lr.grid.f .id').first().textContent())!
   await page.keyboard.press('Enter')
@@ -212,7 +216,7 @@ test('Project → Step → back: no blank frame, no loading text', async ({ page
   await expect(page.locator('.pn .lr.grid.f')).toContainText(id)
   await page.keyboard.press('Enter')
   await expect(page.locator('.hd .cur')).toHaveText(id)
-  expect(await page.evaluate(() => (window as unknown as { bad: string[] }).bad)).toEqual([])
+  expect(await badFrames(page)).toEqual([])
 })
 
 test('a missing step still says so', async ({ page }) => {
@@ -264,5 +268,64 @@ for (const [w, h] of [[1920, 1080], [960, 1080], [960, 540], [1280, 720]]) {
     await page.goto('/#/questions')
     await expect(page.locator('.row').first()).toBeVisible()
     expect(await noPageScroll(page)).toBe(true)
+  })
+}
+
+// Step 408: the main walk through the tree, at full screen and in a half-screen, short tile.
+for (const [w, h] of [[1920, 1080], [960, 540]]) {
+  test(`main walk at ${w}x${h}: enter on the doing step, h l j k, open on the current task, b, no scroll, no flash`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/projects')
+    await expect(page.locator('.lr.row.f')).toContainText('demo')
+    await watchFrames(page)
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/#\/projects\/demo$/)
+    const steps = page.locator('.pn', { hasText: /^Steps/ })
+    const sprints = page.locator('.pn.list').first()
+    const info = page.locator('.pn', { hasText: /^Step info/ })
+    // Lands on the work: Sprint 1 marked ●, the doing step under the cursor, its info shown. No key pressed.
+    const cur = steps.locator('.lr.f')
+    await expect(cur.locator('.chip')).toHaveText('doing')
+    const id = (await cur.locator('.id').first().textContent())!
+    await expect(sprints.locator('.lr.f')).toHaveAttribute('aria-label', 'Sprint 1')
+    await expect(sprints.locator('.lr.f')).toContainText('●')
+    await expect(steps).toHaveClass(/\bf\b/)
+    await expect(info.locator('.bar')).toBeInViewport()
+    expect(await noPageScroll(page)).toBe(true)
+    // j k inside Steps, h l between the columns, back on the same step.
+    await page.keyboard.press('j')
+    await expect(cur).not.toContainText(id)
+    await page.keyboard.press('k')
+    await expect(cur.locator('.id').first()).toHaveText(id)
+    await page.keyboard.press('h')
+    await expect(sprints).toHaveClass(/\bf\b/)
+    await page.keyboard.press('l')
+    await expect(steps).toHaveClass(/\bf\b/)
+    await expect(cur.locator('.id').first()).toHaveText(id)
+    // Open: the Step screen, its current task selected and in view.
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(new RegExp(`#/steps/demo/${id}$`))
+    // The current task: the one doing, else the first todo (a manual step has no doing task).
+    const task = page.locator('.task.sel')
+    await expect(task).toBeInViewport()
+    const at = (sel: string) => page.locator('.task').evaluateAll((ts, sel) => ts.findIndex((t) => t.matches(sel)), sel)
+    const doing = await at('.doing')
+    expect(await at('.sel')).toBe(doing >= 0 ? doing : await at('.todo'))
+    expect(await noPageScroll(page)).toBe(true)
+    // b: icon rail and back; the hide button stays in view, the page never scrolls.
+    const hide = page.locator('nav.sb button.hide')
+    await page.keyboard.press('b')
+    await expect(page.locator('nav.sb.rail')).toBeVisible()
+    await expect(hide).toBeInViewport()
+    expect(await noPageScroll(page)).toBe(true)
+    await page.keyboard.press('b')
+    await expect(page.locator('nav.sb.rail')).toHaveCount(0)
+    await expect(hide).toBeInViewport()
+    // Back: same sprint and step.
+    await page.keyboard.press('Escape')
+    await expect(page).toHaveURL(/#\/projects\/demo$/)
+    await expect(cur.locator('.id').first()).toHaveText(id)
+    expect(await noPageScroll(page)).toBe(true)
+    expect(await badFrames(page)).toEqual([])
   })
 }
