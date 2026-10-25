@@ -9,11 +9,14 @@
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { goal, groupBySprint, loadStep, loadSteps, needsWork, type Step } from '../steps'
+  import { untrack } from 'svelte'
+  import { goal, groupBySprint, loadStep, needsWork, type Step } from '../steps'
+  import { key, lists, put, steps as store } from '../store.svelte'
 
   let { project }: { project: string } = $props()
-  let steps = $state<Step[]>([])
-  let status = $state<'loading' | 'ready' | 'failed'>('loading')
+  // Loaded before the screen shows (nav.svelte.ts), then live from the store: no keys means that load failed.
+  const ids = $derived(lists.steps[project])
+  const steps = $derived((ids ?? []).map((k) => store[k]))
 
   // Hours = time of the recorded runs; the vault has no planned hours.
   const hours = (s: Step) => {
@@ -54,50 +57,44 @@
     Enter: () => (col === 's' ? right() : cur && open(cur)),
     Escape: () => (location.hash = '#/projects'),
   })
-  let detail = $state<Step | null>(null)
-
-  // The list has no spec text, so the preview loads the selected step on its own.
+  // The list has no spec text, so the preview loads the selected step once; the store keeps it.
+  // Keyed on the string: `put` makes a new object, so reading `cur` here would reload forever.
+  const ck = $derived(cur && key(project, cur.step))
   $effect(() => {
-    const c = cur
-    detail = null
-    if (c) loadStep(c.project, c.step).then((d) => c === cur && (detail = d), () => {})
+    const k = ck
+    untrack(() => k && !('spec' in store[k]) && loadStep(project, store[k].step).then((d) => put(project, d), () => {}))
   })
+  const detail = $derived(cur && 'spec' in cur ? cur : null)
 
-  $effect(() => {
-    gi = si = 0
-    col = 't'
-    status = 'loading'
-    loadSteps(project).then(
-      (s) => {
-        // Back from a step: the same place. Otherwise the step that needs work.
-        const gs = groupBySprint(s)
-        const was = back.get(project)
-        back.delete(project)
-        let g = gs.findIndex((x) => x.key === was?.sprint)
-        let i = gs[g]?.steps.findIndex((x) => x.step === was?.step) ?? -1
-        if (i < 0) {
-          const w = needsWork(s)
-          g = gs.findIndex((x) => w && x.steps.includes(w))
-          i = gs[g]?.steps.indexOf(w!) ?? 0
-        }
-        gi = Math.max(g, 0)
-        si = Math.max(i, 0)
-        steps = s
-        status = 'ready'
-      },
-      () => (status = 'failed'),
-    )
+  // Before the first paint of each project: back from a step, the same place. Otherwise the step that needs work.
+  $effect.pre(() => {
+    void project
+    untrack(() => {
+      col = 't'
+      const gs = groups
+      const was = back.get(project)
+      back.delete(project)
+      let g = gs.findIndex((x) => x.key === was?.sprint)
+      let i = gs[g]?.steps.findIndex((x) => x.step === was?.step) ?? -1
+      if (i < 0) {
+        const w = needsWork(steps)
+        g = gs.findIndex((x) => w && x.steps.includes(w))
+        i = gs[g]?.steps.indexOf(w!) ?? 0
+      }
+      gi = Math.max(g, 0)
+      si = Math.max(i, 0)
+    })
   })
 
   // The selected rows stay in view, instantly.
   $effect(() => {
-    void [gi, si, status, col]
+    void [gi, si, col]
     for (const el of document.querySelectorAll('.body .lr.f')) el.scrollIntoView({ block: 'nearest' })
   })
 
   // The task list is the only scroller of the info column: show the current task.
   $effect(() => {
-    void [cur, status]
+    void cur
     document.querySelector('.tl .ck.doing')?.scrollIntoView({ block: 'nearest' })
   })
 </script>
@@ -108,9 +105,9 @@
   {project}
 </Header>
 
-{#if status === 'failed'}
+{#if !ids}
   <p class="dim pad">Cannot load {project}. Is hubd running?</p>
-{:else if status === 'ready'}
+{:else}
   <div class="body">
     <section class="pn list" class:f={col === 's'}>
       <div class="ph"><span class="full">Sprints</span><span class="short">S</span><span class="n">{groups.length}</span></div>
