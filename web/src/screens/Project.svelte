@@ -113,11 +113,11 @@
 {:else if status === 'ready'}
   <div class="body">
     <section class="pn list" class:f={col === 's'}>
-      <div class="ph">Sprints<span class="n">{groups.length}</span></div>
+      <div class="ph"><span class="full">Sprints</span><span class="short">S</span><span class="n">{groups.length}</span></div>
       {#each groups as g, i (g.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="lr gh row" class:f={i === gi} role="button" tabindex="0" aria-pressed={i === gi} onclick={() => pick(i)} onfocus={() => pick(i)}>
-          <b>{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</b>
+        <div class="lr gh row" class:f={i === gi} role="button" tabindex="0" aria-label={g.sprint === null ? "Steps" : `Sprint ${g.sprint}`} aria-pressed={i === gi} onclick={() => pick(i)} onfocus={() => pick(i)}>
+          <b><span class="full">{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</span><span class="short">{g.sprint === null ? '–' : `S${g.sprint}`}</span></b>
           {#if g === work}<span class="mark" title="Holds the step that needs work">●</span>{/if}
           <span class="chip g-{g.state}">{g.state}</span>
           <span class="id">{g.done}/{g.steps.length}</span>
@@ -141,7 +141,7 @@
           {:else}
             <span class="id">{done}/{s.tasks.length}</span>
           {/if}
-          <span><span class="chip s-{s.state}">{s.state}</span></span>
+          <span class="sc"><span class="chip s-{s.state}">{s.state}</span></span>
         </div>
       {/each}
     </section>
@@ -183,9 +183,29 @@
 <style>
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
-  /* Fixed fractions: the columns keep their width whatever is selected. Narrow windows are step 405. */
+  /* Fixed fractions: the columns keep their width whatever is selected. */
   .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 4fr); gap: 20px; align-items: stretch; }
-  .page { height: 100%; display: flex; flex-direction: column; }
+  .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
+  .short { display: none; }
+  .list { overflow-y: auto; }
+  .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
+  /* Half screen (sidebar open: ~720 px of content): Sprints shrink to a strip, Steps drop the state chip. */
+  @container (max-width: 1060px) {
+    .body { grid-template-columns: 64px minmax(0, 5fr) minmax(0, 4fr); gap: 12px; padding: 8px 16px 14px; }
+    .full, .gh .chip, .gh .id, .ph .n { display: none; }
+    .short { display: inline; }
+    .gh { padding: 0; justify-content: center; gap: 4px; }
+    .gh b { margin-right: 0; }
+    .grid { grid-template-columns: 10px 36px minmax(0, 1fr) 56px; padding: 0 12px; column-gap: 8px; }
+    .grid .sc, .ph .r { display: none; }
+    .pv { padding: 12px; gap: 8px; }
+  }
+  /* Short windows: the header and gaps give back room, the columns scroll alone. */
+  @container (max-height: 640px) {
+    .body { padding-bottom: 10px; }
+    .pv { gap: 6px; }
+    .desc { font-size: 13px; }
+  }
   .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 96px 80px; }
   .gh { display: flex; align-items: center; gap: 12px; padding: 0 16px; }
   .gh b { margin-right: auto; }
