@@ -4,17 +4,13 @@
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
-  import { approveStep, loadDiffstat, loadStep, loadSteps, requestChanges } from '../steps'
+  import { nav } from '../nav.svelte'
+  import { approveStep, loadDiffstat, loadStep, requestChanges } from '../steps'
   import { put, steps } from '../store.svelte'
 
   let { project, id }: { project?: string; id?: string } = $props()
-  let error = $state('')
-
-  // The store only holds steps a screen loaded: read every project once; SSE events keep them fresh.
-  fetch('/projects')
-    .then((r) => r.json())
-    .then((ps: { id: string }[]) => Promise.all(ps.map((p) => loadSteps(p.id).then((l) => l.forEach((s) => put(p.id, s))))))
-    .catch(() => (error = 'Cannot load steps. Is hubd running?'))
+  // Every project's steps are in the store before the screen shows (nav.svelte.ts); SSE events keep them fresh.
+  const error = $derived(nav.failed == null ? '' : 'Cannot load steps. Is hubd running?')
 
   const started = (s: { runs: { started?: string }[] }) => s.runs.at(-1)?.started ?? ''
   // Oldest first: the step that has waited longest is on top.

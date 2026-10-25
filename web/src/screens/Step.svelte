@@ -3,7 +3,8 @@
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { ago, goal, loadStep, startStep, tickTask } from '../steps'
+  import { nav } from '../nav.svelte'
+  import { ago, goal, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps } from '../store.svelte'
 
@@ -80,12 +81,11 @@
     document.querySelector('.task.sel')?.scrollIntoView({ block: 'nearest' })
   })
 
+  // Loaded before the screen shows (nav.svelte.ts); `nav.failed` says why when that load did not work.
+  const loadError = $derived(nav.failed == null ? '' : nav.failed === 404 ? `No step ${id} in ${project}.` : `Cannot load ${project}/${id}. Is hubd running?`)
   $effect(() => {
+    void [project, id]
     error = ''
-    loadStep(project, id).then(
-      (d) => put(project, d),
-      (status) => (error = status === 404 ? `No step ${id} in ${project}.` : `Cannot load ${project}/${id}. Is hubd running?`),
-    )
   })
 </script>
 
@@ -103,8 +103,8 @@
     <button class="btn dim" type="button" onclick={close}>Close tab <span class="kb">^W</span></button>
   </span>
 </div>
-{#if error}
-  <p class="err">{error}</p>
+{#if error || loadError}
+  <p class="err">{error || loadError}</p>
 {/if}
 {#if s}
   <div class="body">
