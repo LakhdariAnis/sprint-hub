@@ -90,3 +90,16 @@ export function groupBySprint(steps: Step[]): Group[] {
   const n = (g: Group) => g.sprint ?? 0
   return groups.sort((a, b) => rank[a.state] - rank[b.state] || (a.state === 'done' ? n(b) - n(a) : n(a) - n(b)))
 }
+
+// The step to work on: in the current sprint (else the newest) the first by id of doing, changes, done (waits for review), todo.
+// None of those: the sprint's first step.
+export function needsWork(steps: Step[]): Step | undefined {
+  const groups = groupBySprint(steps)
+  const g = groups.find((x) => x.state === 'current') ?? groups[0]
+  const byId = [...(g?.steps ?? [])].sort((a, b) => a.step.localeCompare(b.step, undefined, { numeric: true }))
+  for (const state of ['doing', 'changes', 'done', 'todo']) {
+    const s = byId.find((x) => x.state === state)
+    if (s) return s
+  }
+  return g?.steps[0]
+}
