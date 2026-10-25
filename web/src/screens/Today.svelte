@@ -212,22 +212,6 @@
   /* Now keeps the room, the others shrink to what is left. */
   .side > .pn { flex: 1 1 0; min-height: 88px; }
   .side > .pn:first-child { flex: 2.4 1 0; }
-  @container (max-width: 1060px) {
-    .body { gap: 12px; padding: 8px 16px 14px; }
-    .body > .pn { grid-column: span 7 !important; }
-    .side { grid-column: span 5 !important; }
-    .pbar, .pr .chip + .chip, .pr .id:last-child { display: none; }
-    .pr { grid-template-columns: minmax(0, 1fr) 48px auto; }
-    .cols { grid-template-columns: 14px 32px minmax(0, 1fr); column-gap: 8px; padding: 0 12px; }
-    .cols > :last-child { display: none; }
-  }
-  @container (max-height: 640px) {
-    .body { gap: 10px; padding-bottom: 10px; }
-    .side { gap: 10px; }
-    .side > .pn { min-height: 60px; }
-    .side > .pn:first-child { flex-grow: 4; min-height: 150px; }
-    .ph { height: 36px; }
-  }
   .cols { display: grid; align-items: center; column-gap: 14px; padding: 0 16px; grid-template-columns: 14px 36px minmax(0, 1fr) auto auto; cursor: pointer; font-size: 14px; }
   .cols:hover { background: var(--lt); }
   .cols.f { background: var(--sel); }
@@ -256,4 +240,20 @@
   .dl { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); font-size: 14px; }
   .dl .chip { margin-left: 8px; }
   .ck { width: 16px; height: 16px; border: 1.5px solid var(--mu); border-radius: 4px; }
+  @container (max-width: 1060px) {
+    .body { gap: 12px; padding: 8px 16px 14px; }
+    .body > .pn { grid-column: span 7 !important; }
+    .side { grid-column: span 5 !important; }
+    .pbar, .pr .chip + .chip, .pr .id:last-child { display: none; }
+    .pr { grid-template-columns: minmax(0, 1fr) 48px auto; }
+    .cols { grid-template-columns: 14px 32px minmax(0, 1fr); column-gap: 8px; padding: 0 12px; }
+    .cols > :last-child { display: none; }
+  }
+  @container (max-height: 640px) {
+    .body { gap: 10px; padding-bottom: 10px; }
+    .side { gap: 10px; }
+    .side > .pn { min-height: 60px; }
+    .side > .pn:first-child { flex-grow: 4; min-height: 150px; }
+    .ph { height: 36px; }
+  }
 </style>

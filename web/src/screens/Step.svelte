@@ -232,29 +232,6 @@
   .ck { grid-column: 1; grid-row: 2; }
   /* No checklist yet: the pane hugs its one line instead of filling the column. */
   .ck.short { align-self: start; }
-  /* Half screen (sidebar open: ~720 px of content): one slim column pair, smaller texts. */
-  @container (max-width: 1060px) {
-    .hd { padding: 0 16px; }
-    .body { padding: 12px 16px; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-    .head { padding: 14px 16px; }
-    .head h1 { font-size: 20px; }
-    .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .task { padding: 0 12px; gap: 8px; }
-    .spec, .chat { padding: 12px 16px; }
-  }
-  /* Short windows: the header band and head pane give back room. */
-  @container (max-height: 640px) {
-    .hd { height: 48px; }
-    .body { padding-top: 8px; padding-bottom: 8px; gap: 8px; }
-    .head { padding: 10px 14px; gap: 6px; }
-    .head h1 { font-size: 17px; }
-    .head p { -webkit-line-clamp: 1; line-clamp: 1; }
-    .meta { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
-    .meta div { padding: 3px 8px; }
-    .big { padding: 8px 14px; }
-    .task { min-height: 40px; }
-    .qa { margin: 8px 12px; padding: 8px 12px; }
-  }
   .right { grid-column: 2; grid-row: 1 / span 2; }
   .big { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--sel); }
   .big b { font-size: 26px; font-weight: 500; line-height: 1; }
@@ -304,4 +281,27 @@
   .bt { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--fg2); }
   .pill { border: 1px solid var(--sel); border-radius: 10px; padding: 0 8px; }
   .go { margin-left: auto; font-weight: 700; color: var(--bg); background: var(--ac); padding: 2px 10px; border-radius: 4px; }
+  /* Half screen (sidebar open: ~720 px of content): one slim column pair, smaller texts. */
+  @container (max-width: 1060px) {
+    .hd { padding: 0 16px; }
+    .body { padding: 12px 16px; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .head { padding: 14px 16px; }
+    .head h1 { font-size: 20px; }
+    .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .task { padding: 0 12px; gap: 8px; }
+    .spec, .chat { padding: 12px 16px; }
+  }
+  /* Short windows: the header band and head pane give back room. */
+  @container (max-height: 640px) {
+    .hd { height: 48px; }
+    .body { padding-top: 8px; padding-bottom: 8px; gap: 8px; }
+    .head { padding: 10px 14px; gap: 6px; }
+    .head h1 { font-size: 17px; }
+    .head p { -webkit-line-clamp: 1; line-clamp: 1; }
+    .meta { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
+    .meta div { padding: 3px 8px; }
+    .big { padding: 8px 14px; }
+    .task { min-height: 40px; }
+    .qa { margin: 8px 12px; padding: 8px 12px; }
+  }
 </style>
