@@ -119,6 +119,24 @@ test('Project screen: the info column keeps its bottom bar in view', async ({ pa
   expect((await info.locator('.ti').boundingBox())!.y).toBe(y)
 })
 
+for (const [w, h] of [[960, 1080], [960, 540]]) {
+  test(`Project screen at ${w}x${h}: no horizontal scroll, bottom bar of the info column in view`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/projects/demo')
+    const info = page.locator('.pn', { hasText: /^Step info/ })
+    await expect(info.locator('.bar')).toBeVisible()
+    const bar = await info.locator('.bar').boundingBox()
+    expect(bar!.y + bar!.height).toBeLessThanOrEqual(h)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(await page.locator('main').evaluate((m) => m.scrollWidth <= m.clientWidth && m.scrollHeight <= m.clientHeight)).toBe(true)
+    // Sprints are a strip: short label, marker kept.
+    const sprints = page.locator('.pn', { hasText: /^S/ }).first()
+    expect((await sprints.boundingBox())!.width).toBeLessThanOrEqual(70)
+    await expect(sprints.locator('.lr.f')).toContainText('S1')
+    await expect(sprints.locator('.lr.f')).toContainText('●')
+  })
+}
+
 test('Step screen: the cursor starts on the current task', async ({ page }) => {
   await page.goto('/#/steps/demo/102')
   await expect(page.locator('.task.sel')).toHaveClass(/\bdoing\b/)
