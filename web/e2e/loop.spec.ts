@@ -55,6 +55,23 @@ test('Ctrl+2 opens Today, Ctrl+1 Projects', async ({ page }) => {
   await expect(page).toHaveURL(/#\/projects$/)
 })
 
+test('Project screen: a sprint lists only its steps, a step shows its info', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  const steps = page.locator('.pn', { hasText: /^Steps/ })
+  const info = page.locator('.pn', { hasText: /^Step info/ })
+  await expect(page.getByRole('button', { name: /Sprint 1/ })).toContainText('●')
+  await expect(steps.getByText('Show the list')).toBeVisible()
+  const box = await steps.boundingBox()
+
+  await page.getByRole('button', { name: /Sprint 2/ }).click()
+  await expect(steps.getByText('Tag the release')).toBeVisible()
+  await expect(steps.getByText('Show the list')).toHaveCount(0)
+  await steps.getByText('Write the changelog').click()
+  await expect(info.getByRole('heading', { name: 'Write the changelog' })).toBeVisible()
+  // Nothing jumps: the Steps column keeps its place and width.
+  expect(await steps.boundingBox()).toMatchObject({ x: box!.x, y: box!.y, width: box!.width })
+})
+
 test('x ticks the tasks of a manual step: todo, doing, done', async ({ page }) => {
   await page.goto('/#/today')
   await expect(page.locator('.pn', { hasText: 'Now' }).getByRole('link', { name: /101/ })).toContainText('demo · me')
