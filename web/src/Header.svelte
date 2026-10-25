@@ -25,9 +25,10 @@
   .crumb :global(a) { color: var(--fg2); text-decoration: none; }
   .crumb :global(a:hover) { color: var(--fg); }
   .search {
-    margin-left: auto; width: 300px; height: 34px; flex: none; border: 1px solid var(--sel); border-radius: 7px; background: var(--dk);
+    margin-left: auto; width: 300px; min-width: 0; flex: 0 1 300px; height: 34px; border: 1px solid var(--sel); border-radius: 7px; background: var(--dk);
     display: flex; align-items: center; gap: 10px; padding: 0 10px; color: var(--fgm); font-size: 13.5px;
   }
+  @media (max-height: 700px) { .hd { height: 52px; margin-bottom: 8px; } }
   .search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
   .search .kb { margin-left: auto; }
 </style>
