@@ -1,6 +1,6 @@
 <script lang="ts">
   import { hub } from './hub.svelte'
-  import { keys } from './keys.svelte'
+  import { keys, toggleRail } from './keys.svelte'
   import { router } from './route.svelte'
   import { steps } from './store.svelte'
 
@@ -51,7 +51,7 @@
   </div>
   <div class="sbf">
     <span class="lbl"><span class="dot" class:x-g={hub.live} class:x-r={hub.live === false}></span> hubd {hub.live === false ? 'down' : 'live'}</span>
-    <button class="hide" type="button" onclick={() => (keys.rail = !keys.rail)} title={keys.rail ? 'Expand sidebar (b)' : 'Hide sidebar (b)'} aria-label={keys.rail ? 'Expand sidebar' : 'Hide sidebar'}>
+    <button class="hide" type="button" onclick={toggleRail} title={keys.rail ? 'Expand sidebar (b)' : 'Hide sidebar (b)'} aria-label={keys.rail ? 'Expand sidebar' : 'Hide sidebar'}>
       {#if keys.rail}<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4v12M8 6l5 4-5 4"/></svg>{:else}<span class="kb">b</span><span class="lbl"> hide</span>{/if}
     </button>
   </div>
