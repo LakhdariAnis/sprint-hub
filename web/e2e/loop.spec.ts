@@ -72,6 +72,44 @@ test('Project screen: a sprint lists only its steps, a step shows its info', asy
   expect(await steps.boundingBox()).toMatchObject({ x: box!.x, y: box!.y, width: box!.width })
 })
 
+test('Project screen: the cursor starts on the doing step, h l j k move it', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  const steps = page.locator('.pn', { hasText: /^Steps/ })
+  const sprints = page.locator('.pn', { hasText: /^Sprints/ })
+  const info = page.locator('.pn', { hasText: /^Step info/ })
+  // Entering: Sprint 1, the doing step 102, Steps column framed. No key pressed.
+  await expect(steps.locator('.lr.f')).toContainText('102')
+  await expect(sprints.locator('.lr.f')).toContainText('Sprint 1')
+  await expect(steps).toHaveClass(/\bf\b/)
+  await page.keyboard.press('j')
+  await expect(steps.locator('.lr.f')).toContainText('103')
+  await page.keyboard.press('k')
+  await page.keyboard.press('k')
+  await expect(steps.locator('.lr.f')).toContainText('101')
+  // h: Sprints column, j moves to Sprint 2; l: back to Steps, which now list Sprint 2.
+  await page.keyboard.press('h')
+  await expect(sprints).toHaveClass(/\bf\b/)
+  await page.keyboard.press('j')
+  await expect(sprints.locator('.lr.f')).toContainText('Sprint 2')
+  await page.keyboard.press('l')
+  await expect(steps).toHaveClass(/\bf\b/)
+  await expect(steps.locator('.lr.f')).toContainText('201')
+  await page.keyboard.press('j')
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#\/steps\/demo\/202$/)
+  // Escape returns to the same sprint and step, not the default.
+  await page.keyboard.press('Escape')
+  await expect(page).toHaveURL(/#\/projects\/demo$/)
+  await expect(sprints.locator('.lr.f')).toContainText('Sprint 2')
+  await expect(steps.locator('.lr.f')).toContainText('202')
+  await expect(info.getByRole('heading', { name: 'Write the changelog' })).toBeVisible()
+})
+
+test('Step screen: the cursor starts on the current task', async ({ page }) => {
+  await page.goto('/#/steps/demo/102')
+  await expect(page.locator('.task.sel')).toHaveClass(/\bdoing\b/)
+})
+
 test('x ticks the tasks of a manual step: todo, doing, done', async ({ page }) => {
   await page.goto('/#/today')
   await expect(page.locator('.pn', { hasText: 'Now' }).getByRole('link', { name: /101/ })).toContainText('demo · me')

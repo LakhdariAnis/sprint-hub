@@ -12,7 +12,7 @@
     ['1 2 3 4', 'Projects, Today, Review, Questions (also Ctrl+1 2 3 4 in the app window)'],
     ['6 … 9', 'the steps under OPEN in the sidebar'],
     ['b', 'hide / show the sidebar labels'],
-    ['Enter  l  h', 'sprint row: fold / open / close (Project)'],
+    ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
     ['s', 'start the step (Step screen)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve; press a or y again to merge (Review)'],

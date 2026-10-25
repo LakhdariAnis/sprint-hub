@@ -18,7 +18,7 @@
   const hints = $derived<Record<string, [string, string][]>>({
     today: [['p n m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
-    project: [['↑ ↓', 'move'], ['→ ↵', 'open step'], ['← Esc', 'back']],
+    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['Esc', 'back']],
     step: [...when(canStart, [['s', 'start']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
