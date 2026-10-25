@@ -3,7 +3,7 @@
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import { useKeys } from '../keys.svelte'
-  import { goal, groupBySprint, loadStep, loadSteps, type Group, type Step } from '../steps'
+  import { goal, groupBySprint, loadStep, loadSteps, type Step } from '../steps'
 
   let { project }: { project: string } = $props()
   let steps = $state<Step[]>([])
@@ -15,31 +15,19 @@
     return m ? (m / 60).toFixed(1) : '–'
   }
 
-  const hrs = (min: number) => (min ? (min / 60).toFixed(1) : '–')
-
-  // Fold state per project: {sprint key: open}. A group without an entry is open only when it is the current one.
-  const foldKey = () => `sprint-hub:folds:${project}`
-  let folds = $state<Record<string, boolean>>({})
-  const isOpen = (g: Group) => folds[g.key] ?? g.state === 'current'
-  const toggle = (g: Group, open = !isOpen(g)) => {
-    folds[g.key] = open
-    try { localStorage.setItem(foldKey(), JSON.stringify(folds)) } catch {}
-  }
-
   const groups = $derived(groupBySprint(steps))
-  type Row = { g: Group; s?: Step }
-  const rows = $derived(groups.flatMap((g): Row[] => [{ g }, ...(isOpen(g) ? g.steps.map((s) => ({ g, s })) : [])]))
-
-  let sel = $state(0)
+  // shortcut: groupBySprint puts the current sprint first, so it holds the work; 403 adds the real "needs work" helper.
+  const work = $derived(groups[0])
+  let gi = $state(0)
+  let si = $state(0)
+  const group = $derived(groups[gi])
+  const cur = $derived(group?.steps[si])
+  const pick = (i: number) => i !== gi && ((gi = i), (si = 0))
   const href = (s: Step) => `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(s.step)}`
-  const row = $derived(rows[sel])
-  const cur = $derived(row?.s)
   useKeys({
-    j: () => (sel = Math.min(sel + 1, rows.length - 1)),
-    k: () => (sel = Math.max(sel - 1, 0)),
-    Enter: () => (cur ? (location.hash = href(cur)) : row && toggle(row.g)),
-    l: () => row && !cur && toggle(row.g, true),
-    h: () => row && !cur && toggle(row.g, false),
+    j: () => group && (si = Math.min(si + 1, group.steps.length - 1)),
+    k: () => (si = Math.max(si - 1, 0)),
+    Enter: () => cur && (location.hash = href(cur)),
     Escape: () => (location.hash = '#/projects'),
   })
   let detail = $state<Step | null>(null)
@@ -52,8 +40,7 @@
   })
 
   $effect(() => {
-    sel = 0
-    try { folds = JSON.parse(localStorage.getItem(foldKey()) ?? '{}') } catch { folds = {} }
+    gi = si = 0
     status = 'loading'
     loadSteps(project).then(
       (s) => ((steps = s), (status = 'ready')),
@@ -71,59 +58,43 @@
   <p class="dim pad">Cannot load {project}. Is hubd running?</p>
 {:else if status === 'ready'}
   <div class="body">
-    <section class="pn f list">
-      <div class="ph">Steps<span class="n">{steps.length}</span><span class="r"><span class="kb">↵</span> open</span></div>
-      <div class="lh grid"><span></span><span>id</span><span>title</span><span>model</span><span>hours</span><span>tasks</span><span>state</span></div>
-      {#each rows as r, i (r.s ? r.s.step : 'g' + r.g.key)}
-        {#if r.s}
-          {@const s = r.s}
-          {@const done = s.tasks.filter((t) => t.state === 'done').length}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => (sel = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (sel = i)}>
-            <span class="dot s-{s.state}"></span>
-            <span class="id">{s.step}</span>
-            <span class="tt">{s.title}</span>
-            <span>{#if s.model}<span class="mdl">{s.model}</span>{/if}</span>
-            <span class="id">{hours(s)}</span>
-            {#if s.state === 'doing' && s.tasks.length}
-              <span class="prog"><span class="pbar" style="--x: var(--b)"><i style="width: {(done / s.tasks.length) * 100}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
-            {:else}
-              <span class="id">{done}/{s.tasks.length}</span>
-            {/if}
-            <span><span class="chip s-{s.state}">{s.state}</span></span>
-          </div>
-        {:else}
-          {@const g = r.g}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <div class="lr gh row" class:f={i === sel} role="button" tabindex="0" aria-expanded={isOpen(g)} onclick={() => (sel = i, toggle(g))} onfocus={() => (sel = i)}>
-            <span class="arrow">{isOpen(g) ? '▾' : '▸'}</span>
-            <b>{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</b>
-            <span class="chip g-{g.state}">{g.state}</span>
-            <span class="id">{g.done}/{g.steps.length}</span>
-            <span class="id">{g.minutes ? `${hrs(g.minutes)} h` : ''}</span>
-          </div>
-        {/if}
+    <section class="pn list">
+      <div class="ph">Sprints<span class="n">{groups.length}</span></div>
+      {#each groups as g, i (g.key)}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="lr gh row" class:f={i === gi} role="button" tabindex="0" aria-pressed={i === gi} onclick={() => pick(i)} onfocus={() => pick(i)}>
+          <b>{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</b>
+          {#if g === work}<span class="mark" title="Holds the step that needs work">●</span>{/if}
+          <span class="chip g-{g.state}">{g.state}</span>
+          <span class="id">{g.done}/{g.steps.length}</span>
+        </div>
       {:else}
         <p class="dim pad">No steps in this project.</p>
       {/each}
     </section>
 
-    {#if row && !cur}
-      <section class="pn">
-        <div class="ph">Sprint summary</div>
-        <div class="pv">
-          <h2>{row.g.sprint === null ? 'Steps' : `Sprint ${row.g.sprint}`}</h2>
-          <div class="kv">
-            <div><span>STATE</span>{row.g.state}</div>
-            <div><span>STEPS</span>{row.g.done}/{row.g.steps.length}</div>
-            <div><span>HOURS</span>{hrs(row.g.minutes)}</div>
-          </div>
-          <p class="dim"><span class="kb">↵</span> fold / unfold</p>
+    <section class="pn f list">
+      <div class="ph">Steps<span class="n">{group?.steps.length ?? 0}</span><span class="r"><span class="kb">↵</span> open</span></div>
+      {#each group?.steps ?? [] as s, i (s.step)}
+        {@const done = s.tasks.filter((t) => t.state === 'done').length}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="lr grid row" class:f={i === si} role="link" tabindex="0" onclick={() => (si = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (si = i)}>
+          <span class="dot s-{s.state}"></span>
+          <span class="id">{s.step}</span>
+          <span class="tt">{s.title}</span>
+          {#if s.state === 'doing' && s.tasks.length}
+            <span class="prog"><span class="pbar" style="--x: var(--b)"><i style="width: {(done / s.tasks.length) * 100}%"></i></span><span class="id">{done}/{s.tasks.length}</span></span>
+          {:else}
+            <span class="id">{done}/{s.tasks.length}</span>
+          {/if}
+          <span><span class="chip s-{s.state}">{s.state}</span></span>
         </div>
-      </section>
-    {:else if cur}
-      <section class="pn">
-        <div class="ph">Step preview<span class="r"><span class="kb">↵</span> open</span></div>
+      {/each}
+    </section>
+
+    <section class="pn">
+      <div class="ph">Step info<span class="r"><span class="kb">↵</span> open</span></div>
+      {#if cur}
         <div class="pv">
           <div>
             <span class="id">{cur.step}</span>
@@ -146,20 +117,22 @@
           <div class="sp"></div>
           <div><a class="btn pri" href={href(cur)}>Open <span class="kb">↵</span></a></div>
         </div>
-      </section>
-    {/if}
+      {:else}
+        <p class="dim pad">No step selected.</p>
+      {/if}
+    </section>
   </div>
 {/if}
 
 <style>
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
-  .body { padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 20px; align-items: start; }
-  /* Narrow windows: the fixed columns leave the title no room beside the preview, so the preview goes below. */
-  @media (max-width: 1300px) { .body { grid-template-columns: minmax(0, 1fr); } }
-  .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 76px 56px 120px 96px; }
+  /* Fixed fractions: the columns keep their width whatever is selected. Narrow windows are step 405. */
+  .body { padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 4fr); gap: 20px; align-items: start; }
+  .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 96px 80px; }
   .gh { display: flex; align-items: center; gap: 12px; padding: 0 16px; }
-  .gh .arrow { width: 10px; color: var(--fg2); }
+  .gh b { margin-right: auto; }
+  .mark { color: var(--ac); font-size: 11px; }
   .chip.g-planned { background: none; box-shadow: inset 0 0 0 1px var(--mu); }
   .row { min-height: 40px; cursor: pointer; }
   .row:hover { background: var(--lt); }
