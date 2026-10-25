@@ -7,6 +7,7 @@
   import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
+  import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { goal, groupBySprint, loadStep, loadSteps, needsWork, type Step } from '../steps'
 
@@ -93,8 +94,15 @@
     void [gi, si, status, col]
     for (const el of document.querySelectorAll('.body .lr.f')) el.scrollIntoView({ block: 'nearest' })
   })
+
+  // The task list is the only scroller of the info column: show the current task.
+  $effect(() => {
+    void [cur, status]
+    document.querySelector('.tl .ck.doing')?.scrollIntoView({ block: 'nearest' })
+  })
 </script>
 
+<div class="page">
 <Header>
   {#snippet crumb()}<a href="#/projects">Projects</a> › {project}{/snippet}
   {project}
@@ -141,27 +149,28 @@
     <section class="pn">
       <div class="ph">Step info<span class="r"><span class="kb">↵</span> open</span></div>
       {#if cur}
+        {@const done = cur.tasks.filter((t) => t.state === 'done').length}
+        {@const nq = hub.questions.filter((q) => q.project === cur.project && q.step === cur.step).length}
         <div class="pv">
-          <div>
-            <span class="id">{cur.step}</span>
-            <h2>{cur.title}</h2>
+          <div class="ti"><span class="id">{cur.step}</span> · {cur.title}</div>
+          <div class="st">
+            <span class="chip s-{cur.state}">{cur.state}</span><span>{cur.model ?? '–'}</span><span>{hours(cur)} h</span><span>{done}/{cur.tasks.length} tasks</span>
           </div>
+          <div class="br"><span class="mono">{cur.branch ?? ''}</span>{#if cur.branch}<Copy text={cur.branch} label="branch" />{/if}</div>
+          <div class="lb">GOAL</div>
           <p class="desc">{#if detail}<Inline text={goal(detail.spec) || 'No goal in the spec.'} />{:else}…{/if}</p>
-          <div class="kv">
-            <div><span>STATE</span><b class="s-{cur.state}" style="color: var(--x)">{cur.state}</b></div>
-            <div><span>MODEL</span>{cur.model ?? '–'}</div>
-            <div><span>HOURS</span>{hours(cur)}</div>
-          </div>
-          {#if cur.branch}<div class="br"><span class="mono">{cur.branch}</span><Copy text={cur.branch} label="branch" /></div>{/if}
-          <div>
+          <div class="lb">TASKS<span>{done}/{cur.tasks.length}</span></div>
+          <div class="tl">
             {#each cur.tasks as t}
-              <div class="ck {t.state}"><span class="box">{#if t.state === 'done'}✓{/if}</span><span><Inline text={t.text} />{#if t.state === 'doing'} · now{/if}</span></div>
+              <div class="ck {t.state}"><span class="box">{#if t.state === 'done'}✓{/if}</span><span><Inline text={t.text} />{#if t.state === 'doing'} <em>← now</em>{/if}</span></div>
             {:else}
               <p class="dim">No checklist yet.</p>
             {/each}
           </div>
-          <div class="sp"></div>
-          <div><a class="btn pri" href={href(cur)} onclick={() => back.set(project, { sprint: group.key, step: cur.step })}>Open <span class="kb">↵</span></a></div>
+          <div class="bar">
+            <a class="btn pri" href={href(cur)} onclick={() => back.set(project, { sprint: group.key, step: cur.step })}>Open <span class="kb">↵</span></a>
+            <span class="nq">{nq} open {nq === 1 ? 'question' : 'questions'}</span>
+          </div>
         </div>
       {:else}
         <p class="dim pad">No step selected.</p>
@@ -169,12 +178,14 @@
     </section>
   </div>
 {/if}
+</div>
 
 <style>
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   /* Fixed fractions: the columns keep their width whatever is selected. Narrow windows are step 405. */
-  .body { padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 4fr); gap: 20px; align-items: start; }
+  .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 4fr); gap: 20px; align-items: stretch; }
+  .page { height: 100%; display: flex; flex-direction: column; }
   .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 96px 80px; }
   .gh { display: flex; align-items: center; gap: 12px; padding: 0 16px; }
   .gh b { margin-right: auto; }
@@ -190,15 +201,20 @@
   .prog .pbar { flex: 1; }
   /* Todo has not started: an outline, not a fill. */
   .chip.s-todo { background: none; box-shadow: inset 0 0 0 1px var(--mu); }
-  .pv { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pv { padding: 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
   .pv p.dim { margin: 0; }
-  h2 { font-size: 18px; font-weight: 600; line-height: 1.3; margin: 2px 0 0; }
-  .desc { margin: 0; font-size: 13.5px; color: var(--fg2); line-height: 1.55; }
-  .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .kv div { border: 1px solid var(--sel); border-radius: 7px; padding: 7px 10px; background: var(--bg); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .kv span { display: block; font: 10.5px var(--mono); color: var(--fg2); }
-  .kv b { font-weight: 500; }
-  .br { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg2); }
+  .ti { font-size: 17px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+  .ti .id { font-size: 14px; }
+  .st { display: flex; align-items: center; gap: 8px; flex: none; font: 12.5px var(--mono); color: var(--fg2); white-space: nowrap; overflow: hidden; }
+  .st > span + span::before { content: "·"; margin-right: 8px; }
+  .lb { flex: none; display: flex; gap: 10px; font: 10.5px var(--mono); color: var(--fg2); }
+  .desc { margin: 0; flex: none; font-size: 13.5px; color: var(--fg2); line-height: 1.55; height: calc(3 * 1.55em); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .br { flex: none; height: 22px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg2); min-width: 0; }
+  .br .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tl { flex: 1; min-height: 0; overflow-y: scroll; }
+  .ck em { font-style: normal; font-size: 12px; }
+  .bar { flex: none; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--sel); padding-top: 10px; }
+  .nq { font: 12.5px var(--mono); color: var(--fg2); }
   .ck { display: grid; grid-template-columns: 20px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sel); font-size: 13.5px; align-items: center; }
   .ck:last-child { border-bottom: 0; }
   .ck.todo { color: var(--fg2); }
@@ -206,7 +222,6 @@
   .box { width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; border: 1px solid var(--mu); }
   .done .box { background: var(--g); border-color: var(--g); color: var(--bg); }
   .doing .box { border: 2px solid var(--ac); }
-  .sp { flex: 1; }
   .btn { height: 34px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; text-decoration: none; }
   .btn.pri { background: var(--ac); color: var(--bg); font-weight: 500; }
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
