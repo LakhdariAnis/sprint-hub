@@ -24,7 +24,10 @@
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
   const common: [string, string][] = [['1 2 3 4', 'tab'], ['b', 'sidebar'], ['?', 'help']]
-  const list = $derived([...(hints[r.name] ?? []), ...common])
+  // Sidebar open and the content narrower than ~800 px: say what gives room.
+  let width = $state(1920)
+  const tight = $derived(width < 1036 && !keys.rail)
+  const list = $derived([...(hints[r.name] ?? []), ...common.map((h): [string, string] => (tight && h[0] === 'b' ? ['b', 'more room'] : h))])
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())
   // shortcut: focus names the route, not the selected row; screens set their own focus from step 213c on.
   const focus = $derived(
@@ -35,6 +38,7 @@
   )
 </script>
 
+<svelte:window bind:innerWidth={width} />
 <footer class="keys">
   <span class="md">{mode}</span>
   {#each list as [key, text]}
