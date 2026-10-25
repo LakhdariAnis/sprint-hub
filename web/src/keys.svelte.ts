@@ -8,7 +8,7 @@ export const keys = $state({ help: false, pending: false, rail: false })
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
 
-// Keys of the screen on show, by `KeyboardEvent.key`. Handlers read state when called, so pass the map once.
+// Keys of the screen on show, by `KeyboardEvent.key`; an arrow can have its own handler, else it acts as j / k / Enter / Esc. Handlers read state when called, so pass the map once.
 export function useKeys(map: Handlers) {
   onMount(() => {
     current = map
@@ -68,7 +68,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? current[k]
+    run = plain[k] ?? current[e.key] ?? current[k]
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

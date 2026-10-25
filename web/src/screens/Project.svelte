@@ -1,9 +1,14 @@
+<script module lang="ts">
+  // Where Escape on a Step screen must land: set when a step is opened, used once by the next load.
+  const back = new Map<string, { sprint: string; step: string }>()
+</script>
+
 <script lang="ts">
   import Header from '../Header.svelte'
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import { useKeys } from '../keys.svelte'
-  import { goal, groupBySprint, loadStep, loadSteps, type Step } from '../steps'
+  import { goal, groupBySprint, loadStep, loadSteps, needsWork, type Step } from '../steps'
 
   let { project }: { project: string } = $props()
   let steps = $state<Step[]>([])
@@ -16,18 +21,36 @@
   }
 
   const groups = $derived(groupBySprint(steps))
-  // shortcut: groupBySprint puts the current sprint first, so it holds the work; 403 adds the real "needs work" helper.
-  const work = $derived(groups[0])
+  const work = $derived.by(() => {
+    const w = needsWork(steps)
+    return groups.find((g) => w && g.steps.includes(w))
+  })
   let gi = $state(0)
   let si = $state(0)
+  let col = $state<'s' | 't'>('t')
   const group = $derived(groups[gi])
   const cur = $derived(group?.steps[si])
-  const pick = (i: number) => i !== gi && ((gi = i), (si = 0))
+  const pick = (i: number) => {
+    col = 's'
+    if (i !== gi) (gi = i), (si = 0)
+  }
+  const clamp = (n: number, len: number) => Math.max(0, Math.min(n, len - 1))
   const href = (s: Step) => `#/steps/${encodeURIComponent(project)}/${encodeURIComponent(s.step)}`
+  const open = (s: Step) => {
+    back.set(project, { sprint: group.key, step: s.step })
+    location.hash = href(s)
+  }
+  const move = (d: number) => (col === 's' ? pick(clamp(gi + d, groups.length)) : (si = clamp(si + d, group?.steps.length ?? 0)))
+  const left = () => (col = 's')
+  const right = () => (col = 't')
   useKeys({
-    j: () => group && (si = Math.min(si + 1, group.steps.length - 1)),
-    k: () => (si = Math.max(si - 1, 0)),
-    Enter: () => cur && (location.hash = href(cur)),
+    j: () => move(1),
+    k: () => move(-1),
+    h: left,
+    ArrowLeft: left,
+    l: right,
+    ArrowRight: right,
+    Enter: () => (col === 's' ? right() : cur && open(cur)),
     Escape: () => (location.hash = '#/projects'),
   })
   let detail = $state<Step | null>(null)
@@ -41,11 +64,34 @@
 
   $effect(() => {
     gi = si = 0
+    col = 't'
     status = 'loading'
     loadSteps(project).then(
-      (s) => ((steps = s), (status = 'ready')),
+      (s) => {
+        // Back from a step: the same place. Otherwise the step that needs work.
+        const gs = groupBySprint(s)
+        const was = back.get(project)
+        back.delete(project)
+        let g = gs.findIndex((x) => x.key === was?.sprint)
+        let i = gs[g]?.steps.findIndex((x) => x.step === was?.step) ?? -1
+        if (i < 0) {
+          const w = needsWork(s)
+          g = gs.findIndex((x) => w && x.steps.includes(w))
+          i = gs[g]?.steps.indexOf(w!) ?? 0
+        }
+        gi = Math.max(g, 0)
+        si = Math.max(i, 0)
+        steps = s
+        status = 'ready'
+      },
       () => (status = 'failed'),
     )
+  })
+
+  // The selected rows stay in view, instantly.
+  $effect(() => {
+    void [gi, si, status, col]
+    for (const el of document.querySelectorAll('.body .lr.f')) el.scrollIntoView({ block: 'nearest' })
   })
 </script>
 
@@ -58,7 +104,7 @@
   <p class="dim pad">Cannot load {project}. Is hubd running?</p>
 {:else if status === 'ready'}
   <div class="body">
-    <section class="pn list">
+    <section class="pn list" class:f={col === 's'}>
       <div class="ph">Sprints<span class="n">{groups.length}</span></div>
       {#each groups as g, i (g.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -73,12 +119,12 @@
       {/each}
     </section>
 
-    <section class="pn f list">
+    <section class="pn list" class:f={col === 't'}>
       <div class="ph">Steps<span class="n">{group?.steps.length ?? 0}</span><span class="r"><span class="kb">↵</span> open</span></div>
       {#each group?.steps ?? [] as s, i (s.step)}
         {@const done = s.tasks.filter((t) => t.state === 'done').length}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="lr grid row" class:f={i === si} role="link" tabindex="0" onclick={() => (si = i)} ondblclick={() => (location.hash = href(s))} onfocus={() => (si = i)}>
+        <div class="lr grid row" class:f={i === si} role="link" tabindex="0" onclick={() => ((col = 't'), (si = i))} ondblclick={() => open(s)} onfocus={() => ((col = 't'), (si = i))}>
           <span class="dot s-{s.state}"></span>
           <span class="id">{s.step}</span>
           <span class="tt">{s.title}</span>
@@ -115,7 +161,7 @@
             {/each}
           </div>
           <div class="sp"></div>
-          <div><a class="btn pri" href={href(cur)}>Open <span class="kb">↵</span></a></div>
+          <div><a class="btn pri" href={href(cur)} onclick={() => back.set(project, { sprint: group.key, step: cur.step })}>Open <span class="kb">↵</span></a></div>
         </div>
       {:else}
         <p class="dim pad">No step selected.</p>
