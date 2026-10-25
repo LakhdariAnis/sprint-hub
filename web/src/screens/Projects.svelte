@@ -2,15 +2,10 @@
   import Header from '../Header.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { loadProjects, type Row } from '../projects'
+  import { lists } from '../store.svelte'
 
-  let rows = $state<Row[]>([])
-  let status = $state<'loading' | 'ready' | 'failed'>('loading')
-
-  loadProjects().then(
-    (d) => ((rows = d), (status = 'ready')),
-    () => (status = 'failed'),
-  )
+  // Loaded before the screen shows (nav.svelte.ts): none here means that load failed.
+  const rows = $derived(lists.projects ?? [])
 
   const open = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   let sel = $state(0)
@@ -31,9 +26,9 @@
   Projects
 </Header>
 
-{#if status === 'failed'}
+{#if !lists.projects}
   <p class="dim pad">Cannot load projects. Is hubd running?</p>
-{:else if status === 'ready'}
+{:else}
   <div class="body">
     <section class="pn f">
       <div class="ph">All projects<span class="n">{rows.length}</span><span class="r"><span class="kb">↵</span> open</span></div>

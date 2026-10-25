@@ -3,8 +3,7 @@
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { steps } from '../store.svelte'
-  import { loadProjects, type Row } from '../projects'
+  import { lists, steps } from '../store.svelte'
   import { ago } from '../steps'
 
   const groups = [
@@ -39,8 +38,7 @@
 
   const open = (k: string) => (location.hash = `#/steps/${k}`)
 
-  let projects = $state<Row[]>([])
-  loadProjects().then((d) => (projects = d), () => {})
+  const projects = $derived(lists.projects ?? [])
 
   // p / n / m / w / q / d focus a pane; j/k walk the rows of the Projects or Now pane.
   let focus = $state<'p' | 'n' | 'm' | 'w' | 'q' | 'd'>('p')
