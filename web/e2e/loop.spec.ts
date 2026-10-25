@@ -329,3 +329,20 @@ for (const [w, h] of [[1920, 1080], [960, 540]]) {
     expect(await badFrames(page)).toEqual([])
   })
 }
+
+test('sidebar: b and the hide button toggle the rail, which survives a reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 400 })
+  await page.goto('/#/today')
+  const rail = page.locator('nav.sb.rail')
+  await expect(rail).toHaveCount(0)
+  await page.keyboard.press('b')
+  await expect(rail).toBeVisible()
+  await page.reload()
+  await expect(rail).toBeVisible()
+  await page.getByRole('button', { name: 'Expand sidebar' }).click()
+  await expect(rail).toHaveCount(0)
+  await page.getByRole('button', { name: 'Hide sidebar' }).click()
+  await expect(rail).toBeVisible()
+  // Short window: the button stays on screen.
+  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeInViewport()
+})

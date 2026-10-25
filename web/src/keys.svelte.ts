@@ -3,7 +3,13 @@ import { router } from './route.svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
-export const keys = $state({ help: false, pending: false, rail: false, shown: null as string | null })
+const railKey = 'sprint-hub:rail'
+const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
+export const keys = $state({ help: false, pending: false, rail: saved, shown: null as string | null })
+export function toggleRail() {
+  keys.rail = !keys.rail
+  try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
+}
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
@@ -38,7 +44,7 @@ const openStep = (n: number) => {
   const i = k.lastIndexOf('/')
   location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
 }
-const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: () => (keys.rail = !keys.rail) }
+const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: toggleRail }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q }
@@ -63,7 +69,8 @@ addEventListener('keydown', (e) => {
     return
   }
   if (e.key === 'Enter' && el.closest('a, button')) return
-  const k = alias[e.key] ?? e.key
+  // Non-Latin layout (Arabic…): `e.key` is not "b", but the physical key is still KeyB.
+  const k = alias[e.key] ?? (/^[^\x00-\x7f]$/.test(e.key) && /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : e.key)
 
   let run: (() => void) | undefined
   if (keys.help) {
