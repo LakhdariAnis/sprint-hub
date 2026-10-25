@@ -4,17 +4,13 @@
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
-  import { approveStep, loadDiffstat, loadStep, loadSteps, requestChanges } from '../steps'
+  import { nav } from '../nav.svelte'
+  import { approveStep, loadDiffstat, loadStep, requestChanges } from '../steps'
   import { put, steps } from '../store.svelte'
 
   let { project, id }: { project?: string; id?: string } = $props()
-  let error = $state('')
-
-  // The store only holds steps a screen loaded: read every project once; SSE events keep them fresh.
-  fetch('/projects')
-    .then((r) => r.json())
-    .then((ps: { id: string }[]) => Promise.all(ps.map((p) => loadSteps(p.id).then((l) => l.forEach((s) => put(p.id, s))))))
-    .catch(() => (error = 'Cannot load steps. Is hubd running?'))
+  // Every project's steps are in the store before the screen shows (nav.svelte.ts); SSE events keep them fresh.
+  const error = $derived(nav.failed == null ? '' : 'Cannot load steps. Is hubd running?')
 
   const started = (s: { runs: { started?: string }[] }) => s.runs.at(-1)?.started ?? ''
   // Oldest first: the step that has waited longest is on top.
@@ -80,6 +76,7 @@
   })
 </script>
 
+<div class="page">
 <Header>
   {#snippet crumb()}{waiting.length} waiting for you{/snippet}
   Review
@@ -169,6 +166,7 @@
     <p class="dim pad">Select a step.</p>
   {/if}
 </div>
+</div>
 
 <style>
   .dim { color: var(--fgd); }
@@ -177,9 +175,15 @@
   .id { font: 12.5px var(--mono); color: var(--fg2); }
   .err { margin: 0 20px 14px; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
   .err.in { margin: 12px 16px; }
-  .grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 20px; padding: 8px 28px 22px; align-items: start; }
-  .detail, .col { display: grid; gap: 20px; min-width: 0; }
-  .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+  /* Fills the window: no page scroll. The queue, Report, Diffstat and Checklist scroll inside their panes; the head with the action bar stays. */
+  .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 20px; padding: 8px 28px 22px; align-items: stretch; }
+  .detail, .col { display: grid; gap: 20px; min-width: 0; min-height: 0; }
+  .detail { grid-template-rows: auto minmax(0, 1fr); }
+  .col { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; min-height: 0; }
+  .queue, .two .pn { overflow-y: auto; }
+  .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
   .gr:not(:first-child) { margin-top: 6px; border-top: 1px solid var(--sel); }
   .cnt { margin-left: auto; }
   .row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--sel); cursor: pointer; font-size: 14px; }
@@ -205,4 +209,20 @@
   .mk { display: inline-block; width: 18px; color: var(--fgm); }
   .done .mk { color: var(--g); }
   .doing .mk { color: var(--ac); }
+  @container (max-width: 1060px) {
+    .grid { grid-template-columns: minmax(0, 2fr) minmax(0, 5fr); gap: 12px; padding: 8px 16px 14px; }
+    .detail, .col { gap: 12px; }
+    .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+    .row { grid-template-columns: 36px minmax(0, 1fr); padding: 0 12px; }
+    .row > :last-child { display: none; }
+    .head { padding: 12px 14px; }
+    .act form { min-width: 0; flex-basis: 100%; }
+  }
+  @container (max-height: 640px) {
+    .grid { gap: 10px; padding-bottom: 10px; }
+    .detail, .col, .two { gap: 10px; }
+    .head { padding: 10px 14px; gap: 6px; }
+    h2 { font-size: 17px; }
+    .row { min-height: 38px; }
+  }
 </style>

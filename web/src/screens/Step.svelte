@@ -3,7 +3,8 @@
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
-  import { ago, goal, loadStep, startStep, tickTask } from '../steps'
+  import { nav } from '../nav.svelte'
+  import { ago, goal, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps } from '../store.svelte'
 
@@ -25,9 +26,15 @@
       .finally(() => (busy = false))
   }
 
-  // `by: me`: j/k pick a task (first open one until then), x or a click ticks it; hubd moves the step.
+  // The cursor starts on the current task: the one doing, else the first todo.
+  // `by: me`: j/k pick a task, x or a click ticks it; hubd moves the step.
   let pick = $state<number | null>(null)
-  const sel = $derived(pick ?? Math.max(0, s?.tasks.findIndex((t) => t.state !== 'done') ?? 0))
+  const current = $derived.by(() => {
+    const t = s?.tasks ?? []
+    const i = t.findIndex((x) => x.state === 'doing')
+    return i >= 0 ? i : Math.max(0, t.findIndex((x) => x.state === 'todo'))
+  })
+  const sel = $derived(pick ?? current)
   const tick = (n: number) => {
     error = ''
     pick = n
@@ -68,12 +75,17 @@
     return t === '–' ? 'running' : `running · ${t}`
   })
 
+  // Instant, no smooth scroll: the task is in view when the step opens.
   $effect(() => {
+    void [sel, s?.tasks.length]
+    document.querySelector('.task.sel')?.scrollIntoView({ block: 'nearest' })
+  })
+
+  // Loaded before the screen shows (nav.svelte.ts); `nav.failed` says why when that load did not work.
+  const loadError = $derived(nav.failed == null ? '' : nav.failed === 404 ? `No step ${id} in ${project}.` : `Cannot load ${project}/${id}. Is hubd running?`)
+  $effect(() => {
+    void [project, id]
     error = ''
-    loadStep(project, id).then(
-      (d) => put(project, d),
-      (status) => (error = status === 404 ? `No step ${id} in ${project}.` : `Cannot load ${project}/${id}. Is hubd running?`),
-    )
   })
 </script>
 
@@ -91,8 +103,8 @@
     <button class="btn dim" type="button" onclick={close}>Close tab <span class="kb">^W</span></button>
   </span>
 </div>
-{#if error}
-  <p class="err">{error}</p>
+{#if error || loadError}
+  <p class="err">{error || loadError}</p>
 {/if}
 {#if s}
   <div class="body">
@@ -121,7 +133,7 @@
       <div class="rows">
         {#each s.tasks as t, i}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events -->
-          <div class="task {t.state}" class:man={manual} class:sel={manual && i === sel} role={manual ? "button" : undefined} tabindex={manual ? 0 : undefined} onclick={manual ? () => tick(i) : undefined}>
+          <div class="task {t.state}" class:man={manual} class:sel={i === sel} role={manual ? "button" : undefined} tabindex={manual ? 0 : undefined} onclick={manual ? () => tick(i) : undefined}>
             <span class="ix">{i + 1}</span>
             <span class="box" aria-label={t.state}>{#if t.state === 'done'}✓{:else if t.state === 'doing'}<span class="spin"></span>{/if}</span>
             <span class="tx"><Inline text={t.text} /></span>
@@ -192,7 +204,8 @@
 </div>
 
 <style>
-  .page { min-height: 100%; display: flex; flex-direction: column; }
+  /* Fills the window: no page scroll; the task list, spec and chat scroll inside their panes. */
+  .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; }
   .err { margin: 14px 20px 0; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
@@ -209,10 +222,10 @@
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
   .btn.dim { color: var(--fg2); }
   .btn:disabled { opacity: 0.5; cursor: default; }
-  .body { flex: 1; padding: 16px 20px; display: grid; grid-template-columns: 440px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 16px; min-height: 0; }
+  .body { flex: 1; padding: 16px 20px; display: grid; grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr); grid-template-rows: auto minmax(0, 1fr); gap: 16px; min-height: 0; }
   .head { grid-column: 1; grid-row: 1; padding: 18px 20px; gap: 10px; }
   .head h1 { margin: 0; font-size: 23px; font-weight: 600; line-height: 1.25; }
-  .head p { margin: 0; color: var(--fg2); font-size: 14px; line-height: 1.6; }
+  .head p { margin: 0; color: var(--fg2); font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
   .meta div { border: 1px solid var(--sel); border-radius: 7px; padding: 6px 10px; background: var(--bg); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta span { display: block; font: 10.5px var(--mono); color: var(--fg2); letter-spacing: 0.05em; }
@@ -227,7 +240,7 @@
   .segs i { flex: 1; height: 10px; border-radius: 3px; background: var(--sel); }
   .segs i.done { background: var(--g); }
   .segs i.doing { background: var(--ac); opacity: 0.6; }
-  .rows { overflow: auto; min-height: 0; }
+  .rows { overflow: auto; min-height: 0; flex: 1; }
   .task {
     display: grid; grid-template-columns: 26px 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0 16px;
     min-height: 50px; border-bottom: 1px solid var(--sel); font-size: 14.5px; position: relative;
@@ -247,7 +260,7 @@
   .doing .box { border: 2px solid var(--ac); }
   .spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--sel); border-top-color: var(--ac); animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .qa { margin: 14px 16px; border: 1px solid var(--y); border-radius: 8px; padding: 12px 14px; background: color-mix(in srgb, var(--y) 8%, transparent); }
+  .qa { flex: none; max-height: 30%; overflow: auto; margin: 14px 16px; border: 1px solid var(--y); border-radius: 8px; padding: 12px 14px; background: color-mix(in srgb, var(--y) 8%, transparent); }
   .qa .l { font: 11px var(--mono); color: var(--y); letter-spacing: 0.06em; }
   .qa .from { margin-left: 8px; color: var(--fgm); letter-spacing: 0; }
   .qt { margin-top: 6px; font-size: 14px; }
@@ -268,4 +281,27 @@
   .bt { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--fg2); }
   .pill { border: 1px solid var(--sel); border-radius: 10px; padding: 0 8px; }
   .go { margin-left: auto; font-weight: 700; color: var(--bg); background: var(--ac); padding: 2px 10px; border-radius: 4px; }
+  /* Half screen (sidebar open: ~720 px of content): one slim column pair, smaller texts. */
+  @container (max-width: 1060px) {
+    .hd { padding: 0 16px; }
+    .body { padding: 12px 16px; gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .head { padding: 14px 16px; }
+    .head h1 { font-size: 20px; }
+    .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .task { padding: 0 12px; gap: 8px; }
+    .spec, .chat { padding: 12px 16px; }
+  }
+  /* Short windows: the header band and head pane give back room. */
+  @container (max-height: 640px) {
+    .hd { height: 48px; }
+    .body { padding-top: 8px; padding-bottom: 8px; gap: 8px; }
+    .head { padding: 10px 14px; gap: 6px; }
+    .head h1 { font-size: 17px; }
+    .head p { -webkit-line-clamp: 1; line-clamp: 1; }
+    .meta { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 0; }
+    .meta div { padding: 3px 8px; }
+    .big { padding: 8px 14px; }
+    .task { min-height: 40px; }
+    .qa { margin: 8px 12px; padding: 8px 12px; }
+  }
 </style>

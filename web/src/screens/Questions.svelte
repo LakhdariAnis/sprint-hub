@@ -11,6 +11,7 @@
   useKeys({ j: () => move(1), k: () => move(-1), Enter: () => hub.questions[at] && open(hub.questions[at]) })
 </script>
 
+<div class="page">
 <Header>
   {#snippet crumb()}Read-only: answer in the step's sprint/questions file{/snippet}
   Questions
@@ -32,9 +33,14 @@
     {/each}
   </section>
 </div>
+</div>
 
 <style>
-  .body { padding: 8px 28px 22px; }
+  /* Fills the window: no page scroll, the list scrolls inside its pane. */
+  .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
+  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 28px 22px; }
+  .pn { overflow-y: auto; }
+  .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   .id { font: 12.5px var(--mono); color: var(--fg2); }
@@ -46,4 +52,10 @@
   .row.f { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .st { color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .qt { color: var(--y); }
+  @container (max-width: 1060px) {
+    .body { padding: 8px 16px 14px; }
+    .row { grid-template-columns: 80px 40px minmax(0, 1fr); padding: 0 12px; column-gap: 10px; }
+    .row .st { display: none; }
+  }
+  @container (max-height: 640px) { .body { padding-bottom: 10px; } }
 </style>

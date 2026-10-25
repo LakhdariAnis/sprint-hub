@@ -2,13 +2,28 @@ import { onMount } from 'svelte'
 import { router } from './route.svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
-// `rail`: the sidebar is collapsed to its icon rail (^B).
-export const keys = $state({ help: false, pending: false, rail: false })
+// `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
+const railKey = 'sprint-hub:rail'
+const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
+export const keys = $state({ help: false, pending: false, rail: saved, shown: null as string | null })
+export function toggleRail() {
+  keys.rail = !keys.rail
+  try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
+}
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
+// Screen keys pressed while the URL is ahead of the screen (hashchange fires late, then the data loads): they belong to the next screen.
+let held: string[] = []
 
-// Keys of the screen on show, by `KeyboardEvent.key`. Handlers read state when called, so pass the map once.
+// The screen of `hash` is on show: run what was typed meanwhile on it.
+export function release(hash: string) {
+  keys.shown = hash
+  if (location.hash !== hash) return
+  for (const key of held.splice(0)) (current[key] ?? current[alias[key] ?? key])?.()
+}
+
+// Keys of the screen on show, by `KeyboardEvent.key`; an arrow can have its own handler, else it acts as j / k / Enter / Esc. Handlers read state when called, so pass the map once.
 export function useKeys(map: Handlers) {
   onMount(() => {
     current = map
@@ -29,7 +44,7 @@ const openStep = (n: number) => {
   const i = k.lastIndexOf('/')
   location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
 }
-const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: () => (keys.rail = !keys.rail) }
+const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: toggleRail }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q }
@@ -54,7 +69,8 @@ addEventListener('keydown', (e) => {
     return
   }
   if (e.key === 'Enter' && el.closest('a, button')) return
-  const k = alias[e.key] ?? e.key
+  // Non-Latin layout (Arabic…): `e.key` is not "b", but the physical key is still KeyB.
+  const k = alias[e.key] ?? (/^[^\x00-\x7f]$/.test(e.key) && /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : e.key)
 
   let run: (() => void) | undefined
   if (keys.help) {
@@ -68,7 +84,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? current[k]
+    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? current[k])
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

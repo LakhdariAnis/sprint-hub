@@ -1,6 +1,7 @@
 <script lang="ts">
   import { hub } from './hub.svelte'
-  import { keys } from './keys.svelte'
+  import { keys, toggleRail } from './keys.svelte'
+  import { nav } from './nav.svelte'
   import { router } from './route.svelte'
   import { steps } from './store.svelte'
 
@@ -13,7 +14,8 @@
     { id: 'chats', label: 'Chats', icon: '<path d="M3 4h14v10H8.5L5 17v-3H3z"/>', off: true },
     { id: 'settings', label: 'Settings', icon: '<path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/>', off: true },
   ]
-  const r = $derived(router.route)
+  // The screen on show, not the URL: the frame swaps with the screen.
+  const r = $derived(nav.route ?? router.route)
   // A project screen belongs to the Projects tab; a step screen to its OPEN entry.
   const active = $derived(r.name === 'project' ? 'projects' : r.name)
   const here = $derived(r.name === 'step' ? `${r.project}/${r.id}` : '')
@@ -22,6 +24,7 @@
 <nav class="sb" class:rail={keys.rail} aria-label="Tabs">
   <div class="brand"><span class="wm">{#if !keys.rail}sprint{/if}<i>hub</i></span><span class="lbl ver">{hub.version}</span></div>
   <button class="newc" type="button" title="New chat comes in a later sprint"><b>+</b><span class="lbl">New chat</span><span class="k">^N</span></button>
+  <div class="sl">
   <div class="sg">TABS</div>
   {#each tabs as t, i}
     {#if t.off}
@@ -47,10 +50,11 @@
       </a>
     {/each}
   {/if}
+  </div>
   <div class="sbf">
     <span class="lbl"><span class="dot" class:x-g={hub.live} class:x-r={hub.live === false}></span> hubd {hub.live === false ? 'down' : 'live'}</span>
-    <button class="hide" type="button" onclick={() => (keys.rail = !keys.rail)} title={keys.rail ? 'Expand sidebar' : 'Hide sidebar'}>
-      <span class="kb">b</span><span class="lbl"> hide</span>
+    <button class="hide" type="button" onclick={toggleRail} title={keys.rail ? 'Expand sidebar (b)' : 'Hide sidebar (b)'} aria-label={keys.rail ? 'Expand sidebar' : 'Hide sidebar'}>
+      {#if keys.rail}<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4v12M8 6l5 4-5 4"/></svg>{:else}<span class="kb">b</span><span class="lbl"> hide</span>{/if}
     </button>
   </div>
 </nav>
@@ -58,8 +62,10 @@
 <style>
   .sb {
     width: 236px; flex: none; background: var(--dk); border-right: 1px solid var(--sel);
-    display: flex; flex-direction: column; padding: 14px 10px 10px; gap: 2px; overflow: hidden auto;
+    display: flex; flex-direction: column; padding: 14px 10px 10px; gap: 2px; overflow: hidden;
   }
+  /* Tabs and OPEN scroll here; the footer below stays on screen. The side margin keeps the .on bar from being clipped. */
+  .sl { flex: 1; min-height: 0; overflow: hidden auto; margin: 0 -10px; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; scrollbar-width: none; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px 14px; }
   .wm { font-weight: 700; font-size: 18px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 3px; }
   .wm i { font-style: normal; background: var(--ac); color: var(--bg); border-radius: 5px; padding: 0 6px; line-height: 26px; }
@@ -85,28 +91,24 @@
   .k { margin-left: auto; font: 11px var(--mono); color: var(--fgm); }
   .bd { background: var(--y); color: var(--bg); border-radius: 8px; padding: 0 6px; font: 700 10.5px/16px var(--mono); }
   .bd + .k { margin-left: 8px; }
-  .sbf { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 10px 6px 0; font: 11.5px var(--mono); color: var(--fg2); }
+  .sbf { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 6px 0; font: 11.5px var(--mono); color: var(--fg2); }
   .sbf .lbl { display: flex; align-items: center; gap: 8px; }
   .hide { margin-left: auto; display: flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
 
-  /* ^B: the 64 px icon rail of the canvas Step artboard. */
-  .rail { width: 64px; padding: 14px 0 10px; align-items: center; gap: 4px; }
-  .rail .lbl { display: none; }
-  .rail .sg { font-size: 0; width: 28px; height: 1px; padding: 0; margin: 6px 0; background: var(--sel); }
-  .rail .brand { padding: 0 0 10px; }
-  .rail .wm { font-size: 14px; }
-  .rail .wm i { padding: 0 5px; line-height: 24px; }
-  .rail .newc, .rail .tb {
-    width: 46px; height: 44px; padding: 0; margin: 0; gap: 0; flex-direction: column; justify-content: center;
-    font: 10px var(--mono);
-  }
-  .rail .newc { color: var(--ac); border-color: var(--mu); }
-  .rail .newc b { font-size: 12px; }
-  .rail .newc .k, .rail .tb .k { margin: 0; font-size: 10px; color: inherit; }
-  .rail .tb.on::before { left: -9px; top: 10px; bottom: 10px; }
+  /* ^B: the icon rail. Rows keep their height and icons their place, only the width slides and the text goes. */
+  .sb { transition: width 0.16s ease; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
+  .rail { width: 56px; }
+  .rail .lbl, .rail .k, .rail .newc .k { display: none; }
+  .rail .sl { margin: 0 -10px; }
+  .rail .sg { font-size: 0; height: 1px; padding: 0; margin: 10px 8px; background: var(--sel); }
+  .rail .brand { padding-left: 0; padding-right: 0; justify-content: center; }
+  .rail .wm i { padding: 0 5px; }
+  .rail .newc { padding: 0 0 0 10px; }
+  .rail .tb .bd { position: absolute; top: 3px; left: 20px; padding: 0 4px; font-size: 9.5px; line-height: 13px; }
   .rail .tb b { font-weight: 700; color: var(--fg); }
-  .rail .tb .bd { position: absolute; top: 1px; right: 0; }
-  .rail .tb .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; }
-  .rail .sbf { padding: 0; }
+  .rail .tb .dot { display: none; }
+  .rail .sbf { justify-content: center; padding: 10px 0 0; }
   .rail .hide { margin: 0; }
+  .hide svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 </style>

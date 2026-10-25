@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "e2e": "playwright test",
+    "test": "node --test test/",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json"
   },
   "devDependencies": {

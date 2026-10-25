@@ -1,10 +1,12 @@
 <script lang="ts">
   import { keys } from './keys.svelte'
   import { hub } from './hub.svelte'
+  import { nav } from './nav.svelte'
   import { router } from './route.svelte'
   import { key, steps } from './store.svelte'
 
-  const r = $derived(router.route)
+  // The screen on show, not the URL: the frame swaps with the screen.
+  const r = $derived(nav.route ?? router.route)
   // Only keys that do something now: start and approve depend on the step's state.
   const cur = $derived(
     r.name === 'step' ? steps[key(r.project, r.id)]
@@ -18,13 +20,16 @@
   const hints = $derived<Record<string, [string, string][]>>({
     today: [['p n m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
-    project: [['↑ ↓', 'move'], ['→ ↵', 'open step'], ['← Esc', 'back']],
+    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['Esc', 'back']],
     step: [...when(canStart, [['s', 'start']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
   const common: [string, string][] = [['1 2 3 4', 'tab'], ['b', 'sidebar'], ['?', 'help']]
-  const list = $derived([...(hints[r.name] ?? []), ...common])
+  // Sidebar open and the content narrower than ~800 px: say what gives room.
+  let width = $state(1920)
+  const tight = $derived(width < 1036 && !keys.rail)
+  const list = $derived([...(hints[r.name] ?? []), ...common.map((h): [string, string] => (tight && h[0] === 'b' ? ['b', 'more room'] : h))])
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())
   // shortcut: focus names the route, not the selected row; screens set their own focus from step 213c on.
   const focus = $derived(
@@ -35,6 +40,7 @@
   )
 </script>
 
+<svelte:window bind:innerWidth={width} />
 <footer class="keys">
   <span class="md">{mode}</span>
   {#each list as [key, text]}
