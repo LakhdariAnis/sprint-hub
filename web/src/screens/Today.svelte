@@ -68,6 +68,7 @@
   )
 </script>
 
+<div class="page">
 <Header>
   {#snippet crumb()}{d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })} · week {week}{/snippet}
   Good {hello}, Anis
@@ -98,6 +99,37 @@
   </section>
 
   <div class="side" style="grid-column: span 4; grid-row: span 2">
+  <section class="pn" class:f={focus === 'n'}>
+    <div class="ph">
+      <span class="hk">n</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
+    </div>
+    {#each groups as g}
+      {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
+      <div class="gr"><span class="s-{g.state}" style="color: var(--x)">{g.mark}</span>{g.title}</div>
+      {#each list as s (s.project + '/' + s.step)}
+        {@const k = `${s.project}/${s.step}`}
+        {@const done = s.tasks.filter((t) => t.state === 'done').length}
+        {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
+        {@const extra = hub.demo?.steps[k]}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
+          <span class="dot s-{g.state}"></span>
+          <span class="id">{s.step}</span>
+          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: <Inline text={cur.text} /></span>{/if}</span>
+          {#if g.id === 'running'}
+            <span class="id">{done}/{s.tasks.length} · {since(s.runs.at(-1)?.started)}</span>
+          {:else if g.id === 'review'}
+            {#if extra}<span class="chip {extra.check.ok ? 'x-g' : 'x-r'}">{extra.check.ok ? '✓' : '✗'} {extra.check.name}</span>{:else}<span class="id">{since(s.runs.at(-1)?.started)}</span>{/if}
+          {:else}
+            <span class="id">{s.project} · {s.by === 'me' ? 'me' : (s.model ?? '–')}</span>
+          {/if}
+        </div>
+      {:else}
+        <p class="dim pad">{g.empty}</p>
+      {/each}
+    {/each}
+  </section>
+
   <section class="pn" class:f={focus === 'm'}>
     <div class="ph"><span class="hk">m</span>Reminders</div>
     {#if reminders}
@@ -144,36 +176,6 @@
     {/each}
   </section>
 
-  <section class="pn" class:f={focus === 'n'}>
-    <div class="ph">
-      <span class="hk">n</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
-    </div>
-    {#each groups as g}
-      {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
-      <div class="gr"><span class="s-{g.state}" style="color: var(--x)">{g.mark}</span>{g.title}</div>
-      {#each list as s (s.project + '/' + s.step)}
-        {@const k = `${s.project}/${s.step}`}
-        {@const done = s.tasks.filter((t) => t.state === 'done').length}
-        {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
-        {@const extra = hub.demo?.steps[k]}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
-          <span class="dot s-{g.state}"></span>
-          <span class="id">{s.step}</span>
-          <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: <Inline text={cur.text} /></span>{/if}</span>
-          {#if g.id === 'running'}
-            <span class="id">{done}/{s.tasks.length} · {since(s.runs.at(-1)?.started)}</span>
-          {:else if g.id === 'review'}
-            {#if extra}<span class="chip {extra.check.ok ? 'x-g' : 'x-r'}">{extra.check.ok ? '✓' : '✗'} {extra.check.name}</span>{:else}<span class="id">{since(s.runs.at(-1)?.started)}</span>{/if}
-          {:else}
-            <span class="id">{s.project} · {s.by === 'me' ? 'me' : (s.model ?? '–')}</span>
-          {/if}
-        </div>
-      {:else}
-        <p class="dim pad">{g.empty}</p>
-      {/each}
-    {/each}
-  </section>
 
   </div>
 
@@ -197,11 +199,35 @@
     {/if}
   </section>
 </div>
+</div>
 
 <style>
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
-  .body { padding: 8px 28px 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto minmax(220px, 1fr); gap: 20px; }
+  /* Fills the window: no page scroll, every pane scrolls inside itself (same rules as the Project screen). */
+  .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
+  .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1.6fr); gap: 20px; }
+  .pn { overflow-y: auto; }
+  .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
+  /* Now keeps the room, the others shrink to what is left. */
+  .side > .pn { flex: 1 1 0; min-height: 88px; }
+  .side > .pn:first-child { flex: 2.4 1 0; }
+  @container (max-width: 1060px) {
+    .body { gap: 12px; padding: 8px 16px 14px; }
+    .body > .pn { grid-column: span 7 !important; }
+    .side { grid-column: span 5 !important; }
+    .pbar, .pr .chip + .chip, .pr .id:last-child { display: none; }
+    .pr { grid-template-columns: minmax(0, 1fr) 48px auto; }
+    .cols { grid-template-columns: 14px 32px minmax(0, 1fr); column-gap: 8px; padding: 0 12px; }
+    .cols > :last-child { display: none; }
+  }
+  @container (max-height: 640px) {
+    .body { gap: 10px; padding-bottom: 10px; }
+    .side { gap: 10px; }
+    .side > .pn { min-height: 60px; }
+    .side > .pn:first-child { flex-grow: 4; min-height: 150px; }
+    .ph { height: 36px; }
+  }
   .cols { display: grid; align-items: center; column-gap: 14px; padding: 0 16px; grid-template-columns: 14px 36px minmax(0, 1fr) auto auto; cursor: pointer; font-size: 14px; }
   .cols:hover { background: var(--lt); }
   .cols.f { background: var(--sel); }
