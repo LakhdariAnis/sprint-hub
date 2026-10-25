@@ -25,9 +25,15 @@
       .finally(() => (busy = false))
   }
 
-  // `by: me`: j/k pick a task (first open one until then), x or a click ticks it; hubd moves the step.
+  // The cursor starts on the current task: the one doing, else the first todo.
+  // `by: me`: j/k pick a task, x or a click ticks it; hubd moves the step.
   let pick = $state<number | null>(null)
-  const sel = $derived(pick ?? Math.max(0, s?.tasks.findIndex((t) => t.state !== 'done') ?? 0))
+  const current = $derived.by(() => {
+    const t = s?.tasks ?? []
+    const i = t.findIndex((x) => x.state === 'doing')
+    return i >= 0 ? i : Math.max(0, t.findIndex((x) => x.state === 'todo'))
+  })
+  const sel = $derived(pick ?? current)
   const tick = (n: number) => {
     error = ''
     pick = n
@@ -66,6 +72,12 @@
     if (s?.state !== 'doing') return s?.state ?? ''
     const t = ago(s.runs.at(-1)?.started, now)
     return t === '–' ? 'running' : `running · ${t}`
+  })
+
+  // Instant, no smooth scroll: the task is in view when the step opens.
+  $effect(() => {
+    void [sel, s?.tasks.length]
+    document.querySelector('.task.sel')?.scrollIntoView({ block: 'nearest' })
   })
 
   $effect(() => {
@@ -121,7 +133,7 @@
       <div class="rows">
         {#each s.tasks as t, i}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events -->
-          <div class="task {t.state}" class:man={manual} class:sel={manual && i === sel} role={manual ? "button" : undefined} tabindex={manual ? 0 : undefined} onclick={manual ? () => tick(i) : undefined}>
+          <div class="task {t.state}" class:man={manual} class:sel={i === sel} role={manual ? "button" : undefined} tabindex={manual ? 0 : undefined} onclick={manual ? () => tick(i) : undefined}>
             <span class="ix">{i + 1}</span>
             <span class="box" aria-label={t.state}>{#if t.state === 'done'}✓{:else if t.state === 'doing'}<span class="spin"></span>{/if}</span>
             <span class="tx"><Inline text={t.text} /></span>
