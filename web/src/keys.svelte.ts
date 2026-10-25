@@ -54,7 +54,8 @@ addEventListener('keydown', (e) => {
     return
   }
   if (e.key === 'Enter' && el.closest('a, button')) return
-  const k = alias[e.key] ?? e.key
+  // Non-Latin layout (Arabic…): `e.key` is not "b", but the physical key is still KeyB.
+  const k = alias[e.key] ?? (/^[^\x00-\x7f]$/.test(e.key) && /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : e.key)
 
   let run: (() => void) | undefined
   if (keys.help) {
