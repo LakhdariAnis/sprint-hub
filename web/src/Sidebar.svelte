@@ -95,26 +95,20 @@
   .sbf .lbl { display: flex; align-items: center; gap: 8px; }
   .hide { margin-left: auto; display: flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
 
-  /* ^B: the 64 px icon rail of the canvas Step artboard. */
-  .rail { width: 64px; padding: 14px 0 10px; align-items: center; gap: 4px; }
-  .rail .lbl { display: none; }
-  .rail .sl { margin: 0; padding: 0; align-self: stretch; align-items: center; gap: 4px; }
-  .rail .sg { font-size: 0; width: 28px; height: 1px; padding: 0; margin: 6px 0; background: var(--sel); }
-  .rail .brand { padding: 0 0 10px; }
-  .rail .wm { font-size: 14px; }
-  .rail .wm i { padding: 0 5px; line-height: 24px; }
-  .rail .newc, .rail .tb {
-    width: 46px; height: 44px; padding: 0; margin: 0; gap: 0; flex-direction: column; justify-content: center;
-    font: 10px var(--mono);
-  }
-  .rail .newc { color: var(--ac); border-color: var(--mu); }
-  .rail .newc b { font-size: 12px; }
-  .rail .newc .k, .rail .tb .k { margin: 0; font-size: 10px; color: inherit; }
-  .rail .tb.on::before { left: -9px; top: 10px; bottom: 10px; }
+  /* ^B: the icon rail. Rows keep their height and icons their place, only the width slides and the text goes. */
+  .sb { transition: width 0.16s ease; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
+  .rail { width: 56px; }
+  .rail .lbl, .rail .k, .rail .newc .k { display: none; }
+  .rail .sl { margin: 0 -10px; }
+  .rail .sg { font-size: 0; height: 1px; padding: 0; margin: 10px 8px; background: var(--sel); }
+  .rail .brand { padding-left: 0; padding-right: 0; justify-content: center; }
+  .rail .wm i { padding: 0 5px; }
+  .rail .newc { padding: 0 0 0 10px; }
+  .rail .tb .bd { position: absolute; top: 3px; left: 20px; padding: 0 4px; font-size: 9.5px; line-height: 13px; }
   .rail .tb b { font-weight: 700; color: var(--fg); }
-  .rail .tb .bd { position: absolute; top: 1px; right: 0; }
-  .rail .tb .dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; }
-  .rail .sbf { padding: 0; }
+  .rail .tb .dot { display: none; }
+  .rail .sbf { justify-content: center; padding: 10px 0 0; }
   .rail .hide { margin: 0; }
   .hide svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 </style>
