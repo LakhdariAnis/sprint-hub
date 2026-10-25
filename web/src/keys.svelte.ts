@@ -2,17 +2,18 @@ import { onMount } from 'svelte'
 import { router } from './route.svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
-// `rail`: the sidebar is collapsed to its icon rail (^B). `hold`: a screen switch is loading (nav.svelte.ts).
-export const keys = $state({ help: false, pending: false, rail: false, hold: false })
+// `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
+export const keys = $state({ help: false, pending: false, rail: false, shown: null as string | null })
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
-// Screen keys pressed while `hold`: they belong to the next screen, not the one still on show.
+// Screen keys pressed while the URL is ahead of the screen (hashchange fires late, then the data loads): they belong to the next screen.
 let held: string[] = []
 
-// The next screen is on show: run what was typed meanwhile on it.
-export function release() {
-  keys.hold = false
+// The screen of `hash` is on show: run what was typed meanwhile on it.
+export function release(hash: string) {
+  keys.shown = hash
+  if (location.hash !== hash) return
   for (const key of held.splice(0)) (current[key] ?? current[alias[key] ?? key])?.()
 }
 
@@ -76,7 +77,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? (keys.hold ? () => held.push(e.key) : current[e.key] ?? current[k])
+    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? current[k])
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

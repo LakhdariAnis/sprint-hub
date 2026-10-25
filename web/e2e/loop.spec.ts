@@ -203,14 +203,15 @@ test('Project → Step → back: no blank frame, no loading text', async ({ page
     }
     requestAnimationFrame(frame)
   })
+  // The step under the cursor: earlier tests move the demo steps on.
+  const id = (await page.locator('.pn .lr.grid.f .id').first().textContent())!
   await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(/#\/steps\/demo\/102$/)
-  await expect(page.locator('.hd .cur')).toHaveText('102')
+  await expect(page.locator('.hd .cur')).toHaveText(id)
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/#\/projects\/demo$/)
-  await expect(page.locator('.pn .lr.grid.f')).toContainText('102')
+  await expect(page.locator('.pn .lr.grid.f')).toContainText(id)
   await page.keyboard.press('Enter')
-  await expect(page.locator('.hd .cur')).toHaveText('102')
+  await expect(page.locator('.hd .cur')).toHaveText(id)
   expect(await page.evaluate(() => (window as unknown as { bad: string[] }).bad)).toEqual([])
 })
 

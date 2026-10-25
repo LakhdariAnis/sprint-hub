@@ -1,5 +1,5 @@
 import { tick } from 'svelte'
-import { keys, release } from './keys.svelte'
+import { release } from './keys.svelte'
 import { loadProjects } from './projects'
 import { router, type Route } from './route.svelte'
 import { loadStep, loadSteps, needsWork } from './steps'
@@ -40,13 +40,13 @@ function data(r: Route): Promise<unknown> {
 let n = 0
 function go(r: Route) {
   const me = ++n
-  keys.hold = true
+  const hash = location.hash
   const slow = setTimeout(() => me === n && (nav.slow = true), 300)
   const show = (failed: unknown) => {
     if (me !== n) return
     clearTimeout(slow)
     Object.assign(nav, { route: r, failed, slow: false })
-    tick().then(release)
+    tick().then(() => release(hash))
   }
   data(r).then(() => show(null), show)
 }
