@@ -2,11 +2,19 @@ import { onMount } from 'svelte'
 import { router } from './route.svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
-// `rail`: the sidebar is collapsed to its icon rail (^B).
-export const keys = $state({ help: false, pending: false, rail: false })
+// `rail`: the sidebar is collapsed to its icon rail (^B). `hold`: a screen switch is loading (nav.svelte.ts).
+export const keys = $state({ help: false, pending: false, rail: false, hold: false })
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
+// Screen keys pressed while `hold`: they belong to the next screen, not the one still on show.
+let held: string[] = []
+
+// The next screen is on show: run what was typed meanwhile on it.
+export function release() {
+  keys.hold = false
+  for (const key of held.splice(0)) (current[key] ?? current[alias[key] ?? key])?.()
+}
 
 // Keys of the screen on show, by `KeyboardEvent.key`; an arrow can have its own handler, else it acts as j / k / Enter / Esc. Handlers read state when called, so pass the map once.
 export function useKeys(map: Handlers) {
@@ -68,7 +76,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? current[e.key] ?? current[k]
+    run = plain[k] ?? (keys.hold ? () => held.push(e.key) : current[e.key] ?? current[k])
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

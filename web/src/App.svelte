@@ -1,7 +1,7 @@
 <script lang="ts">
   import './theme.css'
   import './keys.svelte'
-  import { router } from './route.svelte'
+  import { nav } from './nav.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
   import Questions from './screens/Questions.svelte'
@@ -13,7 +13,7 @@
   import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
 
-  const r = $derived(router.route)
+  const r = $derived(nav.route)
 </script>
 
 <div class="app">
@@ -22,7 +22,10 @@
   <div class="mn">
     <TopBar />
     <main>
-      {#if r.name === 'today'}<Today />
+      <!-- A plain line, no motion: the next screen is still loading. -->
+      {#if nav.slow}<div class="slow"></div>{/if}
+      {#if !r}<!-- first load: nothing to keep on show -->
+      {:else if r.name === 'today'}<Today />
       {:else if r.name === 'questions'}<Questions />
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
@@ -36,5 +39,6 @@
 <style>
   .app { height: 100%; display: flex; overflow: hidden; }
   .mn { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  main { flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+  main { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--bg); }
+  .slow { position: sticky; top: 0; height: 0; border-top: 2px solid var(--b); z-index: 1; }
 </style>

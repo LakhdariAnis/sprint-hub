@@ -1,6 +1,7 @@
 <script lang="ts">
   import { hub } from './hub.svelte'
   import { keys } from './keys.svelte'
+  import { nav } from './nav.svelte'
   import { router } from './route.svelte'
   import { steps } from './store.svelte'
 
@@ -13,7 +14,8 @@
     { id: 'chats', label: 'Chats', icon: '<path d="M3 4h14v10H8.5L5 17v-3H3z"/>', off: true },
     { id: 'settings', label: 'Settings', icon: '<path d="M3 6h8M15 6h2M3 14h2M9 14h8"/><circle cx="13" cy="6" r="2"/><circle cx="7" cy="14" r="2"/>', off: true },
   ]
-  const r = $derived(router.route)
+  // The screen on show, not the URL: the frame swaps with the screen.
+  const r = $derived(nav.route ?? router.route)
   // A project screen belongs to the Projects tab; a step screen to its OPEN entry.
   const active = $derived(r.name === 'project' ? 'projects' : r.name)
   const here = $derived(r.name === 'step' ? `${r.project}/${r.id}` : '')

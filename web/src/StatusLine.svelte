@@ -1,10 +1,12 @@
 <script lang="ts">
   import { keys } from './keys.svelte'
   import { hub } from './hub.svelte'
+  import { nav } from './nav.svelte'
   import { router } from './route.svelte'
   import { key, steps } from './store.svelte'
 
-  const r = $derived(router.route)
+  // The screen on show, not the URL: the frame swaps with the screen.
+  const r = $derived(nav.route ?? router.route)
   // Only keys that do something now: start and approve depend on the step's state.
   const cur = $derived(
     r.name === 'step' ? steps[key(r.project, r.id)]
