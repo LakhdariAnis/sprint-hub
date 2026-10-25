@@ -113,19 +113,15 @@
 {:else}
   <div class="body">
     <section class="pn list" class:f={col === 's'}>
-      <div class="ph"><span class="full">Sprints</span><span class="short">S</span><span class="n">{groups.length}</span></div>
+      <div class="ph"><span class="full">Sprints</span><span class="short">#</span><span class="n">{groups.length}</span></div>
       {#each groups as g, i (g.key)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="lr gh row" class:f={i === gi} role="button" tabindex="0" aria-label={g.sprint === null ? "Steps" : `Sprint ${g.sprint}`} aria-pressed={i === gi} onclick={() => pick(i)} onfocus={() => pick(i)}>
-          <div class="gt">
-            <b><span class="full">{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</span><span class="short">{g.sprint === null ? '–' : `S${g.sprint}`}</span></b>
-            {#if g === work}<span class="mark" title="Holds the step that needs work">●</span>{/if}
-            <span class="gs g-{g.state}">{g.state}</span>
-          </div>
-          <div class="gm">
-            <span class="pbar" style="--x: var(--{g.state === 'done' ? 'g' : 'ac'})"><i style="width: {(g.done / g.steps.length) * 100}%"></i></span>
-            <span class="id">{g.done}/{g.steps.length}</span>
-          </div>
+          <span class="nb g-{g.state}">{g.sprint ?? '–'}{#if g === work}<span class="mark" title="Holds the step that needs work">●</span>{/if}</span>
+          <span class="gt full">
+            <b>{g.sprint === null ? 'Steps' : `Sprint ${g.sprint}`}</b>
+            <span class="gs">{g.done}/{g.steps.length} steps · {g.state}</span>
+          </span>
         </div>
       {:else}
         <p class="dim pad">No steps in this project.</p>
@@ -195,16 +191,18 @@
   .list { overflow-y: auto; }
   .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
   .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 96px 80px; }
-  /* A sprint: name and state on top, its progress below. */
-  .gh { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 10px 16px; min-height: 56px; }
-  .gt { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .gt b { font-weight: 600; }
-  .gs { margin-left: auto; font: 11px var(--mono); color: var(--fgm); }
-  .gs.g-current { color: var(--ac); }
-  .gm { display: flex; align-items: center; gap: 10px; }
-  .gm .pbar { flex: 1; height: 4px; background: var(--bg); }
-  .gm .id { font-size: 11px; color: var(--fgm); }
-  .mark { color: var(--ac); font-size: 9px; }
+  /* A sprint: its number in a badge coloured by state, then name and progress. Half screen keeps the badge only. */
+  .lr.gh { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 52px; }
+  .nb {
+    position: relative; flex: none; width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font: 600 13px var(--mono); color: var(--fg2); box-shadow: inset 0 0 0 1px var(--mu);
+  }
+  .nb.g-current { color: var(--ac); box-shadow: inset 0 0 0 1.5px var(--ac); }
+  .nb.g-done { background: var(--g); color: var(--bg); box-shadow: none; }
+  .gt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .gt b { font-size: 13px; font-weight: 600; }
+  .gs { font: 11px var(--mono); color: var(--fgm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mark { position: absolute; top: -5px; right: -5px; font-size: 9px; line-height: 1; color: var(--ac); }
   .row { min-height: 40px; cursor: pointer; }
   .row:hover { background: var(--lt); }
   .row.f:hover { background: var(--sel); }
@@ -241,11 +239,10 @@
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
   /* Half screen (sidebar open: ~720 px of content): Sprints shrink to a strip, Steps drop the state chip. */
   @container (max-width: 1060px) {
-    .body { grid-template-columns: 64px minmax(0, 5fr) minmax(0, 4fr); gap: 12px; padding: 8px 16px 14px; }
-    .full, .gs, .gm, .ph .n { display: none; }
+    .body { grid-template-columns: 56px minmax(0, 5fr) minmax(0, 4fr); gap: 12px; padding: 8px 16px 14px; }
+    .full, .ph .n { display: none; }
     .short { display: inline; }
-    .gh { padding: 0; min-height: 44px; }
-    .gt { justify-content: center; gap: 4px; }
+    .lr.gh { padding: 0; justify-content: center; }
     .grid { grid-template-columns: 10px 36px minmax(0, 1fr) 56px; padding: 0 12px; column-gap: 8px; }
     .grid .sc, .ph .r, .prog .pbar { display: none; }
     .prog { justify-content: flex-end; }

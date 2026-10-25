@@ -129,10 +129,10 @@ for (const [w, h] of [[960, 1080], [960, 540]]) {
     expect(bar!.y + bar!.height).toBeLessThanOrEqual(h)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(await page.locator('main').evaluate((m) => m.scrollWidth <= m.clientWidth && m.scrollHeight <= m.clientHeight)).toBe(true)
-    // Sprints are a strip: short label, marker kept.
-    const sprints = page.locator('.pn', { hasText: /^S/ }).first()
+    // Sprints are a strip of number badges, marker kept.
+    const sprints = page.locator('.pn.list').first()
     expect((await sprints.boundingBox())!.width).toBeLessThanOrEqual(70)
-    await expect(sprints.locator('.lr.f')).toContainText('S1')
+    await expect(sprints.locator('.lr.f .nb')).toHaveText(/^1/)
     await expect(sprints.locator('.lr.f')).toContainText('●')
   })
 }
