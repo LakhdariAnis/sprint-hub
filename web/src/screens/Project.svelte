@@ -58,11 +58,14 @@
     Escape: () => (location.hash = '#/projects'),
   })
   // The list has no spec text, so the preview loads the selected step once; the store keeps it.
+  // Its neighbours too, so j/k land on a loaded goal instead of a "…" frame.
   // Keyed on the string: `put` makes a new object, so reading `cur` here would reload forever.
-  const ck = $derived(cur && key(project, cur.step))
+  const near = $derived([si, si - 1, si + 1].flatMap((i) => (group?.steps[i] ? [key(project, group.steps[i].step)] : [])).join(' '))
   $effect(() => {
-    const k = ck
-    untrack(() => k && !('spec' in store[k]) && loadStep(project, store[k].step).then((d) => put(project, d), () => {}))
+    const ks = near
+    untrack(() => {
+      for (const k of ks.split(' ')) if (k && !('spec' in store[k])) loadStep(project, store[k].step).then((d) => put(project, d), () => {})
+    })
   })
   const detail = $derived(cur && 'spec' in cur ? cur : null)
 
