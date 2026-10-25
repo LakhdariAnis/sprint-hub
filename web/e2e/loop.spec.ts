@@ -219,3 +219,50 @@ test('a missing step still says so', async ({ page }) => {
   await page.goto('/#/steps/demo/999')
   await expect(page.getByText('No step 999 in demo.')).toBeVisible()
 })
+
+// Step 407: every screen fits the window, nothing scrolls the page.
+const noPageScroll = (page: import('@playwright/test').Page) =>
+  page.locator('main').evaluate((m) => m.scrollHeight <= m.clientHeight && m.scrollWidth <= m.clientWidth)
+
+for (const [w, h] of [[1920, 1080], [960, 1080], [960, 540], [1280, 720]]) {
+  test(`Today at ${w}x${h}: Now is on top and visible, no page scroll`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/today')
+    const now = page.locator('.pn', { hasText: 'Now' }).first()
+    await expect(now.getByRole('link', { name: /102/ })).toBeVisible()
+    const box = (await now.boundingBox())!
+    expect(box.y + box.height).toBeLessThanOrEqual(h)
+    const col = (await page.locator('.side').boundingBox())!
+    expect(box.y).toBeLessThan(col.y + 4)
+    expect(await noPageScroll(page)).toBe(true)
+  })
+
+  test(`Step at ${w}x${h}: buttons and current task visible, no page scroll`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/steps/demo/102')
+    for (const b of [/^Stop/, /^Close tab/]) {
+      const bb = (await page.getByRole('button', { name: b }).boundingBox())!
+      expect(bb.y + bb.height).toBeLessThanOrEqual(h)
+    }
+    const task = page.locator('.task.sel')
+    await expect(task).toHaveClass(/\bdoing\b/)
+    const rows = (await page.locator('.rows').boundingBox())!
+    const tb = (await task.boundingBox())!
+    expect(tb.y).toBeGreaterThanOrEqual(rows.y - 1)
+    expect(tb.y + tb.height).toBeLessThanOrEqual(rows.y + rows.height + 1)
+    expect(await noPageScroll(page)).toBe(true)
+  })
+
+  test(`Review and Questions at ${w}x${h}: no page scroll, approve bar in view`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/review/demo/103')
+    const approve = page.getByRole('button', { name: /^Approve/ })
+    await expect(approve).toBeVisible()
+    const bb = (await approve.boundingBox())!
+    expect(bb.y + bb.height).toBeLessThanOrEqual(h)
+    expect(await noPageScroll(page)).toBe(true)
+    await page.goto('/#/questions')
+    await expect(page.locator('.row').first()).toBeVisible()
+    expect(await noPageScroll(page)).toBe(true)
+  })
+}
