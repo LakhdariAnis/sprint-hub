@@ -78,7 +78,7 @@
   <p class="dim pad">Cannot reach hubd.</p>
 {/if}
 <div class="body">
-  <section class="pn" class:f={focus === 'p'} style="grid-column: span 8">
+  <section class="pn pj" class:f={focus === 'p'} style="grid-column: span 8">
     <div class="ph">
       <span class="hk">p</span>Projects<span class="n">{projects.length} in the vault</span>
       <span class="r"><span class="kb">↵</span> open</span>
@@ -179,18 +179,18 @@
 
   </div>
 
-  <section class="pn" class:f={focus === 'w'} style="grid-column: span 8">
+  <section class="pn wp" class:f={focus === 'w'} style="grid-column: span 8">
     <div class="ph"><span class="hk">w</span>This week<span class="n">{range}</span></div>
     {#if hub.demo}
       <div class="wk">
         {#each days as day, i}
-          <div class="dh" class:today={i === todayIdx}>{day.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase()}<b>{day.getDate()}</b></div>
-        {/each}
-        {#each days as _, i}
-          <div class="dc" class:f={i === todayIdx}>
-            {#each hub.demo.week.filter((e) => e.day === i) as e}
-              <div class="ev" style="border-left-color: var(--{e.color})"><span class="t">{e.time}</span>{e.text}</div>
-            {/each}
+          <div class="day">
+            <div class="dh" class:today={i === todayIdx}>{day.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase()}<b>{day.getDate()}</b></div>
+            <div class="dc" class:f={i === todayIdx}>
+              {#each hub.demo.week.filter((e) => e.day === i) as e}
+                <div class="ev" style="border-left-color: var(--{e.color})"><span class="t">{e.time}</span>{e.text}</div>
+              {/each}
+            </div>
           </div>
         {/each}
       </div>
@@ -208,6 +208,8 @@
   .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
   .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) minmax(0, 1.6fr); gap: 20px; }
   .pn { overflow-y: auto; }
+  /* Rows keep their height: a shrinking flex row would run its text over the next row. */
+  .pn > :global(*) { flex-shrink: 0; }
   .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
   /* Now keeps the room, the others shrink to what is left. */
   .side > .pn { flex: 1 1 0; min-height: 88px; }
@@ -222,12 +224,13 @@
   .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .id { font: 12.5px var(--mono); color: var(--fg2); }
   .wk { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 36px 1fr; min-height: 0; }
-  .dh { display: flex; flex-direction: column; align-items: center; justify-content: center; font: 10.5px var(--mono); color: var(--fg2); border-bottom: 1px solid var(--sel); line-height: 1.2; }
+  .day { display: contents; }
+  .dh { grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 10.5px var(--mono); color: var(--fg2); border-bottom: 1px solid var(--sel); line-height: 1.2; }
   .dh b { font-size: 13px; color: var(--fg); }
   .dh.today { box-shadow: inset 0 -2px 0 var(--ac); }
   .dh.today b { color: var(--ac); }
-  .dc { border-right: 1px solid var(--sel); padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-  .dc:last-child { border-right: 0; }
+  .dc { grid-row: 2; border-right: 1px solid var(--sel); padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .day:last-child .dc { border-right: 0; }
   .dc.f { background: color-mix(in srgb, var(--ac) 7%, transparent); }
   .ev { border-radius: 5px; padding: 4px 7px; font-size: 12px; line-height: 1.35; background: var(--bg); border-left: 3px solid var(--fg3); }
   .ev .t { display: block; font: 10.5px var(--mono); color: var(--fg2); }
@@ -248,6 +251,33 @@
     .pr { grid-template-columns: minmax(0, 1fr) 48px auto; }
     .cols { grid-template-columns: 14px 32px minmax(0, 1fr); column-gap: 8px; padding: 0 12px; }
     .cols > :last-child { display: none; }
+  }
+  /* One column: the body scrolls whole panes, in the order Now, Projects, Reminders, Questions, Deadlines, This week. */
+  @container (max-width: 700px) {
+    .body { display: flex; flex-direction: column; overflow-y: auto; gap: 10px; padding: 8px 12px 12px; scroll-snap-type: y proximity; }
+    .side { display: contents; }
+    .ph { position: static; }
+    .body > .pn, .side > .pn, .side > .pn:first-child { flex: none; overflow: visible; min-height: 0; scroll-snap-align: start; }
+    .side > .pn:nth-child(1) { order: 1; }
+    .pj { order: 2; }
+    .side > .pn:nth-child(2) { order: 3; }
+    .side > .pn:nth-child(3) { order: 4; }
+    .side > .pn:nth-child(4) { order: 5; }
+    .wp { order: 6; }
+    .cols, .rm, .dl { padding-top: 6px; padding-bottom: 6px; }
+    .dl { grid-template-columns: 64px minmax(0, 1fr); }
+    .dl > :nth-child(3) { grid-column: 2; }
+    .dl .chip { display: inline-block; margin: 4px 6px 0 0; }
+    .dl .chip:first-of-type { margin-left: 8px; }
+  }
+  /* Day columns under about 75 px: one row per day. */
+  @container (max-width: 560px) {
+
+    .day { display: grid; grid-template-columns: 56px minmax(0, 1fr); border-bottom: 1px solid var(--sel); }
+    .day:last-child { border-bottom: 0; }
+    .dh, .dc { grid-row: auto; }
+    .dh { border-bottom: 0; }
+    .dc { border-right: 0; min-height: 36px; justify-content: center; }
   }
   @container (max-height: 640px) {
     .body { gap: 10px; padding-bottom: 10px; }
