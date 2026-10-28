@@ -271,6 +271,35 @@ for (const [w, h] of [[1920, 1080], [960, 1080], [960, 540], [1280, 720]]) {
   })
 }
 
+// Step 409a: a half tile at 1.25 scale is 743 px wide; sidebar shown (b off) or reduced to the rail (b on).
+const noOverlap = (page: import('@playwright/test').Page, sel: string) =>
+  page.locator(sel).evaluateAll((els) => {
+    const r = els.map((e) => e.getBoundingClientRect())
+    return r.every((a, i) => i === 0 || a.top >= r[i - 1].bottom - 1)
+  })
+
+for (const [w, h] of [[743, 730], [743, 540]]) {
+  for (const rail of [false, true]) {
+    test(`Today, Review, Questions at ${w}x${h}${rail ? ' rail' : ''}: rows apart, nothing cut across the width`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h })
+      await page.goto('/#/today')
+      if (rail) await page.keyboard.press('b')
+      await expect(page.getByRole('link', { name: /102/ }).first()).toBeVisible()
+      for (const sel of ['.cols', '.rm', '.dl']) expect(await noOverlap(page, sel)).toBe(true)
+      expect(await page.locator('.body').evaluate((b) => b.scrollWidth <= b.clientWidth)).toBe(true)
+      expect(await noPageScroll(page)).toBe(true)
+      await page.goto('/#/review/demo/103')
+      const bb = (await page.getByRole('button', { name: /^Approve/ }).boundingBox())!
+      expect(bb.y + bb.height).toBeLessThanOrEqual(h)
+      expect(await noPageScroll(page)).toBe(true)
+      await page.goto('/#/questions')
+      await expect(page.locator('.row').first()).toBeVisible()
+      expect(await noOverlap(page, '.row')).toBe(true)
+      expect(await noPageScroll(page)).toBe(true)
+    })
+  }
+}
+
 // Step 408: the main walk through the tree, at full screen and in a half-screen, short tile.
 for (const [w, h] of [[1920, 1080], [960, 540]]) {
   test(`main walk at ${w}x${h}: enter on the doing step, h l j k, open on the current task, b, no scroll, no flash`, async ({ page }) => {
@@ -346,3 +375,65 @@ test('sidebar: b and the hide button toggle the rail, which survives a reload', 
   // Short window: the button stays on screen.
   await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeInViewport()
 })
+
+// Step 409b: no two visible text rows overlap, and no row is cut by an edge that does not scroll.
+// A row fully hidden behind an edge (a bar item wrapped to the hidden second line) is fine; half of one is not.
+const ROWS = '.lr, .row, .task, .ck, .dl, .rm, .ph, .lh, .qt, .tb, .meta > div, .bar > *, .act > *, .keys > span, .ub > span, .ub .g, .hd h1, .hd .crumb'
+const layoutFaults = (page: import('@playwright/test').Page) =>
+  page.evaluate((sel) => {
+    const bad: string[] = []
+    const name = (e: Element) => `${e.tagName.toLowerCase()}.${[...e.classList].join('.')} "${(e.textContent ?? '').trim().slice(0, 30)}"`
+    const vis: { e: Element; r: DOMRect }[] = []
+    for (const e of document.querySelectorAll(sel)) {
+      let r = e.getBoundingClientRect()
+      if (r.width < 1 || r.height < 1) continue
+      // Clip by every ancestor that clips; stop checking for cuts once inside a scroll area.
+      let scrolled = false
+      let hidden = false
+      for (let a = e.parentElement; a && !hidden; a = a.parentElement) {
+        const cs = getComputedStyle(a)
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue
+        const c = a.getBoundingClientRect()
+        const x = { l: Math.max(r.left, c.left), t: Math.max(r.top, c.top), r: Math.min(r.right, c.right), b: Math.min(r.bottom, c.bottom) }
+        if (x.r - x.l < 1 || x.b - x.t < 1) hidden = true
+        else {
+          const cut = x.l > r.left + 1 || x.t > r.top + 1 || x.r < r.right - 1 || x.b < r.bottom - 1
+          const scroll = /auto|scroll/.test(cs.overflowX + cs.overflowY)
+          if (cut && !scroll && !scrolled) bad.push(`cut: ${name(e)} by ${name(a).slice(0, 40)}`)
+          scrolled ||= scroll
+          r = new DOMRect(x.l, x.t, x.r - x.l, x.b - x.t)
+        }
+      }
+      if (!hidden) vis.push({ e, r })
+    }
+    for (let i = 0; i < vis.length; i++)
+      for (let j = i + 1; j < vis.length; j++) {
+        const [a, b] = [vis[i], vis[j]]
+        if (a.e.contains(b.e) || b.e.contains(a.e)) continue
+        const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left)
+        const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top)
+        if (w > 1 && h > 1) bad.push(`overlap: ${name(a.e)} and ${name(b.e)}`)
+      }
+    // Step facts: the whole value shows, no ellipsis.
+    for (const m of document.querySelectorAll('.meta > div')) if (m.scrollWidth > m.clientWidth + 1) bad.push(`clipped: ${name(m)}`)
+    return bad
+  }, ROWS)
+
+const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions']
+for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
+  for (const rail of [false, true]) {
+    test(`every screen at ${w}x${h}${rail ? ' rail' : ''}: no overlap, no row cut, no page scroll`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h })
+      await page.goto('/#/today')
+      await expect(page.locator('.body')).toBeVisible()
+      if (rail) await page.keyboard.press('b')
+      for (const s of SCREENS) {
+        await page.goto(`/#/${s}`)
+        await expect(page.locator('main .body')).toBeVisible()
+        await expect(page.locator('main .ph').first()).toBeVisible()
+        expect(await layoutFaults(page), s).toEqual([])
+        expect(await noPageScroll(page), s).toBe(true)
+      }
+    })
+  }
+}

@@ -288,8 +288,20 @@
     .head { padding: 14px 16px; }
     .head h1 { font-size: 20px; }
     .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .meta div { white-space: normal; overflow-wrap: anywhere; }
+    .ck .ph .n { display: none; }
     .task { padding: 0 12px; gap: 8px; }
     .spec, .chat { padding: 12px 16px; }
+  }
+  /* A half tile at 1.25 scale with the sidebar (~500 px): the head spans the width so the facts fit in one row,
+     Checklist and Spec share the row below. A long branch wraps instead of being cut. */
+  @container (max-width: 600px) {
+    .body { grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); }
+    .head { grid-column: 1 / -1; }
+    .right { grid-row: 2; }
+    .meta { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .ix { display: none; }
+    .task { grid-template-columns: 24px minmax(0, 1fr) auto; }
   }
   /* Short windows: the header band and head pane give back room. */
   @container (max-height: 640px) {
