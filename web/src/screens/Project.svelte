@@ -155,7 +155,7 @@
         <div class="pv">
           <div class="ti"><span class="id">{cur.step}</span> · {cur.title}</div>
           <div class="st">
-            <span class="chip s-{cur.state}">{cur.state}</span><span>{cur.model ?? '–'}</span><span>{hours(cur)} h</span><span>{done}/{cur.tasks.length} tasks</span>
+            <span class="chip s-{cur.state}">{cur.state}</span><span>{cur.model ?? '–'}</span><span>{hours(cur)} h</span><span class="tk">{done}/{cur.tasks.length} tasks</span>
           </div>
           <div class="br"><span class="mono">{cur.branch ?? ''}</span>{#if cur.branch}<Copy text={cur.branch} label="branch" />{/if}</div>
           <div class="lb">GOAL</div>
@@ -225,8 +225,8 @@
   .br .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tl { flex: 1; min-height: 0; overflow-y: scroll; }
   .ck em { font-style: normal; font-size: 12px; }
-  .bar { flex: none; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--sel); padding-top: 10px; }
-  .nq { font: 12.5px var(--mono); color: var(--fg2); }
+  .bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; border-top: 1px solid var(--sel); padding-top: 10px; }
+  .nq { font: 12.5px var(--mono); color: var(--fg2); white-space: nowrap; }
   .ck { display: grid; grid-template-columns: 20px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sel); font-size: 13.5px; align-items: center; }
   .ck:last-child { border-bottom: 0; }
   .ck.todo { color: var(--fg2); }
@@ -244,9 +244,22 @@
     .short { display: inline; }
     .lr.gh { padding: 0; justify-content: center; }
     .grid { grid-template-columns: 10px 36px minmax(0, 1fr) 56px; padding: 0 12px; column-gap: 8px; }
-    .grid .sc, .ph .r, .prog .pbar { display: none; }
+    .grid .sc, .ph .r, .prog .pbar, .st .tk { display: none; }
     .prog { justify-content: flex-end; }
     .pv { padding: 12px; gap: 8px; }
+  }
+  /* A half tile at 1.25 scale with the sidebar (~500 px): Steps above Step info, both beside the badge strip. */
+  @container (max-width: 600px) {
+    .body { grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: fit-content(40%) minmax(0, 1fr); gap: 8px; padding: 4px 12px 10px; }
+    .body > .pn:first-child { grid-row: 1 / span 2; }
+    .nb { width: 26px; height: 26px; }
+    .grid.row { min-height: 34px; }
+  }
+  /* Both narrow and short: Step info drops its header and the branch line, the goal takes 2 lines. */
+  @container (max-width: 600px) and (max-height: 640px) {
+    .body > .pn:last-child > .ph, .br { display: none; }
+    .pv { padding: 10px 12px; }
+    .desc { height: calc(2 * 1.55em); -webkit-line-clamp: 2; line-clamp: 2; }
   }
   /* Short windows: the header and gaps give back room, the columns scroll alone. */
   @container (max-height: 640px) {
