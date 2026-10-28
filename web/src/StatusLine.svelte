@@ -25,7 +25,8 @@
     questions: [['j k', 'move'], ['↵', 'open step']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
-  const common: [string, string][] = [['1 2 3 4', 'tab'], ['b', 'sidebar'], ['?', 'help']]
+  // Last = first to drop when the line is full: tab keys go before b and ?.
+  const common: [string, string][] = [['b', 'sidebar'], ['?', 'help'], ['1 2 3 4', 'tab']]
   // Sidebar open and the content narrower than ~800 px: say what gives room.
   let width = $state(1920)
   const tight = $derived(width < 1036 && !keys.rail)
@@ -51,12 +52,12 @@
 
 <style>
   .keys {
-    height: 32px; flex: none; display: flex; align-items: center; gap: 18px; padding: 0 28px; overflow: hidden;
+    height: 32px; flex: none; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0 18px; padding: 0 28px; overflow: hidden;
     background: var(--dk); border-top: 1px solid var(--sel); font: 12px var(--mono); color: var(--fg2); white-space: nowrap;
   }
   .md { background: var(--ac); color: var(--bg); font-weight: 700; padding: 0 8px; border-radius: 3px; line-height: 18px; }
-  .keys > span { display: flex; align-items: center; gap: 4px; }
+  /* Items that do not fit wrap to the hidden second line: the last ones drop whole, none is cut mid-word. */
+  .keys > span { height: 31px; display: flex; align-items: center; gap: 4px; }
+  .keys > .md { height: auto; align-self: center; }
   .fc { margin-left: auto; }
-  /* Below 1200 px the hints fill the line: drop the focus name rather than cut it mid-word. */
-  @media (max-width: 1200px) { .keys > .fc { display: none; } }
 </style>

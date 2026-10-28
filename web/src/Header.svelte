@@ -13,7 +13,7 @@
   <!-- The palette comes in Sprint 4; until then the box only shows where it will be. -->
   <div class="search" title="Search comes in a later sprint">
     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-    Search, jump or run<span class="kb">^K</span>
+    <span class="lbl">Search, jump or run</span><span class="kb">^K</span>
   </div>
 </header>
 
@@ -31,4 +31,6 @@
   @media (max-height: 700px) { .hd { height: 52px; margin-bottom: 8px; } }
   .search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; }
   .search .kb { margin-left: auto; }
+  /* A half tile with the sidebar: the crumb and title get the room, the box keeps its icon and key. */
+  @container (max-width: 600px) { .hd { padding: 0 16px; } .search { flex: none; width: auto; } .search .lbl { display: none; } }
 </style>
