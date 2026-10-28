@@ -183,6 +183,8 @@
   .col { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
   .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; min-height: 0; }
   .queue, .two .pn { overflow-y: auto; }
+  /* Rows keep their height: a shrinking flex row would run its text over the next row. */
+  .queue > :global(*) { flex-shrink: 0; }
   .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
   .gr:not(:first-child) { margin-top: 6px; border-top: 1px solid var(--sel); }
   .cnt { margin-left: auto; }
@@ -217,6 +219,17 @@
     .row > :last-child { display: none; }
     .head { padding: 12px 14px; }
     .act form { min-width: 0; flex-basis: 100%; }
+  }
+  /* List on top, detail below; the head with the action bar stays, Report, Diffstat and Checklist scroll under it. */
+  @container (max-width: 700px) {
+    .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 3fr); gap: 10px; padding: 8px 12px 12px; }
+    .detail, .col { gap: 10px; }
+    .two { display: flex; flex-direction: column; overflow-y: auto; gap: 10px; }
+    .col { display: contents; }
+    .two .pn { flex: none; overflow: visible; }
+    .head { padding: 10px 12px; gap: 6px; }
+    h2 { font-size: 17px; }
+    .row { min-height: 38px; }
   }
   @container (max-height: 640px) {
     .grid { gap: 10px; padding-bottom: 10px; }
