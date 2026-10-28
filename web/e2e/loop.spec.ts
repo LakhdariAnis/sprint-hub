@@ -271,6 +271,35 @@ for (const [w, h] of [[1920, 1080], [960, 1080], [960, 540], [1280, 720]]) {
   })
 }
 
+// Step 409a: a half tile at 1.25 scale is 743 px wide; sidebar shown (b off) or reduced to the rail (b on).
+const noOverlap = (page: import('@playwright/test').Page, sel: string) =>
+  page.locator(sel).evaluateAll((els) => {
+    const r = els.map((e) => e.getBoundingClientRect())
+    return r.every((a, i) => i === 0 || a.top >= r[i - 1].bottom - 1)
+  })
+
+for (const [w, h] of [[743, 730], [743, 540]]) {
+  for (const rail of [false, true]) {
+    test(`Today, Review, Questions at ${w}x${h}${rail ? ' rail' : ''}: rows apart, nothing cut across the width`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h })
+      await page.goto('/#/today')
+      if (rail) await page.keyboard.press('b')
+      await expect(page.getByRole('link', { name: /102/ }).first()).toBeVisible()
+      for (const sel of ['.cols', '.rm', '.dl']) expect(await noOverlap(page, sel)).toBe(true)
+      expect(await page.locator('.body').evaluate((b) => b.scrollWidth <= b.clientWidth)).toBe(true)
+      expect(await noPageScroll(page)).toBe(true)
+      await page.goto('/#/review/demo/103')
+      const bb = (await page.getByRole('button', { name: /^Approve/ }).boundingBox())!
+      expect(bb.y + bb.height).toBeLessThanOrEqual(h)
+      expect(await noPageScroll(page)).toBe(true)
+      await page.goto('/#/questions')
+      await expect(page.locator('.row').first()).toBeVisible()
+      expect(await noOverlap(page, '.row')).toBe(true)
+      expect(await noPageScroll(page)).toBe(true)
+    })
+  }
+}
+
 // Step 408: the main walk through the tree, at full screen and in a half-screen, short tile.
 for (const [w, h] of [[1920, 1080], [960, 540]]) {
   test(`main walk at ${w}x${h}: enter on the doing step, h l j k, open on the current task, b, no scroll, no flash`, async ({ page }) => {
