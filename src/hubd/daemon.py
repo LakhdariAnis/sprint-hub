@@ -11,6 +11,7 @@ from uuid import uuid4
 from watchfiles import awatch
 
 from hubd import importer, init
+from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
@@ -442,7 +443,11 @@ class Hub:
             entry = self.entry(project, step_id)
             new = transition(entry.step, Event.approve, Actor.me)
             repo, branch = self.repo(project), entry.step.branch
-            if repo and branch:  # no repo or no branch (a `by: me` step): nothing to merge
+            if entry.step.by == "claude" and not branch:
+                raise InvalidTransition(f"step {step_id}: no branch to merge, nothing was approved")
+            if repo and branch:  # no repo, or a `by: me` step with no branch: nothing to merge
+                if not repo.is_dir():
+                    raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
                 try:
                     base = self.index.projects[project].base
                     await asyncio.to_thread(_merge, repo, base, branch)
@@ -489,6 +494,9 @@ def _merge(repo: Path, base: str, branch: str) -> None:
 
     Any other branch, or tracked changes: refuse. Conflict: abort.
     """
+    for name in (base, branch):
+        if not git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"):
+            raise InvalidTransition(f"{repo}: branch '{name}' does not exist")
     head = _git(repo, "branch", "--show-current")
     if head not in (base, branch):
         where = f"on branch '{head}'" if head else "not on a branch"

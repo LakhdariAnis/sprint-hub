@@ -109,6 +109,45 @@ def test_from_the_step_branch_it_switches_to_base(hub: Hub, repo: Path) -> None:
     assert git(repo, "log", "-1", "--format=%s").startswith("Merge branch 'step/103-ui'")
 
 
+def set_step(hub: Hub, step_id: str, old: str, new: str) -> Hub:
+    """Edit a step file and read the vault again."""
+    path = hub.entry("demo", step_id).path
+    assert old in path.read_text()
+    path.write_text(path.read_text().replace(old, new))
+    return Hub(hub.vault, lambda _: hub.runner, hub.notifier)
+
+
+def test_claude_step_with_no_branch_is_refused(hub: Hub, repo: Path) -> None:
+    hub = set_step(hub, "103", "branch: step/103-ui\n", "")
+    refused(hub, repo, "no branch to merge")
+
+
+def test_missing_branch_is_refused(hub: Hub, repo: Path) -> None:
+    git(repo, "branch", "-m", "step/103-ui", "gone")
+    refused(hub, repo, "branch 'step/103-ui' does not exist")
+
+
+def test_missing_base_is_refused(vault: Path, hub: Hub, repo: Path) -> None:
+    project = vault / "projects/demo/project.md"
+    project.write_text(project.read_text().replace("model:", "base: nope\nmodel:", 1))
+    hub = Hub(hub.vault, lambda _: hub.runner, hub.notifier)
+    refused(hub, repo, "branch 'nope' does not exist")
+
+
+def test_missing_repo_is_refused(vault: Path, hub: Hub, repo: Path) -> None:
+    repo.rename(vault / "moved")
+    with pytest.raises(InvalidTransition, match="does not exist"):
+        approve(hub)
+    assert hub.entry("demo", "103").step.state == State.done
+
+
+def test_manual_step_without_a_branch_needs_no_git(hub: Hub, repo: Path) -> None:
+    hub = set_step(hub, "103", "by: claude\nmodel: sonnet\nbranch: step/103-ui\n", "by: me\n")
+    head = git(repo, "rev-parse", "HEAD")
+    assert approve(hub).state == State.approved
+    assert git(repo, "rev-parse", "HEAD") == head
+
+
 def test_conflict_aborts_and_notifies(
     vault: Path, hub: Hub, repo: Path, notifier: Recorder
 ) -> None:
