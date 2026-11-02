@@ -8,9 +8,8 @@ from pathlib import Path
 import frontmatter
 import yaml
 
-from hubd.daemon import vault_path
 from hubd.model import Project, State, TaskState
-from hubd.vault import _archive_sprint, parse_tasks, split_sections
+from hubd.vault import _archive_sprint, parse_tasks, split_sections, vault_path
 
 # `api-fields.md` or `design4-mock-list.md` sit next to the specs and are not steps.
 _SPEC = re.compile(r"^(?P<id>[a-z]?\d+[a-z]?)-.+\.md$")
@@ -127,7 +126,8 @@ def write_step(path: Path, meta: dict[str, object]) -> None:
         f.write(f"---\n{text}---\n\n{BODY}")
 
 
-def import_project(folder: Path, project: Project, repo: Path) -> str:
+def import_project(folder: Path, project: Project, repo: Path, only: Path | None = None) -> str:
+    """Write the missing step files of a project; `only` limits it to one spec file."""
     new = kept = 0
     logged = progress_merged(repo)
     branches = step_branches(repo)
@@ -135,6 +135,8 @@ def import_project(folder: Path, project: Project, repo: Path) -> str:
     sprints = sprint_tables(repo)
     no_sprint: list[str] = []
     for step_id, spec in specs(repo).items():
+        if only and spec != only:
+            continue
         target = folder / "steps" / f"{step_id}.md"
         if target.exists():
             kept += 1

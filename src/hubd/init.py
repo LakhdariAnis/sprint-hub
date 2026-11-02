@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from hubd.daemon import vault_path
+from hubd.vault import vault_path
 
 PROJECTS = Path("~/.config/sprint-hub/projects.toml").expanduser()
 

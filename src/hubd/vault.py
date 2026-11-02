@@ -341,6 +341,10 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def vault_path() -> Path:
+    return Path(os.environ.get("HUB_VAULT", Path.home() / "Hub"))
+
+
 def sprint_of(step_id: str) -> int | None:
     """Sprint of a step id: the digits before the last two (`213a` -> 2); None under 3 digits."""
     digits = m[0] if (m := _STEP_DIGITS.match(step_id)) else ""

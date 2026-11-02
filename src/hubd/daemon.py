@@ -1,7 +1,6 @@
 """The Hub: owns the index and the runner. Every change goes through it, one at a time."""
 
 import asyncio
-import os
 import subprocess
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -349,7 +348,3 @@ def _merge(repo: Path, branch: str) -> None:
 
 def _is_md(_: object, path: str) -> bool:
     return path.endswith(".md")  # also skips save_step's `.tmp` files
-
-
-def vault_path() -> Path:
-    return Path(os.environ.get("HUB_VAULT", Path.home() / "Hub"))

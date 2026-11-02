@@ -474,3 +474,15 @@ def snapshot(path: Path) -> dict[str, str]:
         for p in sorted(path.rglob("*"))
         if p.is_file()
     }
+
+
+def test_only_imports_the_named_spec(vault: Path, repo: Path) -> None:
+    spec(repo, "101-first")
+    second = spec(repo, "102-second")
+    folder = vault / "projects" / "demo"
+    project = load_vault(vault).projects["demo"]
+
+    importer.import_project(folder, project, repo, only=second)
+
+    assert not step_file(vault, "101").exists()
+    assert step_file(vault, "102").is_file()
