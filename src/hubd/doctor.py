@@ -3,9 +3,10 @@
 import json
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
-from hubd import install, theme
+from hubd import install, service, theme
 from hubd.runners import claude
 
 
@@ -49,8 +50,14 @@ def _theme(path: Path) -> tuple[bool, str]:
     return False, f"theme {path} not found: the app uses its default colours"
 
 
-def main(settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY) -> int:
+def main(
+    settings: Path = install.SETTINGS,
+    theme_file: Path = theme.OMARCHY,
+    service_state: Callable[[], str] | None = None,
+) -> int:
     results = [*checks(settings), _theme(theme_file)]
     for ok, text in results:
         print(f"{'✔' if ok else '✘'} {text}")
+    # Info, not a check: hubd also runs without the service (bin/sprint-hub-app starts it).
+    print(f"ℹ hubd service: {(service_state or service.state)()}")
     return 0 if all(ok for ok, _ in results) else 1

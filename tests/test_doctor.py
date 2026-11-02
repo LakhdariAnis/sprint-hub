@@ -27,6 +27,11 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, help_text: str)
     monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")  # the script needs cat
 
 
+@pytest.fixture(autouse=True)
+def no_systemctl(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(doctor.service, "state", lambda: "not installed")
+
+
 def settings(tmp_path: Path, data: dict) -> Path:
     path = tmp_path / "settings.json"
     path.write_text(json.dumps(data))
@@ -38,6 +43,7 @@ def test_all_good(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> No
     path = settings(tmp_path, install.with_hook({}))
     assert doctor.main(path, THEME) == 0
     out = capsys.readouterr().out.splitlines()
+    assert out.pop() == "ℹ hubd service: not installed"  # info line, never a failure
     assert all(line.startswith("✔") for line in out)
     assert "✔ version 9.9.9 (Claude Code)" in out
     assert len(out) == 7  # path, version, 3 flags, hook, theme
@@ -58,7 +64,15 @@ def test_no_claude_and_no_hook(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
         "✘ claude not on PATH",
         "✘ SessionEnd hook missing: run hubd install-hook",
         f"✘ theme {tmp_path / 'colors.toml'} not found: the app uses its default colours",
+        "ℹ hubd service: not installed",
     ]
+
+
+def test_service_info_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    fake_claude(tmp_path, monkeypatch, HELP)
+    path = settings(tmp_path, install.with_hook({}))
+    assert doctor.main(path, THEME, lambda: "failed") == 0
+    assert "ℹ hubd service: failed" in capsys.readouterr().out
 
 
 def test_claude_that_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:

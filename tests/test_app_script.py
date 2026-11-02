@@ -13,7 +13,7 @@ def run_app(tmp_path: Path, service: bool) -> list[str]:
     bin_dir.mkdir()
     log = tmp_path / "log"
     fakes = {
-        "curl": f'[ -e {tmp_path}/up ]',  # hubd answers once something started it
+        "curl": f"[ -e {tmp_path}/up ]",  # hubd answers once something started it
         "systemctl": f'echo "systemctl $*" >> {log}\n'
         f'[ "$2" = cat ] && exit {0 if service else 1}\n'
         f"touch {tmp_path}/up",
