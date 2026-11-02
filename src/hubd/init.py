@@ -17,11 +17,30 @@ def slug(name: str) -> str:
 
 
 def load_projects(config: Path) -> list[tuple[str, Path]]:
-    """(name, absolute repo path) of every project in `config`."""
-    data = tomllib.loads(config.read_text())
-    return [
-        (p["name"], Path(os.path.abspath(os.path.expanduser(p["path"])))) for p in data["project"]
-    ]
+    """(name, absolute repo path) of every project in `config`; ValueError if it is not usable."""
+    try:
+        data = tomllib.loads(config.read_text())
+    except OSError as exc:
+        raise ValueError(f"cannot read {config}: {exc.strerror}") from None
+    except ValueError as exc:  # bad TOML or bad UTF-8
+        raise ValueError(f"{config}: {exc}") from None
+    entries = data.get("project")
+    if not entries or not isinstance(entries, list):
+        raise ValueError(f"{config}: no [[project]] entries")
+    projects: list[tuple[str, Path]] = []
+    folders: set[str] = set()
+    for p in entries:
+        if not isinstance(p, dict) or not all(isinstance(p.get(k), str) for k in ("name", "path")):
+            raise ValueError(f"{config}: every [[project]] needs a name and a path")
+        name = p["name"]
+        # The slug is a folder name under projects/: it must stay there.
+        if slug(name) in ("", ".", "..") or "/" in name:
+            raise ValueError(f"{config}: bad project name {name!r}")
+        if slug(name) in folders:
+            raise ValueError(f"{config}: two projects share the folder {slug(name)!r}")
+        folders.add(slug(name))
+        projects.append((name, Path(os.path.abspath(os.path.expanduser(p["path"])))))
+    return projects
 
 
 def create(folder: Path, name: str, repo: Path) -> None:
@@ -34,7 +53,11 @@ def create(folder: Path, name: str, repo: Path) -> None:
 
 
 def main(config: Path = PROJECTS) -> int:
-    projects = load_projects(config)
+    try:
+        projects = load_projects(config)
+    except ValueError as exc:
+        print(f"hubd init: {exc}", file=sys.stderr)
+        return 1
     vault = vault_path()
     try:
         (vault / "projects").mkdir(parents=True, exist_ok=True)

@@ -108,6 +108,48 @@ def test_vault_that_cannot_be_created_exits_1(
     assert "hubd init:" in capsys.readouterr().err
 
 
+def test_missing_toml_is_one_line_error_and_creates_nothing(
+    vault: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert init.main(tmp_path / "nope.toml") == 1
+
+    err = capsys.readouterr().err
+    assert "nope.toml" in err
+    assert err.count("\n") == 1
+    assert not vault.exists()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "not toml at all",
+        "",
+        "project = 1",
+        "project = [1]",
+        '[[project]]\nname = "no path"\n',
+        '[[project]]\npath = "/no/name"\n',
+        '[[project]]\nname = 1\npath = "/x"\n',
+        '[[project]]\nname = ""\npath = "/x"\n',
+        '[[project]]\nname = "../out"\npath = "/x"\n',
+        '[[project]]\nname = ".."\npath = "/x"\n',
+        '[[project]]\nname = "Same Name"\npath = "/x"\n'
+        '[[project]]\nname = "same-name"\npath = "/y"\n',
+    ],
+)
+def test_broken_toml_is_one_line_error_and_creates_nothing(
+    vault: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], text: str
+) -> None:
+    toml = tmp_path / "projects.toml"
+    toml.write_text(text)
+
+    assert init.main(toml) == 1
+
+    err = capsys.readouterr().err
+    assert str(toml) in err
+    assert err.count("\n") == 1
+    assert not vault.exists()
+
+
 def test_command_expands_tilde_and_honours_hub_vault(tmp_path: Path) -> None:
     (tmp_path / "work/demo").mkdir(parents=True)
     toml = tmp_path / ".config/sprint-hub/projects.toml"
