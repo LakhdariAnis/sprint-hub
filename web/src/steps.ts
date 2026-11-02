@@ -21,6 +21,7 @@ export type Step = {
   command_model?: string | null
   // `doing`, but hubd found no live session when it started.
   run_gone?: boolean
+  base?: string
 }
 
 // API order is by file name, which is step order.
@@ -43,7 +44,8 @@ async function post(project: string, id: string, move: string, body?: object): P
 
 export const startStep = (project: string, id: string) => post(project, id, 'start')
 export const finishStep = (project: string, id: string) => post(project, id, 'finish')
-export const approveStep = (project: string, id: string) => post(project, id, 'approve')
+// `commit`: what the base branch is on after the merge; null when there was nothing to merge.
+export const approveStep = (project: string, id: string) => post(project, id, 'approve') as Promise<Step & { commit: string | null }>
 export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
 export const requestChanges = (project: string, id: string, comment: string) => post(project, id, 'changes', { comment })
 
@@ -58,7 +60,7 @@ export const ago = (started: string | undefined, now: number) => {
 
 export const goal = (spec: string | null | undefined) => spec?.match(/^## Goal\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1].trim() ?? ''
 
-// `git diff --stat main...branch` of the step; a refused read throws hubd's reason.
+// `git diff --stat base...branch` of the step; a refused read throws hubd's reason.
 export async function loadDiffstat(project: string, id: string): Promise<string> {
   const r = await fetch(`/steps/${encodeURIComponent(project)}/${encodeURIComponent(id)}/diffstat`)
   const body = await r.json().catch(() => null)

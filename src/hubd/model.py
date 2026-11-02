@@ -33,6 +33,7 @@ class Project(BaseModel):
 
     name: str
     repo: Path | None = None
+    base: str = "main"  # the branch approve merges into
     model: str
     merge: Merge
 

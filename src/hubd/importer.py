@@ -56,8 +56,10 @@ def step_branches(repo: Path) -> list[str]:
     return git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/step/").split()
 
 
-def merged_branches(repo: Path) -> set[str]:
-    line = main_line(repo)
+def merged_branches(repo: Path, base: str) -> set[str]:
+    # A project.md without `base:` on a repo with no `main`: fall back on the repo's own main line.
+    has_base = git(repo, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
+    line = base if has_base else main_line(repo)
     if line is None:
         return set()
     tip = git(repo, "rev-parse", line)
@@ -137,7 +139,7 @@ def import_project(folder: Path, project: Project, repo: Path, only: Path | None
     new = kept = 0
     logged = progress_merged(repo)
     branches = step_branches(repo)
-    merged = merged_branches(repo)
+    merged = merged_branches(repo, project.base)
     sprints = sprint_tables(repo)
     no_sprint: list[str] = []
     for step_id, spec in specs(repo).items():

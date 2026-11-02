@@ -23,6 +23,7 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await page.getByRole('button', { name: /^Approve/ }).click()
   await page.getByRole('button', { name: /^Yes, approve/ }).click()
   await expect(page.locator('.head .chip')).toHaveText(/approved/)
+  await expect(page.getByRole('status')).toHaveText(/merged into main as [0-9a-f]{7,}, not pushed/)
   await expect(page.locator('.queue').getByRole('link', { name: /301/ })).toBeVisible()
 })
 
