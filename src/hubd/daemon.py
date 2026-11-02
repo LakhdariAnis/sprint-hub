@@ -151,6 +151,7 @@ class Hub:
                     async for changes in watching:
                         for path in sorted({p for _, p in changes}):
                             await self.reload(Path(path))
+                        # shortcut: a file written while watching restarts shows at its next change.
                         if (now := self._sprint_dirs()) != known:
                             await self._import_projects(now - known)
                             known = now
