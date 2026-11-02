@@ -1,5 +1,6 @@
 <script lang="ts">
   import Header from '../Header.svelte'
+  import NoProjects from '../NoProjects.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
 
@@ -17,6 +18,7 @@
   Questions
 </Header>
 
+<NoProjects />
 <div class="body">
   <section class="pn">
     <div class="ph">Open<span class="n">{hub.questions.length} across projects</span><span class="r"><span class="kb">↵</span> open step</span></div>

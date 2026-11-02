@@ -1,5 +1,6 @@
 <script lang="ts">
   import Header from '../Header.svelte'
+  import NoProjects from '../NoProjects.svelte'
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
@@ -74,9 +75,7 @@
   Good {hello}, Anis
 </Header>
 
-{#if hub.live === false}
-  <p class="dim pad">Cannot reach hubd.</p>
-{/if}
+<NoProjects />
 <div class="body">
   <section class="pn pj" class:f={focus === 'p'} style="grid-column: span 8">
     <div class="ph">
@@ -94,7 +93,7 @@
         <span class="id">{r.todo} todo</span>
       </div>
     {:else}
-      <p class="dim pad">No projects in the vault.</p>
+      <p class="dim pad">No projects yet.</p>
     {/each}
   </section>
 

@@ -80,7 +80,10 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": True, "version": version("hubd"), "demo": demo}
+        body = {"ok": True, "version": version("hubd"), "demo": demo}
+        if hub:  # the app says to run `hubd init` when there is no vault
+            body |= {"vault": str(hub.vault), "vault_found": (hub.vault / "projects").is_dir()}
+        return body
 
     @app.get("/theme")
     def get_theme() -> dict:
