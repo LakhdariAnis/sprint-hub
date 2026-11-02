@@ -358,11 +358,11 @@ def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
         progress = sprint / "progress" / f"{step.step}.md"
         if entry.spec is None:
             entry.spec = archived = next(
-                iter(sorted(sprint.glob(f"archive/sprint-*/{step.step}-*.md"))), None
+                iter(sorted(sprint.glob(f"archive/*/{step.step}-*.md"))), None
             )
         if not progress.is_file():
             progress = next(
-                iter(sorted(sprint.glob(f"archive/sprint-*/progress/{step.step}.md"))), progress
+                iter(sorted(sprint.glob(f"archive/**/progress/{step.step}.md"))), progress
             )
             archived = archived or (progress if progress.is_file() else None)
         if progress.is_file() and step.by == "claude":
