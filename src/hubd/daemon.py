@@ -316,6 +316,11 @@ class Hub:
         due = [d for d in [*self.index.deadlines, *steps] if not d.done and d.date <= end]
         return sorted(due, key=lambda d: (d.date, d.text))
 
+    def command_model(self, entry: StepEntry) -> str | None:
+        """The `model:` of the step's `.claude/commands/sprint-<id>.md`."""
+        repo = self.repo(entry.project)
+        return importer.model_of(repo, entry.step.step) if repo else None
+
     async def start(self, project: str, step_id: str) -> Step:
         async with self.lock:
             entry = self.entry(project, step_id)
@@ -333,7 +338,8 @@ class Hub:
             if resume:
                 model, session = resume.model, resume.session
             else:
-                model, session = new.model or settings.model, str(uuid4())
+                model = new.model or self.command_model(entry) or settings.model
+                session = str(uuid4())
             running = next(
                 (
                     e.step.step
@@ -346,6 +352,8 @@ class Hub:
             )
             if reason := self.runner.refusal(step_id, repo, resume is None, running):
                 raise InvalidTransition(f"step {step_id}: {reason}")
+            if not new.branch and entry.spec:
+                new.branch = f"step/{entry.spec.stem}"
             started = datetime.now().replace(second=0, microsecond=0)  # the file keeps minutes
             new.runs = [*new.runs, Run(started=started, model=model, session=session)]
             before = entry.path.read_bytes()

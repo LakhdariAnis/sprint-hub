@@ -148,3 +148,42 @@ def test_a_manual_step_in_doing_is_not_a_run(hub: Hub) -> None:
     hub.entry("try", "902").step.state = State.doing
     hub.entry("try", "902").step.by = "me"
     assert asyncio.run(hub.start("try", "901")).state == State.doing
+
+
+def test_model_from_the_command_when_the_step_has_none(hub: Hub, spawned: list[list[str]]) -> None:
+    assert asyncio.run(hub.start("try", "901")).runs[-1].model == "haiku"
+    assert spawned[0][spawned[0].index("--model") + 1] == "haiku"
+
+
+def test_the_vault_step_model_wins_over_the_command(hub: Hub, spawned: list[list[str]]) -> None:
+    path = step_file(hub)
+    path.write_text(path.read_text().replace("by: claude", "by: claude\nmodel: opus"))
+    runner = hub.runner
+    hub = Hub(hub.vault, lambda _: runner, Recorder())
+    assert asyncio.run(hub.start("try", "901")).runs[-1].model == "opus"
+    assert spawned[0][spawned[0].index("--model") + 1] == "opus"
+    assert hub.command_model(hub.entry("try", "901")) == "haiku"
+
+
+def test_project_model_when_neither_has_one(hub: Hub, repo: Path) -> None:
+    (repo / ".claude/commands/sprint-901.md").write_text("---\ndescription: x\n---\nGo\n")
+    assert asyncio.run(hub.start("try", "901")).runs[-1].model == "sonnet"
+
+
+def test_missing_branch_comes_from_the_spec_and_is_saved(hub: Hub) -> None:
+    assert asyncio.run(hub.start("try", "901")).branch == "step/901-note"
+    assert "branch: step/901-note" in step_file(hub).read_text()
+
+
+def test_existing_branch_is_kept(hub: Hub) -> None:
+    path = step_file(hub)
+    path.write_text(path.read_text().replace("by: claude", "by: claude\nbranch: step/901-old"))
+    runner = hub.runner
+    hub = Hub(hub.vault, lambda _: runner, Recorder())
+    assert asyncio.run(hub.start("try", "901")).branch == "step/901-old"
+
+
+def test_refused_start_does_not_save_the_branch(hub: Hub, repo: Path, spawned: list) -> None:
+    (repo / ".claude/commands/sprint-901.md").unlink()
+    refused(hub, "sprint-901.md", spawned)
+    assert hub.entry("try", "901").step.branch is None
