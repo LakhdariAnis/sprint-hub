@@ -38,7 +38,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => open(r.id)} onfocus={() => (sel = i)}>
           <span class="ic" style="background: var(--{tile[i % tile.length]})">{initials(r.name)}</span>
-          <span class="nm"><b>{r.name}</b>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
+          <span class="nm"><b>{r.name}</b>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if r.repoMissing}<span class="t2 hint">repo not found: {r.path}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
           <span class="id where">{r.path || 'vault only'}</span>
           <span class="prog"><span class="pbar"><i style="width: {r.total ? (r.approved / r.total) * 100 : 0}%"></i></span><span class="id">{r.approved}/{r.total}</span></span>
           <!-- State colours as everywhere else; a zero steps back. -->

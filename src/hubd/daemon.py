@@ -100,6 +100,10 @@ class Hub:
         settings = self.index.projects.get(project)
         return self.vault / settings.repo if settings and settings.repo else None
 
+    def repo_missing(self, project: str) -> bool:
+        repo = self.repo(project)
+        return repo is not None and not repo.is_dir()
+
     def _sprint_dirs(self) -> set[Path]:
         return {
             s for p in self.index.projects if (r := self.repo(p)) and (s := r / "sprint").is_dir()
@@ -143,13 +147,9 @@ class Hub:
                             await self._import_projects(now - known)
                             known = now
                             break
-                        if self._roots(known) != roots:
-                            if self.vault not in roots and self.vault.is_dir():
-                                async with (
-                                    self.lock
-                                ):  # `hubd init` made the vault: read it, no import
-                                    self._reload_all()
-                                known = self._sprint_dirs()
+                        if (
+                            self._roots(known) != roots
+                        ):  # the vault or projects.toml's folder appeared
                             break
             except OSError:  # a watched folder vanished between the check and the watch
                 known = self._sprint_dirs()
@@ -346,6 +346,8 @@ class Hub:
             repo = self.repo(project)
             if repo is None:
                 raise InvalidTransition(f"project {project}: no repo to run in")
+            if not repo.is_dir():
+                raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
             new = transition(entry.step, Event.start, Actor.daemon)
             # Changes requested: continue the last run's chat, the review comment is the prompt.
             last = new.runs[-1] if entry.step.state == State.changes and new.runs else None

@@ -94,7 +94,10 @@ def create_app(
 
     @app.get("/projects")
     def projects() -> list[dict]:
-        return [{"id": k, **p.model_dump(mode="json")} for k, p in hub.index.projects.items()]
+        return [
+            {"id": k, **p.model_dump(mode="json"), "repo_missing": hub.repo_missing(k)}
+            for k, p in hub.index.projects.items()
+        ]
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
