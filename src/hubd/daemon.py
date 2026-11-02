@@ -485,13 +485,19 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _merge(repo: Path, base: str, branch: str) -> None:
-    """`git merge --no-ff branch`; refuse a dirty repo or wrong branch, abort a conflict."""
+    """`git merge --no-ff branch` into `base`, starting on `base` or on `branch`.
+
+    Any other branch, or tracked changes: refuse. Conflict: abort.
+    """
     head = _git(repo, "branch", "--show-current")
-    if head != base:
-        raise InvalidTransition(f"{repo}: on branch '{head}', not '{base}'; switch to {base} first")
+    if head not in (base, branch):
+        where = f"on branch '{head}'" if head else "not on a branch"
+        raise InvalidTransition(f"{repo}: {where}, not '{base}' or '{branch}'; switch first")
     # Untracked files are not changes; git itself refuses if one would be overwritten.
-    if _git(repo, "status", "--porcelain", "--untracked-files=no"):
-        raise InvalidTransition(f"{repo}: uncommitted changes; commit or stash them first")
+    if changed := _git(repo, "diff", "--name-only", "HEAD").splitlines():
+        raise InvalidTransition(f"{repo}: uncommitted changes in {', '.join(changed)}")
+    if head != base:
+        _git(repo, "switch", "-q", base)
     try:
         _git(repo, "merge", "--no-ff", "--no-edit", branch)
     except InvalidTransition as exc:

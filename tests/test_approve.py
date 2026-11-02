@@ -49,18 +49,64 @@ def test_clean_merge(vault: Path, hub: Hub, repo: Path) -> None:
     assert (repo / "ui.txt").exists()
 
 
-def test_dirty_tree_is_refused(hub: Hub, repo: Path) -> None:
+def repo_state(repo: Path) -> tuple[str, str, str]:
+    """Branch, commit and `git status`: a refusal leaves all three as they were."""
+    return (
+        git(repo, "branch", "--show-current"),
+        git(repo, "rev-parse", "HEAD"),
+        git(repo, "status", "--porcelain"),
+    )
+
+
+def refused(hub: Hub, repo: Path, reason: str) -> None:
+    before = repo_state(repo)
+    with pytest.raises(InvalidTransition, match=reason):
+        approve(hub)
+    assert repo_state(repo) == before
+    assert hub.entry("demo", "103").step.state == State.done
+    assert _load_step(hub.entry("demo", "103").path).state == State.done
+
+
+def test_tracked_changes_are_refused_and_named(hub: Hub, repo: Path) -> None:
     (repo / "notes.txt").write_text("edited\n")
-    with pytest.raises(InvalidTransition, match="uncommitted changes"):
-        approve(hub)
-    assert hub.entry("demo", "103").step.state == State.done
+    refused(hub, repo, "uncommitted changes in notes.txt")
+    assert (repo / "notes.txt").read_text() == "edited\n"
 
 
-def test_not_on_main_is_refused(hub: Hub, repo: Path) -> None:
+def test_staged_changes_are_refused(hub: Hub, repo: Path) -> None:
+    (repo / "notes.txt").write_text("edited\n")
+    git(repo, "add", "notes.txt")
+    refused(hub, repo, "uncommitted changes in notes.txt")
+
+
+def test_tracked_changes_on_the_step_branch_are_refused(hub: Hub, repo: Path) -> None:
     git(repo, "checkout", "-q", "step/103-ui")
-    with pytest.raises(InvalidTransition, match="not 'main'"):
-        approve(hub)
-    assert hub.entry("demo", "103").step.state == State.done
+    (repo / "ui.txt").write_text("edited\n")
+    refused(hub, repo, "uncommitted changes in ui.txt")
+    assert (repo / "ui.txt").read_text() == "edited\n"
+
+
+def test_untracked_files_do_not_block_and_stay(hub: Hub, repo: Path) -> None:
+    (repo / "scratch.txt").write_text("mine\n")
+    assert approve(hub).state == State.approved
+    assert (repo / "scratch.txt").read_text() == "mine\n"
+
+
+def test_other_branch_is_refused_and_named(hub: Hub, repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "other")
+    refused(hub, repo, "on branch 'other'")
+
+
+def test_detached_head_is_refused(hub: Hub, repo: Path) -> None:
+    git(repo, "checkout", "-q", "--detach")
+    refused(hub, repo, "not on a branch")
+
+
+def test_from_the_step_branch_it_switches_to_base(hub: Hub, repo: Path) -> None:
+    git(repo, "checkout", "-q", "step/103-ui")
+    assert approve(hub).state == State.approved
+    assert git(repo, "branch", "--show-current") == "main"
+    assert git(repo, "log", "-1", "--format=%s").startswith("Merge branch 'step/103-ui'")
 
 
 def test_conflict_aborts_and_notifies(
