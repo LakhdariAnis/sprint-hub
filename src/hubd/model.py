@@ -1,5 +1,6 @@
 """Typed models for the vault (docs/HUB-DESIGN.md section 4)."""
 
+import re
 from datetime import date, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -62,6 +63,11 @@ class Run(BaseModel):
     minutes: int | None = None
     tokens: int | None = None
     task: str = "all"
+
+
+def one_line(text: str) -> str:
+    """Pasted lines joined with a space: a review comment is one `comment:` line in the file."""
+    return re.sub(r"\s*[\r\n]+\s*", " ", text).strip()
 
 
 class Review(BaseModel):

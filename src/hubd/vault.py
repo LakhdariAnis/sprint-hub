@@ -18,7 +18,7 @@ from hubd.model import Deadline, Project, Question, Review, Run, Step, Task
 
 _HEADING = re.compile(r"^## (.+?)\s*$")
 # ` # ...` after a value is a YAML-style comment, e.g. `verdict: changes  # approve | changes`.
-# shortcut: a ` #` inside a review comment is cut too, use a real escape if that ever bites.
+# Not on the `comment:` line: a review comment is free text, ` #important` is part of it.
 _COMMENT = re.compile(r"\s+#.*$")
 _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
@@ -109,7 +109,9 @@ def parse_review(lines: list[str]) -> Review:
     """`key: value` lines; an empty value means not set."""
     fields = {}
     for line in lines:
-        key, sep, value = _COMMENT.sub("", line).partition(":")
+        if not line.startswith("comment:"):
+            line = _COMMENT.sub("", line)
+        key, sep, value = line.partition(":")
         if sep and (value := value.strip()):
             fields[key.strip()] = value
     return Review.model_validate(fields)
@@ -284,7 +286,7 @@ def _save_review(lines: list[str], review: Review, eol: str) -> None:
         lines[at:at] = ["", f"## Review{eol}", *fields]
         return
     end = next((i for i in range(heading + 1, len(lines)) if _HEADING.match(lines[i])), len(lines))
-    _set_fields(lines, heading + 1, end, values, eol)
+    _set_fields(lines, heading + 1, end, values, eol, raw={"comment"})
 
 
 def _format(value: object) -> str | None:
@@ -301,9 +303,17 @@ def _format(value: object) -> str | None:
 
 
 def _set_fields(
-    lines: list[str], start: int, end: int, values: dict[str, str | None], eol: str
+    lines: list[str],
+    start: int,
+    end: int,
+    values: dict[str, str | None],
+    eol: str,
+    raw: frozenset[str] | set[str] = frozenset(),
 ) -> None:
-    """Set `key: value` lines in `lines[start:end]` in place; keeps spacing and `# ...` comments."""
+    """Set `key: value` lines in `lines[start:end]` in place; keeps spacing and `# ...` comments.
+
+    A key in `raw` has no trailing comment: its old text after the value is replaced whole.
+    """
     for key, value in values.items():
         for i in range(start, end):
             m = _FIELD.match(lines[i])
@@ -322,7 +332,7 @@ def _set_fields(
             end -= 1
             continue
         rest = m["rest"]
-        comment = c[0] if (c := _COMMENT.search(rest)) else ""
+        comment = c[0] if key not in raw and (c := _COMMENT.search(rest)) else ""
         lead = rest[: len(rest) - len(rest.lstrip())] or " "
         lines[i] = f"{key}:{lead if value else ''}{value}{comment}{m['eol']}"
 
