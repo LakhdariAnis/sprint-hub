@@ -3,13 +3,14 @@ import sys
 
 import uvicorn
 
-from hubd import doctor, install
+from hubd import doctor, install, service
 from hubd.api import HOST, PORT
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="hubd")
-    commands = ["serve", "install-hook", "uninstall-hook", "doctor"]
+    commands = ["serve", "install-hook", "uninstall-hook", "install-service", "uninstall-service"]
+    commands.append("doctor")
     parser.add_argument("command", nargs="?", default="serve", choices=commands)
     parser.add_argument("--demo", action="store_true", help="run on built-in data, FakeRunner")
     args = parser.parse_args()
@@ -18,6 +19,10 @@ def main() -> None:
         sys.exit(install.change(install.with_hook))
     if command == "doctor":
         sys.exit(doctor.main())
+    if command == "install-service":
+        sys.exit(service.install_service())
+    if command == "uninstall-service":
+        sys.exit(service.uninstall_service())
     if command == "uninstall-hook":
         sys.exit(install.change(install.uninstalled))
     if args.demo:
