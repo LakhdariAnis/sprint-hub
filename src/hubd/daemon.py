@@ -23,6 +23,7 @@ from hubd.vault import (
     _load_project,
     _load_step,
     _write_atomic,
+    live_file,
     load_deadlines,
     load_vault,
     parse_questions,
@@ -30,6 +31,7 @@ from hubd.vault import (
     save_step,
     step_tasks,
     tick_task,
+    worktrees,
 )
 
 # shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
@@ -59,6 +61,7 @@ def step_json(entry: StepEntry) -> dict:
         **entry.step.model_dump(mode="json"),
         "tasks": tasks,
         "questions": questions,
+        "run_gone": entry.run_gone,
     }
 
 
@@ -82,6 +85,10 @@ class Hub:
         self.runner = runner(self.run_ended)
         self.notifier = notifier
         self.lock = asyncio.Lock()
+        for entry in self.index.steps:  # a hook sent while hubd was down never arrived
+            if entry.step.state == State.doing and entry.step.by == "claude":
+                runs = entry.step.runs
+                entry.run_gone = not (runs and self.runner.running(runs[-1].session))
 
     def emit(self, event: dict) -> None:
         for queue in self.queues:
@@ -105,9 +112,10 @@ class Hub:
         return repo is not None and not repo.is_dir()
 
     def _sprint_dirs(self) -> set[Path]:
-        return {
-            s for p in self.index.projects if (r := self.repo(p)) and (s := r / "sprint").is_dir()
-        }
+        """Every `sprint/` to watch: each repo's and those of its worktrees."""
+        repos = [r for p in self.index.projects if (r := self.repo(p))]
+        trees = [t for r in repos for t in (r, *worktrees(r))]
+        return {s for t in trees if (s := t / "sprint").is_dir()}
 
     def _watchable(self, _: object, path: str) -> bool:
         return path.endswith(".md") or Path(path) == self.projects_file  # `.md` skips `.tmp` too
@@ -115,7 +123,7 @@ class Hub:
     async def watch(self, stop: asyncio.Event) -> None:
         """Reload each changed file of the vault, the repos' `sprint/` and `projects.toml`.
 
-        Runs until `stop`. When a project's `sprint/` appears or goes, watching restarts.
+        Runs until `stop`. When a repo's or worktree's `sprint/` appears or goes, watching restarts.
         """
         known = self._sprint_dirs()
         loaded = self.vault.is_dir()
@@ -143,6 +151,7 @@ class Hub:
                     async for changes in watching:
                         for path in sorted({p for _, p in changes}):
                             await self.reload(Path(path))
+                        # shortcut: a file written while watching restarts shows at its next change.
                         if (now := self._sprint_dirs()) != known:
                             await self._import_projects(now - known)
                             known = now
@@ -161,7 +170,10 @@ class Hub:
         return [p for p in (self.vault, *sprints, config) if p and p.is_dir()]
 
     async def _import_projects(self, sprints: set[Path]) -> None:
-        """Import the projects whose `sprint/` just appeared: its specs may be there already."""
+        """Import the projects whose `sprint/` just appeared: its specs may be there already.
+
+        Always reads the vault again: a worktree's `sprint/` has no specs but may hold a checklist.
+        """
         async with self.lock:
             for project, settings in self.index.projects.items():
                 repo = self.repo(project)
@@ -192,7 +204,11 @@ class Hub:
 
     def _reload_all(self) -> None:
         # shortcut: the whole vault is read again; fine for a few projects.
+        old = {e.path: e for e in self.index.steps}
         self.index = load_vault(self.vault)
+        for entry in self.index.steps:
+            if was := old.get(entry.path):
+                entry.seen, entry.run_gone = was.seen, was.run_gone
         self.emit({"type": "reload"})
 
     async def _sync_projects(self) -> None:
@@ -266,7 +282,7 @@ class Hub:
             return
         entry = _join(project, path, step, self.repo(project))
         if old:
-            entry.seen = old.seen
+            entry.seen, entry.run_gone = old.seen, old.run_gone
         self.index.steps.append(entry)
         self.index.steps.sort(key=lambda e: (e.project, e.path))
         if old is None or old.step != step or old.tasks != entry.tasks:
@@ -275,17 +291,20 @@ class Hub:
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
             repo = self.repo(entry.project)
-            if repo is None:
+            if repo is None or path.name != f"{entry.step.step}.md":
                 continue
-            if path == repo / "sprint" / "questions" / f"{entry.step.step}.md":
-                questions = parse_questions(path.read_text()) if path.exists() else []
+            trees = (repo, *worktrees(repo))
+            if path.parent in [t / "sprint" / "questions" for t in trees]:
+                file = live_file(repo, "questions", entry.step.step)
+                questions = parse_questions(file.read_text()) if file else []
                 if questions != entry.questions:
                     entry.questions = questions
                     self.emit({"type": "tasks", **step_json(entry)})
             if entry.step.by == "me":
                 continue  # a `by: me` checklist is in the step file, reloaded with it
-            if path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
-                tasks = parse_tasks(path.read_text()) if path.exists() else []
+            if path.parent in [t / "sprint" / "progress" for t in trees]:
+                file = live_file(repo, "progress", entry.step.step)
+                tasks = parse_tasks(file.read_text()) if file else []
                 if tasks != entry.tasks:
                     before, now = {t.text: t.state for t in entry.tasks}, datetime.now()
                     entry.seen = {
@@ -382,6 +401,7 @@ class Hub:
             before = entry.path.read_bytes()
             save_step(entry.path, new)
             old, entry.step = entry.step, new
+            entry.run_gone = False
             try:
                 if resume:
                     await self.runner.resume(new, session, repo, comment)
@@ -432,12 +452,26 @@ class Hub:
                 raise NotFound(f"no run {session_id} for step {step_id}")
             if entry.step.runs[-1].session != session_id:
                 raise InvalidTransition(f"step {step_id}: {session_id} is not the latest run")
-            new = transition(entry.step, Event.run_ended, Actor.daemon)
-            save_step(entry.path, new)
-            entry.step = new
-            self.emit({"type": "step", **step_json(entry)})
+            if entry.step.state != State.doing:
+                return entry.step  # a late hook: `f` already ended this run
+            new = self._end_run(entry)
             self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
             return new
+
+    async def finish(self, project: str, step_id: str) -> Step:
+        """End a run from the app, for a run whose hook never arrived. Same move as the hook."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by == "me":
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
+            return self._end_run(entry)
+
+    def _end_run(self, entry: StepEntry) -> Step:
+        new = transition(entry.step, Event.run_ended, Actor.daemon)
+        save_step(entry.path, new)
+        entry.step = new
+        self.emit({"type": "step", **step_json(entry)})
+        return new
 
     async def approve(self, project: str, step_id: str) -> Step:
         """Merge the step branch into main (locally, never pushed), then mark it approved."""

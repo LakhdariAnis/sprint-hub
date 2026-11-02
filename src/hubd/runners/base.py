@@ -21,6 +21,10 @@ class AgentRunner(Protocol):
         """
         ...
 
+    def running(self, session_id: str) -> bool:
+        """Is this session alive right now? Asked when hubd starts."""
+        ...
+
     async def start(
         self, step: Step, session_id: str, model: str, cwd: Path, prompt: str
     ) -> None: ...

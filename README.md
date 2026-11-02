@@ -14,7 +14,7 @@ Needs `uv` and Node 24. No Claude, Omarchy or your own projects needed: the demo
     uv run hubd --demo
 
 Open http://127.0.0.1:8765/. Keys: `1 2 3 4` switch screens, `j`/`k` (or arrows) walk a list, `h`/`l` move between
-columns, `Enter` opens, `Esc` goes back, `b` hides the sidebar, `s` starts a step (Step screen), `a` approves and `c`
+columns, `Enter` opens, `Esc` goes back, `b` hides the sidebar, `s` starts a step and `f` finishes a run whose end never arrived (Step screen), `a` approves and `c`
 requests changes (Review), `?` shows all keys. A project opens on the step that needs work, a step on its current task.
 
 On your own vault (`~/Hub`, or `HUB_VAULT`), list your projects in `~/.config/sprint-hub/projects.toml`:

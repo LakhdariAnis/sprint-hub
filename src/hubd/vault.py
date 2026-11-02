@@ -52,6 +52,8 @@ class StepEntry:
     questions: list[Question] = field(default_factory=list)
     # When hubd saw each task (by text) reach its state; only changes seen while it runs.
     seen: dict[str, datetime | None] = field(default_factory=dict)
+    # `doing`, but hubd found no live session for it when it started: `f` gets it out.
+    run_gone: bool = False
 
 
 @dataclass
@@ -350,6 +352,29 @@ def sprint_of(step_id: str) -> int | None:
     return int(digits[:-2]) if len(digits) > 2 else None
 
 
+def worktrees(repo: Path) -> list[Path]:
+    """The linked worktrees of `repo` that are on disk; the same files `git worktree list` reads.
+
+    No git process: the watcher asks every second, per project (gitrepository-layout(5)).
+    shortcut: a repo that is itself a linked worktree lists none, read its common dir if needed.
+    """
+    found = []
+    for gitdir in (repo / ".git" / "worktrees").glob("*/gitdir"):
+        try:
+            tree = (gitdir.parent / gitdir.read_text().strip()).parent  # the path may be relative
+        except OSError:
+            continue  # removed just now
+        if tree.is_dir():
+            found.append(tree)
+    return sorted(found)
+
+
+def live_file(repo: Path, folder: str, step_id: str) -> Path | None:
+    """`sprint/<folder>/<id>.md` of the repo or one of its worktrees: the newest file wins."""
+    paths = [d / "sprint" / folder / f"{step_id}.md" for d in (repo, *worktrees(repo))]
+    return max((p for p in paths if p.is_file()), key=lambda p: p.stat().st_mtime, default=None)
+
+
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
     archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
@@ -358,20 +383,17 @@ def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     if repo:
         sprint = repo / "sprint"
         entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
-        progress = sprint / "progress" / f"{step.step}.md"
+        progress = live_file(repo, "progress", step.step)
         if entry.spec is None:
             entry.spec = archived = next(
                 iter(sorted(sprint.glob(f"archive/*/{step.step}-*.md"))), None
             )
-        if not progress.is_file():
-            progress = next(
-                iter(sorted(sprint.glob(f"archive/**/progress/{step.step}.md"))), progress
-            )
-            archived = archived or (progress if progress.is_file() else None)
-        if progress.is_file() and step.by == "claude":
+        if progress is None:
+            progress = next(iter(sorted(sprint.glob(f"archive/**/progress/{step.step}.md"))), None)
+            archived = archived or progress
+        if progress and step.by == "claude":
             entry.tasks = parse_tasks(progress.read_text())
-        questions = repo / "sprint" / "questions" / f"{step.step}.md"
-        if questions.is_file():
+        if questions := live_file(repo, "questions", step.step):
             entry.questions = parse_questions(questions.read_text())
     # Derived here, never in `_load_step`, so a saved step cannot write it back.
     step.sprint = step.sprint or _archive_sprint(archived) or sprint_of(step.step)

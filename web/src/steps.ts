@@ -19,6 +19,8 @@ export type Step = {
   spec?: string | null
   path?: string
   command_model?: string | null
+  // `doing`, but hubd found no live session when it started.
+  run_gone?: boolean
 }
 
 // API order is by file name, which is step order.
@@ -40,6 +42,7 @@ async function post(project: string, id: string, move: string, body?: object): P
 }
 
 export const startStep = (project: string, id: string) => post(project, id, 'start')
+export const finishStep = (project: string, id: string) => post(project, id, 'finish')
 export const approveStep = (project: string, id: string) => post(project, id, 'approve')
 export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
 export const requestChanges = (project: string, id: string, comment: string) => post(project, id, 'changes', { comment })
