@@ -439,7 +439,7 @@ for (const [w, h] of [[743, 730], [960, 1080]]) {
   })
 }
 
-const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions']
+const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions', 'settings']
 for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
   for (const rail of [false, true]) {
     test(`every screen at ${w}x${h}${rail ? ' rail' : ''}: no overlap, no row cut, no page scroll`, async ({ page }) => {
