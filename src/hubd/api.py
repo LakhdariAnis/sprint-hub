@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from hubd import reminders
-from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
+from hubd.daemon import Hub, MergeConflict, NotFound, step_json
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -20,6 +20,7 @@ from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
 from hubd.theme import watch as watch_theme
+from hubd.vault import vault_path
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
 PORT = 8765
