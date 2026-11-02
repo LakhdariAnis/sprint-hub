@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from hubd.api import serve_app
 from hubd.settings import (
     Current,
     Settings,
@@ -78,3 +80,10 @@ def test_save_round_trip(tmp_path: Path) -> None:
     save_settings(path, new)
     assert load_settings(path) == new and not has_comments(path)
     assert [p.name for p in tmp_path.iterdir()] == ["hub.toml"]
+
+
+def test_hubd_starts_on_a_broken_hub_toml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "hub.toml").write_text("broken = [\n")
+    monkeypatch.setenv("HUB_VAULT", str(tmp_path))
+    client = TestClient(serve_app())
+    assert client.get("/health").json()["ok"] is True

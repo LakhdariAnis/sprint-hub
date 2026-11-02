@@ -17,7 +17,7 @@ from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
-from hubd.settings import load_settings
+from hubd.settings import Current, Settings, load_current
 from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
@@ -45,9 +45,13 @@ def create_app(
     demo: bool = False,
     theme: ThemeSource | None = None,
     reminder_hour: int | None = None,
+    current: Current | None = None,
 ) -> FastAPI:
     """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo)."""
     theme = theme or FakeTheme()
+    # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
+    current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
+    hour = [reminder_hour]
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -60,7 +64,7 @@ def create_app(
             tasks.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
         if reminder_hour is not None:
             path = reminders.state_path()
-            tasks.append(asyncio.create_task(reminders.loop(hub, path, reminder_hour, stop)))
+            tasks.append(asyncio.create_task(reminders.loop(hub, path, lambda: hour[0], stop)))
         yield
         stop.set()
         await asyncio.gather(*tasks)
@@ -208,9 +212,16 @@ def _relative(path: Path, root: Path) -> Path:
 def serve_app() -> FastAPI:
     """`hubd serve`: the real vault, Claude runner, notify-send and Omarchy theme."""
     vault = vault_path()
-    settings = load_settings(vault / "hub.toml")
+    current = load_current(
+        vault / "hub.toml"
+    )  # a broken file: defaults, the Settings screen says why
     url = f"http://{HOST}:{PORT}"
     hub = Hub(
-        vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend(), projects=PROJECTS
+        vault,
+        lambda _: ClaudeCodeRunner(current.settings.terminal, url),
+        NotifySend(),
+        projects=PROJECTS,
     )
-    return create_app(hub, theme=OmarchyTheme(), reminder_hour=settings.reminder_hour)
+    return create_app(
+        hub, theme=OmarchyTheme(), reminder_hour=current.settings.reminder_hour, current=current
+    )
