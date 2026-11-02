@@ -252,7 +252,20 @@ def save_step(path: Path, step: Step) -> None:
 
 
 def _save_runs(lines: list[str], old: list[Run], new: list[Run], eol: str) -> None:
-    """Append the runs in `new` after `old`; existing run lines are never rewritten."""
+    """Append the runs in `new` after `old`, or set the end of the latest run.
+
+    Any other change to an existing run line is refused.
+    """
+    if len(new) == len(old) and old and new[:-1] == old[:-1]:
+        last, was = new[-1], old[-1]
+        if last.model_copy(update={"minutes": was.minutes}) == was:
+            heading = _find_heading(lines, "Runs")
+            end = next(
+                (i for i in range(heading + 1, len(lines)) if _HEADING.match(lines[i])), len(lines)
+            )
+            at = max(i for i in range(heading + 1, end) if lines[i].startswith("- "))
+            lines[at] = format_run(last) + eol
+            return
     if new[: len(old)] != old:
         raise ValueError("runs can only be appended")
     added = [format_run(run) + eol for run in new[len(old) :]]

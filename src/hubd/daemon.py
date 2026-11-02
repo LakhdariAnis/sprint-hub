@@ -479,10 +479,16 @@ class Hub:
             entry = self.entry(project, step_id)
             if entry.step.by == "me":
                 raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
-            return self._end_run(entry)
+            runs = entry.step.runs
+            # A session already gone ended at some unknown time: no end, the run counts 0.
+            return self._end_run(entry, bool(runs) and self.runner.running(runs[-1].session))
 
-    def _end_run(self, entry: StepEntry) -> Step:
+    def _end_run(self, entry: StepEntry, ended_now: bool = True) -> Step:
         new = transition(entry.step, Event.run_ended, Actor.daemon)
+        if ended_now and new.runs and new.runs[-1].minutes is None:
+            last = new.runs[-1]
+            minutes = max((datetime.now() - last.started) // timedelta(minutes=1), 0)
+            new.runs = [*new.runs[:-1], last.model_copy(update={"minutes": minutes})]
         save_step(entry.path, new)
         entry.step = new
         self.emit({"type": "step", **step_json(entry)})
