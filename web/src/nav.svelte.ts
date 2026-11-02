@@ -1,6 +1,7 @@
 import { tick } from 'svelte'
 import { release } from './keys.svelte'
 import { loadProjects } from './projects'
+import { loadSettings, sx } from './settings.svelte'
 import { router, type Route } from './route.svelte'
 import { loadStep, loadSteps, needsWork } from './steps'
 import { key, lists, put, steps } from './store.svelte'
@@ -27,6 +28,10 @@ function data(r: Route): Promise<unknown> {
   if (r.name === 'step') {
     const s = steps[key(r.project, r.id)]
     return cached(s && 'spec' in s, () => loadStep(r.project, r.id).then((d) => put(r.project, d)))
+  }
+  if (r.name === 'settings') {
+    const projects = () => cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
+    return cached(sx.settings && sx.doctor, () => Promise.all([loadSettings(), projects()]))
   }
   // The review queue spans every project. j/k there only change the URL's selection.
   if (r.name === 'review') {

@@ -23,10 +23,11 @@
     project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['Esc', 'back']],
     step: [...when(canStart, [['s', 'start']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
+    settings: [['j k', 'move'], ['↵', 'edit / copy']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
   // Last = first to drop when the line is full: tab keys go before b and ?.
-  const common: [string, string][] = [['b', 'sidebar'], ['?', 'help'], ['1 2 3 4', 'tab']]
+  const common: [string, string][] = [['b', 'sidebar'], ['?', 'help'], ['1 … 5', 'tab']]
   // Sidebar open and the content narrower than ~800 px: say what gives room.
   let width = $state(1920)
   const tight = $derived(width < 1036 && !keys.rail)

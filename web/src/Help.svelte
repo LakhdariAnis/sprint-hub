@@ -9,7 +9,8 @@
     ['g p', 'go to Projects'],
     ['g r', 'go to Review'],
     ['g q', 'go to Questions'],
-    ['1 2 3 4', 'Projects, Today, Review, Questions (also Ctrl+1 2 3 4 in the app window)'],
+    ['g s', 'go to Settings'],
+    ['1 … 5', 'Projects, Today, Review, Questions, Settings (also Ctrl+1 … 5 in the app window)'],
     ['6 … 9', 'the steps under OPEN in the sidebar'],
     ['b', 'hide / show the sidebar labels'],
     ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
@@ -18,6 +19,7 @@
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve; press a or y again to merge (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
+    ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['?', 'show / hide this help'],
   ]

@@ -8,6 +8,7 @@
   import Questions from './screens/Questions.svelte'
   import Projects from './screens/Projects.svelte'
   import Step from './screens/Step.svelte'
+  import Settings from './screens/Settings.svelte'
   import Today from './screens/Today.svelte'
   import Errors from './Errors.svelte'
   import Help from './Help.svelte'
@@ -34,6 +35,7 @@
       {#if !r}<!-- first load: nothing to keep on show -->
       {:else if r.name === 'today'}<Today />
       {:else if r.name === 'questions'}<Questions />
+      {:else if r.name === 'settings'}<Settings />
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
