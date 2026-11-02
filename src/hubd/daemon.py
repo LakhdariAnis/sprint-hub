@@ -334,6 +334,8 @@ class Hub:
                 model, session = resume.model, resume.session
             else:
                 model, session = new.model or settings.model, str(uuid4())
+            if reason := self.runner.refusal(step_id, repo, resume is None):
+                raise InvalidTransition(f"step {step_id}: {reason}")
             started = datetime.now().replace(second=0, microsecond=0)  # the file keeps minutes
             new.runs = [*new.runs, Run(started=started, model=model, session=session)]
             before = entry.path.read_bytes()

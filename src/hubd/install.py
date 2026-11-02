@@ -24,6 +24,21 @@ def installed(settings: dict) -> bool:
     return any(is_ours(h) for g in groups for h in g.get("hooks", []))
 
 
+def hook_problem(path: Path = SETTINGS) -> str | None:
+    """Why this hubd will not hear a run end; None when the hook is installed with this python."""
+    try:
+        data = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, ValueError) as exc:
+        return f"cannot read {path}: {exc}"
+    groups = data.get("hooks", {}).get(EVENT, [])
+    commands = [h.get("command") for g in groups for h in g.get("hooks", []) if is_ours(h)]
+    if COMMAND in commands:
+        return None
+    if commands:
+        return f"{EVENT} hook points to another python: run hubd install-hook"
+    return f"{EVENT} hook missing: run hubd install-hook"
+
+
 def with_hook(settings: dict) -> dict:
     new = uninstalled(settings)  # replaces an old entry, e.g. from another venv
     group = {"hooks": [{"type": "command", "command": COMMAND}]}

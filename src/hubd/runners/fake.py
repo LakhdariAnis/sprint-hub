@@ -16,6 +16,9 @@ class FakeRunner:
         self.tasks: dict[str, asyncio.Task[None]] = {}  # keeps runs alive; tests await them
         self.resumed: list[tuple[str, str]] = []  # (session_id, prompt) of each resume
 
+    def refusal(self, step_id: str, cwd: Path, fresh: bool) -> None:
+        return None
+
     async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
