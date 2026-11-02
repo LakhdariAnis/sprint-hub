@@ -137,3 +137,14 @@ def test_terminal_handing_off_to_a_running_instance_is_fine(
 ) -> None:
     monkeypatch.setattr(subprocess, "Popen", lambda *_, **__: Launched(0))
     assert asyncio.run(hub.start("try", "901")).state == State.doing
+
+
+def test_another_run_in_the_same_repo(hub: Hub, spawned: list[list[str]]) -> None:
+    asyncio.run(hub.start("try", "902"))
+    refused(hub, "step 902 is running in this repo", spawned, spawns=1)
+
+
+def test_a_manual_step_in_doing_is_not_a_run(hub: Hub) -> None:
+    hub.entry("try", "902").step.state = State.doing
+    hub.entry("try", "902").step.by = "me"
+    assert asyncio.run(hub.start("try", "901")).state == State.doing

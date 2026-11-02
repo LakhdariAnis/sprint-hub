@@ -334,7 +334,17 @@ class Hub:
                 model, session = resume.model, resume.session
             else:
                 model, session = new.model or settings.model, str(uuid4())
-            if reason := self.runner.refusal(step_id, repo, resume is None):
+            running = next(
+                (
+                    e.step.step
+                    for e in self.index.steps
+                    if e.step.state == State.doing
+                    and e.step.by == "claude"
+                    and self.repo(e.project) == repo
+                ),
+                None,
+            )
+            if reason := self.runner.refusal(step_id, repo, resume is None, running):
                 raise InvalidTransition(f"step {step_id}: {reason}")
             started = datetime.now().replace(second=0, microsecond=0)  # the file keeps minutes
             new.runs = [*new.runs, Run(started=started, model=model, session=session)]
