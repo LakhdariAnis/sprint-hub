@@ -194,7 +194,7 @@
           {#if s.spec}
             <Spec text={s.spec} />
           {:else}
-            <p class="dim">No spec in the repo.</p>
+            <p class="dim">Spec missing: no spec file for this step in the repo.</p>
           {/if}
         </div>
       {/if}

@@ -24,6 +24,7 @@ _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
 _QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.*))?$", re.M)
 _STEP_DIGITS = re.compile(r"^\d+")
+_ARCHIVE_SPRINT = re.compile(r"sprint-(\d+)")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 # `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
@@ -157,8 +158,7 @@ def load_vault(path: Path) -> Index:
     index = Index()
     index.deadlines, index.errors = load_deadlines(path / "deadlines.md")
     if not (path / "projects").is_dir():
-        index.errors.append(FileError(path / "projects", None, "no projects folder"))
-        return index
+        return index  # first run, not a broken file: the app says to run `hubd init`
     for project_dir in sorted(p for p in (path / "projects").iterdir() if p.is_dir()):
         project = _guard(index, project_dir / "project.md", _load_project)
         if project:
@@ -340,6 +340,10 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
+def vault_path() -> Path:
+    return Path(os.environ.get("HUB_VAULT", Path.home() / "Hub"))
+
+
 def sprint_of(step_id: str) -> int | None:
     """Sprint of a step id: the digits before the last two (`213a` -> 2); None under 3 digits."""
     digits = m[0] if (m := _STEP_DIGITS.match(step_id)) else ""
@@ -357,11 +361,11 @@ def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
         progress = sprint / "progress" / f"{step.step}.md"
         if entry.spec is None:
             entry.spec = archived = next(
-                iter(sorted(sprint.glob(f"archive/sprint-*/{step.step}-*.md"))), None
+                iter(sorted(sprint.glob(f"archive/*/{step.step}-*.md"))), None
             )
         if not progress.is_file():
             progress = next(
-                iter(sorted(sprint.glob(f"archive/sprint-*/progress/{step.step}.md"))), progress
+                iter(sorted(sprint.glob(f"archive/**/progress/{step.step}.md"))), progress
             )
             archived = archived or (progress if progress.is_file() else None)
         if progress.is_file() and step.by == "claude":
@@ -378,8 +382,11 @@ def _archive_sprint(path: Path | None) -> int | None:
     """`.../archive/sprint-2/203-x.md` or `.../sprint-2/progress/203.md` -> 2."""
     if path is None:
         return None
-    folder = next(p for p in path.parents if p.name.startswith("sprint-"))
-    return int(folder.name.removeprefix("sprint-"))
+    for parent in path.parents:
+        # Only under `archive/`: `archive/steps/` has no sprint, and the repo may be `sprint-hub`.
+        if parent.parent.name == "archive" and (m := _ARCHIVE_SPRINT.fullmatch(parent.name)):
+            return int(m[1])
+    return None
 
 
 def _guard[T](index: Index, path: Path, load: Callable[[Path], T]) -> T | None:

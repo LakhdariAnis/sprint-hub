@@ -1,3 +1,4 @@
+import shutil
 import time
 from pathlib import Path
 
@@ -41,9 +42,9 @@ def test_run_ended_from_the_hook(hub: Hub) -> None:
     assert client.post("/runs/ended", json={"session_id": "x"}).status_code == 422
 
 
-def test_missing_vault_is_an_error_not_a_crash(tmp_path: Path) -> None:
+def test_missing_vault_is_empty_not_broken(tmp_path: Path) -> None:
     index = load_vault(tmp_path / "nothing")
-    assert [e.message for e in index.errors] == ["no projects folder"]
+    assert (index.projects, index.steps, index.errors) == ({}, [], [])
 
 
 def test_tick_manual_task(vault: Path, hub: Hub) -> None:
@@ -72,3 +73,17 @@ def test_tick_and_start_errors(hub: Hub) -> None:
     assert client.post("/steps/demo/101/tasks/9/tick").status_code == 404
     assert client.post("/steps/demo/101/tasks/x/tick").status_code == 422
     assert client.post("/steps/demo/999/tasks/0/tick").status_code == 404
+
+
+def test_start_refuses_a_repo_that_is_gone(vault: Path, hub: Hub) -> None:
+    client = TestClient(create_app(hub))
+    assert [p["repo_missing"] for p in client.get("/projects").json() if p["id"] == "demo"] == [
+        False
+    ]
+    before = hub.entry("demo", "104").step.state
+    shutil.rmtree(vault / "demo-repo")
+    assert client.get("/projects").json()[1]["repo_missing"] is True
+    response = client.post("/steps/demo/104/start")
+    assert response.status_code == 409
+    assert "does not exist" in response.json()["detail"]
+    assert hub.entry("demo", "104").step.state == before

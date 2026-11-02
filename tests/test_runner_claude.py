@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from hubd.model import Step
+from hubd.runners import claude
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import Settings
 
@@ -13,10 +14,23 @@ SESSION = "550e8400-e29b-41d4-a716-446655440000"
 URL = "http://127.0.0.1:8765"
 
 
+class Launched:
+    """A Popen whose terminal is still open."""
+
+    def poll(self) -> None:
+        return None
+
+
 @pytest.fixture
 def spawned(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     calls: list[dict] = []
-    monkeypatch.setattr(subprocess, "Popen", lambda argv, **kw: calls.append({"argv": argv, **kw}))
+
+    def popen(argv: list[str], **kw: object) -> Launched:
+        calls.append({"argv": argv, **kw})
+        return Launched()
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(claude, "GRACE", 0)
     return calls
 
 

@@ -13,8 +13,22 @@ def test_projects(hub: Hub) -> None:
     response = TestClient(create_app(hub)).get("/projects")
     assert response.status_code == 200
     assert response.json() == [
-        {"id": "broken", "name": "broken", "repo": None, "model": "sonnet", "merge": "manual"},
-        {"id": "demo", "name": "demo", "repo": "demo-repo", "model": "sonnet", "merge": "manual"},
+        {
+            "id": "broken",
+            "name": "broken",
+            "repo": None,
+            "model": "sonnet",
+            "merge": "manual",
+            "repo_missing": False,
+        },
+        {
+            "id": "demo",
+            "name": "demo",
+            "repo": "demo-repo",
+            "model": "sonnet",
+            "merge": "manual",
+            "repo_missing": False,
+        },
     ]
 
 

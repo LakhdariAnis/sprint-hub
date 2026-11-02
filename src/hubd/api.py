@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
@@ -12,7 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from hubd import reminders
-from hubd.daemon import Hub, MergeConflict, NotFound, step_json, vault_path
+from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
+from hubd.init import PROJECTS
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -20,9 +22,10 @@ from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
 from hubd.theme import watch as watch_theme
+from hubd.vault import vault_path
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
-PORT = 8765
+PORT = int(os.environ.get("HUBD_PORT", 8765))  # tests run a second hubd on another port
 # shortcut: the built app is found next to the source, so it only runs from a source checkout.
 WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
 
@@ -78,7 +81,10 @@ def create_app(
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": True, "version": version("hubd"), "demo": demo}
+        body = {"ok": True, "version": version("hubd"), "demo": demo}
+        if hub:  # the app says to run `hubd init` when there is no vault
+            body |= {"vault": str(hub.vault), "vault_found": (hub.vault / "projects").is_dir()}
+        return body
 
     @app.get("/theme")
     def get_theme() -> dict:
@@ -89,7 +95,10 @@ def create_app(
 
     @app.get("/projects")
     def projects() -> list[dict]:
-        return [{"id": k, **p.model_dump(mode="json")} for k, p in hub.index.projects.items()]
+        return [
+            {"id": k, **p.model_dump(mode="json"), "repo_missing": hub.repo_missing(k)}
+            for k, p in hub.index.projects.items()
+        ]
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
@@ -100,8 +109,7 @@ def create_app(
     @app.get("/steps/{project}/{step_id}")
     def step(project: str, step_id: str) -> dict:
         entry = hub.entry(project, step_id)
-        spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
-        return {**step_json(entry), "spec": spec, "path": str(entry.path)}
+        return {**step_json(entry), "spec": spec_text(entry), "path": str(entry.path)}
 
     @app.get("/steps/{project}/{step_id}/diffstat")
     async def diffstat(project: str, step_id: str) -> dict:
@@ -191,5 +199,7 @@ def serve_app() -> FastAPI:
     vault = vault_path()
     settings = load_settings(vault / "hub.toml")
     url = f"http://{HOST}:{PORT}"
-    hub = Hub(vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend())
+    hub = Hub(
+        vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend(), projects=PROJECTS
+    )
     return create_app(hub, theme=OmarchyTheme(), reminder_hour=settings.reminder_hour)

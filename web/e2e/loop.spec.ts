@@ -419,6 +419,25 @@ const layoutFaults = (page: import('@playwright/test').Page) =>
     return bad
   }, ROWS)
 
+// Step 501: a real name as `hubd init` writes it, in the narrowest tiles.
+for (const [w, h] of [[743, 730], [960, 1080]]) {
+  test(`Projects at ${w}x${h}: a long name reads in full, every column fits`, async ({ page }) => {
+    await page.route('**/projects', async (route) => {
+      const rows = await (await route.fetch()).json()
+      rows[0].name = 'tinyml-bearing-fault'
+      await route.fulfill({ json: rows })
+    })
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/projects')
+    const name = page.locator('.nm b', { hasText: 'tinyml-bearing-fault' })
+    await expect(name).toBeVisible()
+    expect(await name.evaluate((e) => e.getBoundingClientRect().width > 60 && e.scrollWidth <= e.clientWidth)).toBe(true)
+    for (const sel of ['.lh', '.row']) {
+      expect(await page.locator(sel).first().evaluate((e) => e.scrollWidth <= e.clientWidth), sel).toBe(true)
+    }
+  })
+}
+
 const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions']
 for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
   for (const rail of [false, true]) {

@@ -44,6 +44,9 @@
 <svelte:window bind:innerWidth={width} />
 <footer class="keys">
   <span class="md">{mode}</span>
+  {#if hub.errors.length}
+    <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {hub.errors.length} broken {hub.errors.length === 1 ? 'file' : 'files'}</button>
+  {/if}
   {#each list as [key, text]}
     <span>{#each key.split(' ') as k}<span class="kb">{k}</span> {/each}{text}</span>
   {/each}
@@ -60,4 +63,7 @@
   .keys > span { height: 31px; display: flex; align-items: center; gap: 4px; }
   .keys > .md { height: auto; align-self: center; }
   .fc { margin-left: auto; }
+  /* Right after the mode: the groups that do not fit drop from the end, this one stays. */
+  .keys > .er { height: auto; align-self: center; padding: 0 8px; border: 1px solid var(--y); border-radius: 3px; background: none; font: inherit; line-height: 16px; color: var(--y); cursor: pointer; }
+  .keys > .er:hover { background: var(--lt); }
 </style>

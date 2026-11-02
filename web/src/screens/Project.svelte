@@ -16,6 +16,7 @@
   let { project }: { project: string } = $props()
   // Loaded before the screen shows (nav.svelte.ts), then live from the store: no keys means that load failed.
   const ids = $derived(lists.steps[project])
+  const gone = $derived(lists.projects?.find((p) => p.id === project && p.repoMissing))
   const steps = $derived((ids ?? []).map((k) => store[k]))
 
   // Hours = time of the recorded runs; the vault has no planned hours.
@@ -108,6 +109,9 @@
   {project}
 </Header>
 
+{#if gone}
+  <p class="gone">The repo {gone.path} does not exist. Steps cannot start until it is back or <span class="mono">repo:</span> is fixed in the project file.</p>
+{/if}
 {#if !ids}
   <p class="dim pad">Cannot load {project}. Is hubd running?</p>
 {:else}
@@ -182,6 +186,7 @@
 </div>
 
 <style>
+  .gone { flex: none; margin: 0; padding: 8px 28px; color: var(--y); overflow-wrap: anywhere; }
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; margin: 0; }
   /* Fixed fractions: the columns keep their width whatever is selected. */

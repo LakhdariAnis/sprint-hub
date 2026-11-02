@@ -366,3 +366,27 @@ def test_archived_spec_checklist_and_sprint(tmp_path: Path) -> None:
     assert entries["05"].step.sprint == 4  # frontmatter wins
     assert entries["02"].spec == tmp_path / "r" / "sprint" / "02-live.md"
     assert entries["02"].tasks == [] and entries["02"].step.sprint is None
+
+
+def test_archive_steps_layout_finds_spec_and_checklist(tmp_path: Path) -> None:
+    """BenWhispers: `sprint/archive/steps/` and `sprint/archive/progress/`, no `sprint-<n>/`."""
+    (tmp_path / "projects" / "p" / "steps").mkdir(parents=True)
+    (tmp_path / "projects" / "p" / "project.md").write_text(
+        "---\nname: p\nrepo: sprint-hub\nmodel: sonnet\nmerge: manual\n---\n"
+    )
+    (tmp_path / "projects" / "p" / "steps" / "a401.md").write_text(
+        "---\nstep: a401\ntitle: t\nstate: approved\n---\n"
+    )
+    archive = tmp_path / "sprint-hub" / "sprint" / "archive"
+    (archive / "steps").mkdir(parents=True)
+    (archive / "progress").mkdir()
+    (archive / "steps" / "a401-x.md").write_text("# spec\n")
+    (archive / "progress" / "a401.md").write_text("- [x] done\n")
+
+    index = load_vault(tmp_path)
+
+    assert index.errors == []
+    entry = index.steps[0]
+    assert entry.spec == archive / "steps" / "a401-x.md"
+    assert [t.text for t in entry.tasks] == ["done"]
+    assert entry.step.sprint is None

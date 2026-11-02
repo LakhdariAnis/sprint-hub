@@ -1,5 +1,6 @@
 <script lang="ts">
   import Header from '../Header.svelte'
+  import NoProjects from '../NoProjects.svelte'
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
@@ -82,6 +83,7 @@
   Review
 </Header>
 
+<NoProjects />
 {#if error}<p class="err">{error}</p>{/if}
 <div class="grid">
   <section class="pn queue">

@@ -1,6 +1,5 @@
 """`hubd doctor`: check the Claude Code setup and theme hubd depends on. One ✔/✘ line per check."""
 
-import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -30,17 +29,8 @@ def checks(settings: Path = install.SETTINGS) -> list[tuple[bool, str]]:
 
 
 def _hook(settings: Path) -> list[tuple[bool, str]]:
-    try:
-        data = json.loads(settings.read_text()) if settings.exists() else {}
-    except (OSError, ValueError) as exc:
-        return [(False, f"cannot read {settings}: {exc}")]
-    groups = data.get("hooks", {}).get(install.EVENT, [])
-    commands = [h.get("command") for g in groups for h in g.get("hooks", []) if install.is_ours(h)]
-    if install.COMMAND in commands:
-        return [(True, f"{install.EVENT} hook installed")]
-    if commands:
-        return [(False, f"{install.EVENT} hook points to another python: run hubd install-hook")]
-    return [(False, f"{install.EVENT} hook missing: run hubd install-hook")]
+    problem = install.hook_problem(settings)
+    return [(False, problem)] if problem else [(True, f"{install.EVENT} hook installed")]
 
 
 def _theme(path: Path) -> tuple[bool, str]:
