@@ -1,16 +1,21 @@
 """Step 513c: planned hours, agent time, the `Time:` line in PROGRESS."""
 
 import asyncio
-from datetime import datetime, timedelta
+import shutil
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from conftest import Recorder
+from fastapi.testclient import TestClient
+from test_approve import git
 from test_live import drain
 from test_live_sync import until, watching
 
+from hubd.api import create_app
 from hubd.daemon import Hub, step_json
-from hubd.model import Run, State
-from hubd.vault import _load_step, format_run, planned_hours, save_step
+from hubd.model import Run, State, Step
+from hubd.vault import _load_step, format_run, planned_hours, save_step, save_time, time_line
 
 COMMANDS = Path("demo-repo/.claude/commands")
 
@@ -144,3 +149,191 @@ def test_finish_on_a_gone_session_leaves_no_end(
     assert entry.step.state == State.done
     assert entry.step.runs[-1].minutes is None
     assert _load_step(entry.path).runs[-1].minutes is None
+
+
+def time_step(**fields: object) -> Step:
+    runs = [
+        Run(started="2026-11-02 10:00", model="haiku", session="s", minutes=m) for m in (30, 15)
+    ]
+    return Step(step="901", title="T", state="approved", runs=runs, **fields)
+
+
+@pytest.mark.parametrize(
+    ("own", "line"),
+    [
+        (None, "Time: 0.75 h (agent 0.75 h, Anis not recorded)"),
+        (0, "Time: 0.75 h (agent 0.75 h)"),
+        (0.5, "Time: 1.25 h (agent 0.75 h)"),
+    ],
+)
+def test_time_line(own: float | None, line: str) -> None:
+    assert time_line(time_step(own_hours=own)) == line
+
+
+def test_a_run_with_no_end_counts_zero() -> None:
+    step = time_step()
+    step.runs.append(Run(started="2026-11-02 12:00", model="haiku", session="t"))
+    assert time_line(step) == "Time: 0.75 h (agent 0.75 h, Anis not recorded)"
+
+
+PROGRESS = """# Progress
+
+Log.
+
+
+## 2026-11-02 — Step 902 built (branch step/902-x)
+
+- Built: it.
+
+## 2026-11-01 — Step 901 built (branch step/901-x)
+
+- Built: that.
+
+## 2026-10-30 — Step 901 reviewed (branch step/901-x)
+Merged into `v2`.
+"""
+
+
+def test_time_goes_in_the_newest_entry_of_the_step_and_nothing_else_moves(tmp_path: Path) -> None:
+    path = tmp_path / "PROGRESS.md"
+    path.write_text(PROGRESS)
+    save_time(path, time_step(own_hours=0.5), None, date(2026, 11, 2))
+    assert path.read_text() == PROGRESS.replace(
+        "Step 901 built (branch step/901-x)\n",
+        "Step 901 built (branch step/901-x)\n\nTime: 1.25 h (agent 0.75 h)\n",
+    )
+
+
+def test_entry_with_text_right_under_the_heading_keeps_its_text(tmp_path: Path) -> None:
+    path = tmp_path / "PROGRESS.md"
+    path.write_text(PROGRESS)
+    save_time(path, time_step(), None, date(2026, 11, 2))
+    step = time_step()
+    step.step = "901x"  # no such entry: 901 must not match 901x, nor the reverse
+    save_time(path, step, None, date(2026, 11, 2))
+    assert path.read_text().count("— Step 901 built") == 1
+    assert "## 2026-11-02 — Step 901x approved\n" in path.read_text()
+
+
+def test_time_line_is_replaced_not_added_twice(tmp_path: Path) -> None:
+    path = tmp_path / "PROGRESS.md"
+    path.write_text(PROGRESS)
+    save_time(path, time_step(), None, date(2026, 11, 2))
+    save_time(path, time_step(own_hours=1), None, date(2026, 11, 2))
+    assert path.read_text().count("Time: ") == 1
+    assert "Time: 1.75 h (agent 0.75 h)\n" in path.read_text()
+
+
+def test_no_entry_adds_one_on_top_in_the_file_format(tmp_path: Path) -> None:
+    path = tmp_path / "PROGRESS.md"
+    path.write_text(PROGRESS.replace("Step 901", "Step 800"))
+    original = path.read_text()
+    save_time(
+        path, time_step(branch="step/901-x"), "Merged into `main` in `abc1234`.", date(2026, 11, 2)
+    )
+    entry = (
+        "## 2026-11-02 — Step 901 approved (branch step/901-x)\n\n"
+        "Merged into `main` in `abc1234`.\n\n"
+        "Time: 0.75 h (agent 0.75 h, Anis not recorded)\n\n"
+    )
+    assert path.read_text() == original.replace(
+        "## 2026-11-02 — Step 902", entry + "## 2026-11-02 — Step 902"
+    )
+
+
+@pytest.mark.parametrize("start", [None, "", "# Progress\n"])
+def test_file_with_no_entry_gets_one(tmp_path: Path, start: str | None) -> None:
+    path = tmp_path / "PROGRESS.md"
+    if start is not None:
+        path.write_text(start)
+    save_time(path, time_step(), None, date(2026, 11, 2))
+    assert path.read_text() == (
+        "# Progress\n\n## 2026-11-02 — Step 901 approved\n\n"
+        "Time: 0.75 h (agent 0.75 h, Anis not recorded)\n"
+    )
+
+
+@pytest.fixture
+def merged_repo(vault: Path) -> Path:
+    """demo-repo on main, with branch step/103-ui; `sprint/` ignored like the real projects."""
+    repo = vault / "demo-repo"
+    for args in (
+        ("init", "-q", "-b", "main"),
+        ("config", "user.name", "test"),
+        ("config", "user.email", "test@hubd.invalid"),
+    ):
+        git(repo, *args)
+    (repo / ".gitignore").write_text("sprint/\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "start")
+    git(repo, "checkout", "-q", "-b", "step/103-ui")
+    (repo / "ui.txt").write_text("ui\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "ui")
+    git(repo, "checkout", "-q", "main")
+    return repo
+
+
+def test_approve_with_hours_writes_step_and_progress(
+    vault: Path, hub: Hub, merged_repo: Path
+) -> None:
+    client = TestClient(create_app(hub))
+    reply = client.post("/steps/demo/103/approve", json={"own_hours": 0.5})
+    assert reply.status_code == 200
+    assert reply.json()["own_hours"] == 0.5
+    entry = hub.entry("demo", "103")
+    assert _load_step(entry.path).own_hours == 0.5
+    text = (merged_repo / "sprint/PROGRESS.md").read_text()
+    assert "Time: 1.2 h (agent 0.7 h)\n" in text  # 103 has a 42 min run
+    assert f"Merged into `main` in `{git(merged_repo, 'rev-parse', '--short', 'HEAD')}`." in text
+    assert git(merged_repo, "status", "--short") == ""
+
+
+@pytest.mark.parametrize("body", [None, {}, {"own_hours": None}])
+def test_approve_with_empty_field_is_not_recorded(
+    vault: Path, hub: Hub, merged_repo: Path, body: dict | None
+) -> None:
+    client = TestClient(create_app(hub))
+    reply = client.post("/steps/demo/103/approve", json=body)
+    assert reply.status_code == 200
+    assert reply.json()["own_hours"] is None
+    assert "own_hours" not in hub.entry("demo", "103").path.read_text()
+    assert "Anis not recorded" in (merged_repo / "sprint/PROGRESS.md").read_text()
+
+
+@pytest.mark.parametrize("hours", [-1, "soon"])
+def test_api_refuses_bad_hours_before_any_merge(hub: Hub, merged_repo: Path, hours: object) -> None:
+    client = TestClient(create_app(hub))
+    assert client.post("/steps/demo/103/approve", json={"own_hours": hours}).status_code == 422
+    assert hub.entry("demo", "103").step.state == State.done
+
+
+def test_tracked_progress_is_left_alone_and_warned(
+    vault: Path, hub: Hub, merged_repo: Path, notifier: Recorder
+) -> None:
+    (merged_repo / ".gitignore").unlink()
+    progress = merged_repo / "sprint/PROGRESS.md"
+    progress.write_text(PROGRESS)
+    git(merged_repo, "add", ".")
+    git(merged_repo, "commit", "-q", "-m", "track sprint")
+    asyncio.run(hub.approve("demo", "103"))
+    assert progress.read_text() == PROGRESS
+    assert git(merged_repo, "status", "--short") == ""
+    assert hub.entry("demo", "103").step.state == State.approved
+    assert notifier.sent[-1][0] == "Time not written"
+
+
+def test_failed_write_never_undoes_the_approve(
+    vault: Path, hub: Hub, merged_repo: Path, notifier: Recorder
+) -> None:
+    (merged_repo / "sprint/PROGRESS.md").mkdir()
+    asyncio.run(hub.approve("demo", "103"))
+    assert hub.entry("demo", "103").step.state == State.approved
+    assert notifier.sent[-1][0] == "Time not written"
+
+
+def test_repo_with_no_sprint_folder_gets_none(vault: Path, hub: Hub, merged_repo: Path) -> None:
+    shutil.rmtree(merged_repo / "sprint")
+    asyncio.run(hub.approve("demo", "103"))
+    assert hub.entry("demo", "103").step.state == State.approved
+    assert not (merged_repo / "sprint").exists()

@@ -28,7 +28,7 @@ _QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.
 _STEP_DIGITS = re.compile(r"^\d+")
 _ARCHIVE_SPRINT = re.compile(r"sprint-(\d+)")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
-_FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
+_FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due", "own_hours")
 # `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
 _DEADLINE = re.compile(r"^- (?:\[(?P<mark>[ xX])\] )?(?P<date>\S+)(?P<rest>.*)$")
 _TAG = re.compile(r"(?<!\S)#([\w/-]+)")
@@ -417,6 +417,48 @@ def planned_hours(repo: Path, step_id: str) -> float | None:
     except ValueError:
         return None
     return hours if math.isfinite(hours) and hours >= 0 else None
+
+
+def time_line(step: Step) -> str:
+    """The `Time:` line of a step's PROGRESS entry; a run with no end counts 0."""
+    agent = sum(r.minutes or 0 for r in step.runs) / 60
+    a = f"{round(agent, 2):g}"
+    if step.own_hours is None:
+        return f"Time: {a} h (agent {a} h, Anis not recorded)"
+    return f"Time: {round(agent + step.own_hours, 2):g} h (agent {a} h)"
+
+
+def save_time(path: Path, step: Step, merged: str | None, today: date) -> None:
+    """Set the `Time:` line in the step's newest `sprint/PROGRESS.md` entry; no other line changes.
+
+    No entry: add one on top, in the file's format. `merged`: its "Merged into ..." sentence.
+    """
+    path.touch()
+    lines = path.read_text().split("\n")
+    line = time_line(step)
+    heading = re.compile(rf"^## .*— Step {re.escape(step.step)}\b")
+    at = next((i for i, text in enumerate(lines) if heading.match(text)), None)
+    if at is None:
+        branch = f" (branch {step.branch})" if step.branch else ""
+        entry = [f"## {today} — Step {step.step} approved{branch}", ""]
+        entry += [merged, ""] if merged else []
+        entry += [line, ""]
+        top = next((i for i, text in enumerate(lines) if text.startswith("## ")), None)
+        if top is None:  # no entry at all: after what the file has, with one blank line between
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines += ["", *entry] if lines else ["# Progress", "", *entry]
+        else:
+            lines[top:top] = entry
+    else:
+        end = next((i for i in range(at + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+        old = next((i for i in range(at + 1, end) if lines[i].startswith("Time: ")), None)
+        if old is not None:
+            lines[old] = line
+        else:
+            gap = [""] if at + 1 < len(lines) and lines[at + 1].strip() else []
+            lines[at + 1 : at + 1] = ["", line, *gap]
+    _write_atomic(path, "\n".join(lines).encode())
 
 
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:

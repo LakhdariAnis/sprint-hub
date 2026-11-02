@@ -31,6 +31,7 @@ from hubd.vault import (
     parse_tasks,
     planned_hours,
     save_step,
+    save_time,
     step_tasks,
     tick_task,
     worktrees,
@@ -494,7 +495,9 @@ class Hub:
         self.emit({"type": "step", **step_json(entry)})
         return new
 
-    async def approve(self, project: str, step_id: str) -> tuple[Step, str | None]:
+    async def approve(
+        self, project: str, step_id: str, own_hours: float | None = None
+    ) -> tuple[Step, str | None]:
         """Merge the step branch into the project's base (locally, never pushed), then approve.
 
         Returns the step and the commit `base` is on now; None when nothing was merged.
@@ -502,6 +505,7 @@ class Hub:
         async with self.lock:
             entry = self.entry(project, step_id)
             new = transition(entry.step, Event.approve, Actor.me)
+            new.own_hours = own_hours
             repo, branch, commit = self.repo(project), entry.step.branch, None
             if entry.step.by == "claude" and not branch:
                 raise InvalidTransition(f"step {step_id}: no branch to merge, nothing was approved")
@@ -519,7 +523,27 @@ class Hub:
             save_step(entry.path, new)
             entry.step = new
             self.emit({"type": "step", **step_json(entry)})
+            if repo:
+                await asyncio.to_thread(self._write_time, project, repo, new, commit)
             return new, commit
+
+    def _write_time(self, project: str, repo: Path, step: Step, commit: str | None) -> None:
+        """The one repo file hubd writes. The merge is done: a failure only warns."""
+        if not (repo / "sprint").is_dir():
+            return
+        reason = None
+        # A tracked PROGRESS.md left changed would make the next approve refuse to merge.
+        if git(repo, "ls-files", "sprint/PROGRESS.md"):
+            reason = "sprint/PROGRESS.md is tracked by git, add the line by hand"
+        else:
+            base = self.index.projects[project].base
+            merged = f"Merged into `{base}` in `{commit}`." if commit else None
+            try:
+                save_time(repo / "sprint/PROGRESS.md", step, merged, date.today())
+            except (OSError, ValueError) as exc:
+                reason = str(exc)
+        if reason:
+            self.notifier.notify("Time not written", f"{project} {step.step}: {reason}")
 
     async def request_changes(self, project: str, step_id: str, comment: str) -> Step:
         """Save the comment in `## Review`, state `changes`; the next start resumes the chat."""
