@@ -35,6 +35,19 @@ On your own vault (`~/Hub`, or `HUB_VAULT`):
 
 This runs the real `hubd` on your vault, not the demo. Closing the window leaves `hubd` running.
 
+### Run hubd as a service
+
+`uv run hubd install-service` writes `~/.config/systemd/user/hubd.service`, shows the diff, asks y/N, then enables and
+starts it. hubd then runs from login on (reminders need that), restarts after a crash and logs to
+`journalctl --user -u hubd`. `uv run hubd uninstall-service` undoes it; `bin/sprint-hub-app` still works without it.
+
+- **`PATH`** is copied from the shell that runs `install-service` (so `claude` under mise is found). Run it again after
+  `claude` moves. **`WAYLAND_DISPLAY`** and the other desktop variables are read from `systemctl --user show-environment`
+  each time hubd opens a terminal or a notification.
+- Port 8765 taken: hubd logs one line and exits with 98; the unit does not restart on 98.
+- **`git switch` on this repo changes the code the service runs.** The unit points at this repo's `.venv/bin/hubd`; a
+  branch with a broken hubd means a broken service. Restart it after a switch: `systemctl --user restart hubd`.
+
 ## Screenshots
 
 > **TODO(Anis): retake these from the 0.2.0 build before the release, or drop them.**
