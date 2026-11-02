@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 from conftest import Recorder
+from fastapi.testclient import TestClient
 
 from hubd import install
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.model import State
 from hubd.runners import claude
@@ -187,3 +189,8 @@ def test_refused_start_does_not_save_the_branch(hub: Hub, repo: Path, spawned: l
     (repo / ".claude/commands/sprint-901.md").unlink()
     refused(hub, "sprint-901.md", spawned)
     assert hub.entry("try", "901").step.branch is None
+
+
+def test_step_api_serves_the_command_model(hub: Hub) -> None:
+    body = TestClient(create_app(hub)).get("/steps/try/901").json()
+    assert body["command_model"] == "haiku"
