@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from hubd import reminders
+from hubd import doctor, reminders, service
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.notify import NotifySend
@@ -152,6 +152,15 @@ def create_app(
             {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
             for e in hub.index.errors
         ] + [{"path": str(theme.path), "line": None, "message": m} for m in read_theme(theme)[1]]
+
+    @app.get("/doctor")
+    def get_doctor() -> dict:
+        return {
+            "vault": str(hub.vault),
+            "version": version("hubd"),
+            "service": service.state(),
+            "checks": doctor.report(hub.vault),
+        }
 
     @app.get("/events")
     async def events() -> StreamingResponse:
