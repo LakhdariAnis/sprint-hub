@@ -72,7 +72,7 @@ test('a broken step file counts in the status line, lists with file, line and fi
   await page.goto('/#/projects/notes')
   await expect(page.getByRole('button', { name: /Sprint 3/ })).toBeVisible()
   try {
-    await writeFile(path, original.replace('state: todo', 'state: banana'))
+    await writeFile(path, original.replace(/^state: .*$/m, 'state: banana'))
     await expect(count(before + 1)).toBeVisible({ timeout: 5000 })
     await count(before + 1).click()
     const row = page.getByRole('dialog').locator('.er', { hasText: '301.md' })
