@@ -359,7 +359,8 @@ class Hub:
         repo = self.repo(entry.project)
         return importer.model_of(repo, entry.step.step) if repo else None
 
-    async def start(self, project: str, step_id: str) -> Step:
+    async def start(self, project: str, step_id: str, fresh: bool = False) -> Step:
+        """Start a run. From `changes` it resumes the last chat; `fresh` opens a new one."""
         async with self.lock:
             entry = self.entry(project, step_id)
             if entry.step.by == "me":
@@ -372,9 +373,12 @@ class Hub:
                 raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
             new = transition(entry.step, Event.start, Actor.daemon)
             # Changes requested: continue the last run's chat, the review comment is the prompt.
-            last = new.runs[-1] if entry.step.state == State.changes and new.runs else None
-            comment = new.review.comment if new.review else ""
-            resume = last if last and comment else None
+            changes = entry.step.state == State.changes
+            if fresh and not changes:
+                raise InvalidTransition(f"step {step_id}: a new chat is for a step in changes")
+            last = new.runs[-1] if changes and new.runs else None
+            comment = new.review.comment if changes and new.review else ""
+            resume = last if last and comment and not fresh else None
             if resume:
                 model, session = resume.model, resume.session
             else:
@@ -404,7 +408,11 @@ class Hub:
                 if resume:
                     await self.runner.resume(new, session, repo, comment)
                 else:
-                    await self.runner.start(new, session, model, repo, f"/sprint-{step_id}")
+                    # The command file gets the comment as its arguments (`ARGUMENTS: ...`).
+                    prompt = f"/sprint-{step_id} Changes requested on the earlier run: {comment}"
+                    await self.runner.start(
+                        new, session, model, repo, prompt if comment else f"/sprint-{step_id}"
+                    )
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too
                 entry.step = old

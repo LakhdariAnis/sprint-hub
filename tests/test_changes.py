@@ -100,3 +100,30 @@ def test_empty_comment_changes_nothing(vault: Path, hub: Hub) -> None:
     with pytest.raises(InvalidTransition, match="write what should change"):
         asyncio.run(hub.request_changes("demo", "103", " \n "))
     assert (vault / STEP_103).read_text() == before
+
+
+def test_fresh_run_from_changes_is_a_new_chat_with_the_comment(vault: Path, hub: Hub) -> None:
+    (vault / "demo-repo" / "sprint" / "103-ui.md").write_text("# Step 103\n\n## Tasks\n- Sort\n")
+
+    async def main() -> None:
+        await hub.request_changes("demo", "103", "Sort the list #now")
+        step = await hub.start("demo", "103", fresh=True)
+        assert hub.runner.resumed == []
+        [(session, prompt)] = hub.runner.started
+        assert session != "7b1e…a04"
+        assert step.runs[-1].session == session
+        assert prompt == "/sprint-103 Changes requested on the earlier run: Sort the list #now"
+        assert [r.session for r in step.runs] == ["7b1e…a04", session]
+        await hub.runner.tasks[session]
+
+    asyncio.run(main())
+    saved = _load_step(vault / STEP_103)
+    assert saved.state == State.done
+    assert len(saved.runs) == 2
+
+
+def test_fresh_run_only_from_changes(vault: Path, hub: Hub) -> None:
+    client = TestClient(create_app(hub))
+    before = (vault / STEP_103).read_text()
+    assert client.post("/steps/demo/103/start?fresh=true").status_code == 409
+    assert (vault / STEP_103).read_text() == before

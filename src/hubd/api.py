@@ -163,8 +163,8 @@ def create_app(
         return StreamingResponse(stream(), media_type="text/event-stream")
 
     @app.post("/steps/{project}/{step_id}/start")
-    async def start(project: str, step_id: str) -> dict:
-        return (await hub.start(project, step_id)).model_dump(mode="json")
+    async def start(project: str, step_id: str, fresh: bool = False) -> dict:
+        return (await hub.start(project, step_id, fresh)).model_dump(mode="json")
 
     @app.post("/steps/{project}/{step_id}/finish")
     async def finish(project: str, step_id: str) -> dict:
