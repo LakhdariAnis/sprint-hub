@@ -36,9 +36,6 @@ def test_run_ended_from_the_hook(hub: Hub) -> None:
     response = client.post("/runs/ended", json=body)
     assert response.status_code == 200
     assert response.json()["state"] == "done"
-    again = client.post("/runs/ended", json=body)
-    assert again.status_code == 409
-    assert "no 'run_ended' from 'done'" in again.json()["detail"]
     assert client.post("/runs/ended", json={"session_id": "x"}).status_code == 422
 
 

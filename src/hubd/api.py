@@ -163,6 +163,10 @@ def create_app(
     async def start(project: str, step_id: str) -> dict:
         return (await hub.start(project, step_id)).model_dump(mode="json")
 
+    @app.post("/steps/{project}/{step_id}/finish")
+    async def finish(project: str, step_id: str) -> dict:
+        return (await hub.finish(project, step_id)).model_dump(mode="json")
+
     @app.post("/steps/{project}/{step_id}/approve")
     async def approve(project: str, step_id: str) -> dict:
         return (await hub.approve(project, step_id)).model_dump(mode="json")

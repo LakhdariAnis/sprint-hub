@@ -432,12 +432,26 @@ class Hub:
                 raise NotFound(f"no run {session_id} for step {step_id}")
             if entry.step.runs[-1].session != session_id:
                 raise InvalidTransition(f"step {step_id}: {session_id} is not the latest run")
-            new = transition(entry.step, Event.run_ended, Actor.daemon)
-            save_step(entry.path, new)
-            entry.step = new
-            self.emit({"type": "step", **step_json(entry)})
+            if entry.step.state != State.doing:
+                return entry.step  # a late hook: `f` already ended this run
+            new = self._end_run(entry)
             self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
             return new
+
+    async def finish(self, project: str, step_id: str) -> Step:
+        """End a run from the app, for a run whose hook never arrived. Same move as the hook."""
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by == "me":
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
+            return self._end_run(entry)
+
+    def _end_run(self, entry: StepEntry) -> Step:
+        new = transition(entry.step, Event.run_ended, Actor.daemon)
+        save_step(entry.path, new)
+        entry.step = new
+        self.emit({"type": "step", **step_json(entry)})
+        return new
 
     async def approve(self, project: str, step_id: str) -> Step:
         """Merge the step branch into main (locally, never pushed), then mark it approved."""
