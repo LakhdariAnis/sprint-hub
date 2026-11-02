@@ -28,19 +28,32 @@
   const sel = $derived(project && id ? steps[`${project}/${id}`] : waiting[0])
   const open = (p: string, i: string) => (location.hash = `#/review/${encodeURIComponent(p)}/${encodeURIComponent(i)}`)
   const done = $derived(sel?.tasks.filter((t) => t.state === 'done').length ?? 0)
+  const base = $derived(sel?.base ?? 'base')
 
   // Both moves are only valid from `done`; hubd's refusal (e.g. a merge conflict) shows under the buttons.
   let confirming = $state(false)
   let comment = $state('')
   let busy = $state(false)
   let moveError = $state('')
+  // Stays after the step leaves `done` and the selection moves on.
+  let merged = $state('')
   const move = (run: () => Promise<unknown>) => {
     if (!sel) return
     busy = true
     moveError = ''
+    merged = ''
     run().then(() => ((confirming = false), (comment = '')), (e: Error) => (moveError = e.message)).finally(() => (busy = false))
   }
-  const approve = () => sel && move(() => approveStep(sel.project, sel.step).then((d) => put(sel.project, d)))
+  const approve = () => {
+    if (!sel) return
+    const [p, i, into] = [sel.project, sel.step, base]
+    move(() =>
+      approveStep(p, i).then(({ commit, ...d }) => {
+        put(p, d)
+        merged = commit ? `${i} merged into ${into} as ${commit}, not pushed.` : `${i} approved, nothing to merge.`
+      }),
+    )
+  }
   const changesRequested = () => sel && move(() => requestChanges(sel.project, sel.step, comment.trim()).then((d) => put(sel.project, d)))
 
   // j/k walk the three groups as one list; the URL holds the selection.
@@ -85,6 +98,7 @@
 
 <NoProjects />
 {#if error}<p class="err">{error}</p>{/if}
+{#if merged}<p class="merged" role="status">{merged}</p>{/if}
 <div class="grid">
   <section class="pn queue">
     {#each groups as g}
@@ -117,7 +131,7 @@
         {#if sel.state === 'done'}
           <div class="act">
             {#if confirming}
-              <span>Merge <span class="mono">{sel.branch ?? 'nothing'}</span> into main?</span>
+              <span>{#if sel.branch}Merge <span class="mono">{sel.branch}</span> into <span class="mono">{base}</span>?{:else}Approve? Nothing to merge.{/if}</span>
               <button class="btn" type="button" disabled={busy} onclick={approve}>Yes, approve <span class="kb">y</span></button>
               <button class="btn ghost" type="button" disabled={busy} onclick={() => (confirming = false)}>Cancel <span class="kb">Esc</span></button>
             {:else}
@@ -147,11 +161,11 @@
         </section>
         <div class="col">
           <section class="pn">
-            <div class="ph">Diffstat <span class="n">main...{sel.branch ?? '–'}</span></div>
+            <div class="ph">Diffstat <span class="n">{base}...{sel.branch ?? '–'}</span></div>
             {#if statError}<p class="err in">{statError}</p>
             {:else if stat === null}<p class="dim pad">Loading…</p>
             {:else if stat}<pre class="pad">{stat}</pre>
-            {:else}<p class="dim pad">No changes against main.</p>{/if}
+            {:else}<p class="dim pad">No changes against {base}.</p>{/if}
           </section>
           <section class="pn">
             <div class="ph">Checklist <span class="n">{done}/{sel.tasks.length}</span></div>
@@ -177,6 +191,7 @@
   .id { font: 12.5px var(--mono); color: var(--fg2); }
   .err { margin: 0 20px 14px; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
   .err.in { margin: 12px 16px; }
+  .merged { flex: none; margin: 0 28px 6px; color: var(--g); font: 13px var(--mono); overflow-wrap: anywhere; }
   /* Fills the window: no page scroll. The queue, Report, Diffstat and Checklist scroll inside their panes; the head with the action bar stays. */
   .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
   .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 20px; padding: 8px 28px 22px; align-items: stretch; }

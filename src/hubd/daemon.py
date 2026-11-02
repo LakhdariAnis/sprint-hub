@@ -437,12 +437,15 @@ class Hub:
             self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
             return new
 
-    async def approve(self, project: str, step_id: str) -> Step:
-        """Merge the step branch into the project's base (locally, never pushed), then approve."""
+    async def approve(self, project: str, step_id: str) -> tuple[Step, str | None]:
+        """Merge the step branch into the project's base (locally, never pushed), then approve.
+
+        Returns the step and the commit `base` is on now; None when nothing was merged.
+        """
         async with self.lock:
             entry = self.entry(project, step_id)
             new = transition(entry.step, Event.approve, Actor.me)
-            repo, branch = self.repo(project), entry.step.branch
+            repo, branch, commit = self.repo(project), entry.step.branch, None
             if entry.step.by == "claude" and not branch:
                 raise InvalidTransition(f"step {step_id}: no branch to merge, nothing was approved")
             if repo and branch:  # no repo, or a `by: me` step with no branch: nothing to merge
@@ -450,7 +453,7 @@ class Hub:
                     raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
                 try:
                     base = self.index.projects[project].base
-                    await asyncio.to_thread(_merge, repo, base, branch)
+                    commit = await asyncio.to_thread(_merge, repo, base, branch)
                 except MergeConflict as exc:
                     self.notifier.notify(
                         "Merge conflict", f"{project} {step_id}: {', '.join(exc.files)}"
@@ -459,7 +462,7 @@ class Hub:
             save_step(entry.path, new)
             entry.step = new
             self.emit({"type": "step", **step_json(entry)})
-            return new
+            return new, commit
 
     async def request_changes(self, project: str, step_id: str, comment: str) -> Step:
         """Save the comment in `## Review`, state `changes`; the next start resumes the chat."""
@@ -489,7 +492,7 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _merge(repo: Path, base: str, branch: str) -> None:
+def _merge(repo: Path, base: str, branch: str) -> str:
     """`git merge --no-ff branch` into `base`, starting on `base` or on `branch`.
 
     Any other branch, or tracked changes: refuse. A failed merge puts the repo back as it was.
@@ -520,3 +523,4 @@ def _merge(repo: Path, base: str, branch: str) -> None:
         raise MergeConflict(
             f"merge {branch}: conflict in {', '.join(files)}; merge aborted", files
         ) from exc
+    return _git(repo, "rev-parse", "--short", "HEAD")

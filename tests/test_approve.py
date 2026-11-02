@@ -38,7 +38,7 @@ def repo(vault: Path) -> Path:
 
 
 def approve(hub: Hub, step_id: str = "103"):
-    return asyncio.run(hub.approve("demo", step_id))
+    return asyncio.run(hub.approve("demo", step_id))[0]
 
 
 def test_clean_merge(vault: Path, hub: Hub, repo: Path) -> None:
@@ -144,7 +144,8 @@ def test_missing_repo_is_refused(vault: Path, hub: Hub, repo: Path) -> None:
 def test_manual_step_without_a_branch_needs_no_git(hub: Hub, repo: Path) -> None:
     hub = set_step(hub, "103", "by: claude\nmodel: sonnet\nbranch: step/103-ui\n", "by: me\n")
     head = git(repo, "rev-parse", "HEAD")
-    assert approve(hub).state == State.approved
+    step, commit = asyncio.run(hub.approve("demo", "103"))
+    assert (step.state, commit) == (State.approved, None)
     assert git(repo, "rev-parse", "HEAD") == head
 
 
@@ -237,6 +238,14 @@ def test_api_approve_and_conflict(hub: Hub, repo: Path) -> None:
     response = client.post("/steps/demo/103/approve")
     assert response.status_code == 200
     assert response.json()["state"] == "approved"
+
+
+def test_api_says_the_merge_commit_and_the_base(hub: Hub, repo: Path) -> None:
+    client = TestClient(create_app(hub))
+    assert client.get("/steps/demo/103").json()["base"] == "main"
+    commit = client.post("/steps/demo/103/approve").json()["commit"]
+    assert commit == git(repo, "rev-parse", "--short", "main")
+    assert len(git(repo, "log", "-1", "--format=%p", commit).split()) == 2
 
 
 def test_diffstat(hub: Hub, repo: Path) -> None:

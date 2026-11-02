@@ -114,6 +114,7 @@ def create_app(
             "spec": spec_text(entry),
             "path": str(entry.path),
             "command_model": hub.command_model(entry),
+            "base": hub.index.projects[project].base,
         }
 
     @app.get("/steps/{project}/{step_id}/diffstat")
@@ -165,7 +166,8 @@ def create_app(
 
     @app.post("/steps/{project}/{step_id}/approve")
     async def approve(project: str, step_id: str) -> dict:
-        return (await hub.approve(project, step_id)).model_dump(mode="json")
+        step, commit = await hub.approve(project, step_id)
+        return {**step.model_dump(mode="json"), "commit": commit}
 
     @app.post("/steps/{project}/{step_id}/changes")
     async def changes(project: str, step_id: str, body: Changes) -> dict:
