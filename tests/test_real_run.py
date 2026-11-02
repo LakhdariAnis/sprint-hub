@@ -1,6 +1,9 @@
 """Step 506b: a run always gets out of `doing`, and its checklist ticks wherever it works."""
 
+import asyncio
+import subprocess
 from pathlib import Path
+from uuid import uuid4
 
 from conftest import Recorder
 from fastapi.testclient import TestClient
@@ -8,6 +11,8 @@ from fastapi.testclient import TestClient
 from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.model import State
+from hubd.runners.claude import ClaudeCodeRunner
+from hubd.runners.fake import FakeRunner
 from hubd.vault import _load_step
 
 STEP = Path("projects") / "demo" / "steps"
@@ -58,3 +63,69 @@ def test_second_hook_notifies_once(hub: Hub, notifier: Recorder) -> None:
     assert client.post("/runs/ended", json=LATE).status_code == 200
     assert client.post("/runs/ended", json=LATE).status_code == 200
     assert len(notifier.sent) == 1
+
+
+class Gone(FakeRunner):
+    """Every session has ended: Claude exited while hubd was down."""
+
+    def running(self, session_id: str) -> bool:
+        return False
+
+
+def gone_hub(vault: Path, notifier: Recorder) -> Hub:
+    return Hub(vault, lambda ended: Gone(ended, delay=0), notifier)
+
+
+def test_hubd_down_flags_the_run_and_moves_nothing(vault: Path, notifier: Recorder) -> None:
+    before = (vault / STEP / "102.md").read_bytes()
+    client = TestClient(create_app(gone_hub(vault, notifier)))
+    step = client.get("/steps/demo/102").json()
+    assert (step["state"], step["run_gone"]) == ("doing", True)
+    assert (vault / STEP / "102.md").read_bytes() == before
+    assert client.get("/steps/demo/103").json()["run_gone"] is False  # `done`: not a stuck run
+    assert client.post("/steps/demo/102/finish").json()["state"] == "done"
+
+
+def test_live_session_is_not_flagged(hub: Hub) -> None:
+    assert hub.entry("demo", "102").run_gone is False
+
+
+def test_doing_without_a_run_is_flagged(vault: Path, notifier: Recorder) -> None:
+    (vault / STEP / "150.md").write_text(
+        "---\nstep: 150\ntitle: Imported\nstate: doing\nby: claude\n---\n"
+    )
+    assert gone_hub(vault, notifier).entry("demo", "150").run_gone is True
+
+
+def test_flag_survives_a_reload_and_a_new_start_clears_it(vault: Path, notifier: Recorder) -> None:
+    hub = gone_hub(vault, notifier)
+
+    async def main() -> None:
+        path = hub.entry("demo", "102").path
+        path.write_text(path.read_text() + "\n")
+        await hub.reload(path)
+        assert hub.entry("demo", "102").run_gone is True
+        hub._reload_all()
+        assert hub.entry("demo", "102").run_gone is True
+
+        await hub.finish("demo", "102")
+        await hub.request_changes("demo", "102", "again")
+        await hub.start("demo", "102")
+        assert hub.entry("demo", "102").run_gone is False
+        await asyncio.gather(*hub.runner.tasks.values())
+
+    asyncio.run(main())
+
+
+def test_claude_runner_finds_a_session_on_a_process_argv(tmp_path: Path) -> None:
+    runner = ClaudeCodeRunner(["x"], "http://127.0.0.1:1", tmp_path / "settings.json")
+    session = str(uuid4())
+    assert runner.running(session) is False
+    # `sh -c CMD NAME ARG`: the session stays on the argv while `sleep` runs.
+    process = subprocess.Popen(["sh", "-c", "sleep 30; :", "claude", "--session-id", session])
+    try:
+        assert runner.running(session) is True
+    finally:
+        process.kill()
+        process.wait()
+    assert runner.running(session) is False

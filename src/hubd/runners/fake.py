@@ -19,6 +19,9 @@ class FakeRunner:
     def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> None:
         return None  # it only writes a progress file, so the demo can run steps side by side
 
+    def running(self, session_id: str) -> bool:
+        return True  # the demo's `doing` steps show a run in progress
+
     async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 

@@ -52,6 +52,8 @@ class StepEntry:
     questions: list[Question] = field(default_factory=list)
     # When hubd saw each task (by text) reach its state; only changes seen while it runs.
     seen: dict[str, datetime | None] = field(default_factory=dict)
+    # `doing`, but hubd found no live session for it when it started: `f` gets it out.
+    run_gone: bool = False
 
 
 @dataclass

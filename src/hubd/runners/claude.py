@@ -36,6 +36,16 @@ class ClaudeCodeRunner:
             return "claude not on PATH of hubd: install it, then restart hubd"
         return install.hook_problem(self.settings)
 
+    def running(self, session_id: str) -> bool:
+        # `--session-id` or `--resume` holds it: on the argv of `claude` and of its terminal.
+        for cmdline in Path("/proc").glob("[0-9]*/cmdline"):
+            try:
+                if session_id.encode() in cmdline.read_bytes():
+                    return True
+            except OSError:
+                continue  # that process just ended
+        return False
+
     def command(self, cwd: Path, claude_args: list[str]) -> list[str]:
         """The terminal argv with `{cwd}` filled in, then `claude` and its args."""
         return [arg.replace("{cwd}", str(cwd)) for arg in self.terminal] + ["claude", *claude_args]

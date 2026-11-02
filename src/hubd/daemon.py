@@ -59,6 +59,7 @@ def step_json(entry: StepEntry) -> dict:
         **entry.step.model_dump(mode="json"),
         "tasks": tasks,
         "questions": questions,
+        "run_gone": entry.run_gone,
     }
 
 
@@ -82,6 +83,10 @@ class Hub:
         self.runner = runner(self.run_ended)
         self.notifier = notifier
         self.lock = asyncio.Lock()
+        for entry in self.index.steps:  # a hook sent while hubd was down never arrived
+            if entry.step.state == State.doing and entry.step.by == "claude":
+                runs = entry.step.runs
+                entry.run_gone = not (runs and self.runner.running(runs[-1].session))
 
     def emit(self, event: dict) -> None:
         for queue in self.queues:
@@ -192,7 +197,11 @@ class Hub:
 
     def _reload_all(self) -> None:
         # shortcut: the whole vault is read again; fine for a few projects.
+        old = {e.path: e for e in self.index.steps}
         self.index = load_vault(self.vault)
+        for entry in self.index.steps:
+            if was := old.get(entry.path):
+                entry.seen, entry.run_gone = was.seen, was.run_gone
         self.emit({"type": "reload"})
 
     async def _sync_projects(self) -> None:
@@ -266,7 +275,7 @@ class Hub:
             return
         entry = _join(project, path, step, self.repo(project))
         if old:
-            entry.seen = old.seen
+            entry.seen, entry.run_gone = old.seen, old.run_gone
         self.index.steps.append(entry)
         self.index.steps.sort(key=lambda e: (e.project, e.path))
         if old is None or old.step != step or old.tasks != entry.tasks:
@@ -382,6 +391,7 @@ class Hub:
             before = entry.path.read_bytes()
             save_step(entry.path, new)
             old, entry.step = entry.step, new
+            entry.run_gone = False
             try:
                 if resume:
                     await self.runner.resume(new, session, repo, comment)
