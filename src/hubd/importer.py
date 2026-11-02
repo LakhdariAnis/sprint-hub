@@ -1,6 +1,7 @@
 """`hubd import`: one vault step per spec in the repos. Reads repos, writes only in the vault."""
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -8,7 +9,8 @@ import frontmatter
 import yaml
 
 from hubd.daemon import vault_path
-from hubd.model import Project, State
+from hubd.model import Project, State, TaskState
+from hubd.vault import parse_tasks
 
 # `api-fields.md` or `design4-mock-list.md` sit next to the specs and are not steps.
 _SPEC = re.compile(r"^(?P<id>[a-z]?\d+[a-z]?)-.+\.md$")
@@ -24,6 +26,64 @@ def specs(repo: Path) -> dict[str, Path]:
             if m := _SPEC.match(path.name):
                 found.setdefault(m["id"], path)
     return found
+
+
+def git(repo: Path, *args: str) -> str:
+    """Read-only git; empty when `repo` is not a git repo or `ref` is missing."""
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def main_line(repo: Path) -> str | None:
+    """`origin/HEAD` names it (sprint-hub: `v2`, its `main` is v1); else `main`, `master`."""
+    remote = git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+    for ref in (remote.removeprefix("origin/"), remote, "main", "master"):
+        if ref and git(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"):
+            return ref
+    return None
+
+
+def step_branches(repo: Path) -> list[str]:
+    return git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/step/").split()
+
+
+def merged_branches(repo: Path) -> set[str]:
+    line = main_line(repo)
+    if line is None:
+        return set()
+    tip = git(repo, "rev-parse", line)
+    fmt = "--format=%(refname:short) %(objectname)"
+    rows = git(repo, "for-each-ref", f"--merged={line}", fmt, "refs/heads/step/").splitlines()
+    # A branch still at the tip has no work of its own yet: not merged.
+    return {name for name, sha in map(str.split, rows) if sha != tip}
+
+
+def progress_merged(repo: Path) -> set[str]:
+    """Step ids whose `## date — Step <id> ...` entry in PROGRESS.md says "Merged"."""
+    path = repo / "sprint/PROGRESS.md"
+    if not path.is_file():
+        return set()
+    merged = set()
+    # Case matters: "not merged yet" appears in entries of steps that are not merged.
+    for block in re.split(r"(?m)^## ", path.read_text(errors="replace"))[1:]:
+        m = re.search(r"Step (\w+)", block.partition("\n")[0])
+        if m and "Merged" in block:
+            merged.add(m[1].lower())
+    return merged
+
+
+def all_ticked(repo: Path, step_id: str) -> bool:
+    paths = [repo / "sprint/progress" / f"{step_id}.md"]
+    paths += sorted((repo / "sprint").glob(f"archive/**/progress/{step_id}.md"))
+    path = next((p for p in paths if p.is_file()), None)
+    tasks = parse_tasks(path.read_text()) if path else []
+    return bool(tasks) and all(t.state == TaskState.done for t in tasks)
+
+
+def state_of(repo: Path, step_id: str, approved: bool) -> State:
+    if approved:
+        return State.approved
+    return State.done if all_ticked(repo, step_id) else State.todo
 
 
 def model_of(repo: Path, step_id: str) -> str | None:
@@ -50,6 +110,9 @@ def write_step(path: Path, meta: dict[str, object]) -> None:
 
 def import_project(folder: Path, project: Project, repo: Path) -> str:
     new = kept = 0
+    logged = progress_merged(repo)
+    branches = step_branches(repo)
+    merged = merged_branches(repo)
     for step_id, spec in specs(repo).items():
         target = folder / "steps" / f"{step_id}.md"
         if target.exists():
@@ -57,17 +120,22 @@ def import_project(folder: Path, project: Project, repo: Path) -> str:
             continue
         try:
             m = _TITLE.search(spec.read_text())
+            mine = [b for b in branches if b.startswith(f"step/{step_id}-")]
+            approved = step_id in logged or any(b in merged for b in mine)
+            state = state_of(repo, step_id, approved)
         except (OSError, ValueError) as exc:
             print(f"warning: {project.name}: {spec}: {exc}", file=sys.stderr)
             continue
         if not m:
             print(f"warning: {project.name}: {spec}: no '# Step <id> — <title>'", file=sys.stderr)
             continue
-        meta: dict[str, object] = {"step": step_id, "title": m["title"], "state": State.todo.value}
+        meta: dict[str, object] = {"step": step_id, "title": m["title"], "state": state.value}
         meta["by"] = "claude"
         if model := model_of(repo, step_id):
             meta["model"] = model
-        meta["branch"] = f"step/{spec.stem}"
+        # The real branch when its slug differs from the spec's: approve merges this name.
+        branch = f"step/{spec.stem}"
+        meta["branch"] = branch if branch in mine or not mine else mine[0]
         write_step(target, meta)
         new += 1
     return f"{project.name}: {new} new, {kept} kept"

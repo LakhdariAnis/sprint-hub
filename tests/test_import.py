@@ -1,3 +1,4 @@
+import hashlib
 import os
 import subprocess
 import sys
@@ -214,3 +215,189 @@ def test_command_runs_from_the_cli(vault: Path, repo: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Demo: 1 new, 0 kept" in result.stdout
+
+
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def commit(repo: Path, name: str) -> None:
+    (repo / name).write_text(name)
+    git(repo, "add", name)
+    git(repo, "commit", "-q", "-m", name)
+
+
+def init_git(repo: Path, line: str = "main") -> None:
+    git(repo, "init", "-q", "-b", line)
+    git(repo, "config", "user.name", "test")
+    git(repo, "config", "user.email", "test@hubd.invalid")
+    commit(repo, "start")
+
+
+def branch_with_work(repo: Path, branch: str, merge: bool, line: str = "main") -> None:
+    git(repo, "checkout", "-q", "-b", branch)
+    commit(repo, branch.replace("/", "_"))
+    git(repo, "checkout", "-q", line)
+    if merge:
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge", branch)
+
+
+def progress(repo: Path, step_id: str, text: str, folder: str = "sprint/progress") -> None:
+    path = repo / folder / f"{step_id}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def state(vault: Path, step_id: str) -> State:
+    return _load_step(step_file(vault, step_id)).state
+
+
+def test_progress_entry_with_merged_is_approved(vault: Path, repo: Path) -> None:
+    spec(repo, "101-x")
+    spec(repo, "102-y")
+    (repo / "sprint/PROGRESS.md").write_text(
+        "# Progress\n\n## 2026-10-30 — Step 101 Title (branch step/101-x)\nMerged and pushed.\n\n"
+        "## 2026-10-29 — Step 102 Title (branch step/102-y)\nBuilt, 101 is not merged yet.\n"
+    )
+
+    importer.main()
+
+    assert state(vault, "101") == State.approved
+    assert state(vault, "102") == State.todo
+
+
+def test_branch_merged_into_main_is_approved(vault: Path, repo: Path) -> None:
+    init_git(repo)
+    spec(repo, "101-x")
+    spec(repo, "102-y")
+    branch_with_work(repo, "step/101-x", merge=True)
+    commit(repo, "later")
+    branch_with_work(repo, "step/102-y", merge=False)
+
+    importer.main()
+
+    assert state(vault, "101") == State.approved
+    assert state(vault, "102") == State.todo
+
+
+def test_main_line_comes_from_origin_head(vault: Path, repo: Path, tmp_path: Path) -> None:
+    """Like sprint-hub: `origin/HEAD` is `v2`; merged only into old `main` does not count."""
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    init_git(origin)
+    git(origin, "checkout", "-q", "-b", "v2")
+    commit(origin, "v2-start")
+    clone = tmp_path / "clone"
+    git(tmp_path, "clone", "-q", str(origin), str(clone))
+    git(clone, "config", "user.name", "test")
+    git(clone, "config", "user.email", "test@hubd.invalid")
+    git(clone, "branch", "-q", "main", "origin/main")
+    branch_with_work(clone, "step/101-x", merge=True, line="v2")
+    commit(clone, "after-101")
+    git(clone, "checkout", "-q", "main")
+    branch_with_work(clone, "step/102-y", merge=True)
+    git(clone, "checkout", "-q", "v2")
+    add_project(vault, "clone", "Clone", clone)
+    spec(clone, "101-x")
+    spec(clone, "102-y")
+
+    importer.main()
+
+    assert _load_step(step_file(vault, "101", "clone")).state == State.approved
+    assert _load_step(step_file(vault, "102", "clone")).state == State.todo
+
+
+def test_branch_still_at_the_tip_is_not_merged(vault: Path, repo: Path) -> None:
+    init_git(repo)
+    spec(repo, "101-x")
+    git(repo, "branch", "step/101-x")
+
+    importer.main()
+
+    assert state(vault, "101") == State.todo
+
+
+def test_all_ticked_is_done(vault: Path, repo: Path) -> None:
+    spec(repo, "101-x")
+    progress(repo, "101", "# Step 101\n- [x] one\n- [x] two\n")
+
+    importer.main()
+
+    assert state(vault, "101") == State.done
+
+
+@pytest.mark.parametrize(
+    "text", ["- [x] one\n- [~] two\n", "- [x] one\n- [ ] two\n", "# Step 101\n"]
+)
+def test_open_or_empty_checklist_is_todo(vault: Path, repo: Path, text: str) -> None:
+    spec(repo, "101-x")
+    progress(repo, "101", text)
+
+    importer.main()
+
+    assert state(vault, "101") == State.todo
+
+
+def test_no_checklist_is_todo_never_doing(vault: Path, repo: Path) -> None:
+    init_git(repo)
+    spec(repo, "101-x")
+    branch_with_work(repo, "step/101-x", merge=False)
+
+    importer.main()
+
+    assert state(vault, "101") == State.todo
+
+
+def test_merged_beats_ticked(vault: Path, repo: Path) -> None:
+    spec(repo, "101-x")
+    progress(repo, "101", "- [x] one\n")
+    (repo / "sprint/PROGRESS.md").write_text("## 2026-10-30 — Step 101 x\nMerged.\n")
+
+    importer.main()
+
+    assert state(vault, "101") == State.approved
+
+
+@pytest.mark.parametrize("folder", ["sprint/archive/sprint-2/progress", "sprint/archive/progress"])
+def test_archived_checklist_counts(vault: Path, repo: Path, folder: str) -> None:
+    spec(repo, "201-x", "sprint/archive/sprint-2")
+    progress(repo, "201", "- [x] one\n", folder)
+
+    importer.main()
+
+    assert state(vault, "201") == State.done
+
+
+def test_branch_is_the_real_one_when_its_slug_differs(vault: Path, repo: Path) -> None:
+    init_git(repo)
+    spec(repo, "101-spec-slug")
+    branch_with_work(repo, "step/101-real-slug", merge=False)
+
+    importer.main()
+
+    assert _load_step(step_file(vault, "101")).branch == "step/101-real-slug"
+
+
+def test_repo_stays_byte_identical(vault: Path, repo: Path) -> None:
+    init_git(repo)
+    spec(repo, "101-x")
+    spec(repo, "201-y", "sprint/archive/sprint-2")
+    progress(repo, "101", "- [x] one\n")
+    (repo / "sprint/PROGRESS.md").write_text("## 2026-10-30 — Step 201 y\nMerged.\n")
+    branch_with_work(repo, "step/101-x", merge=True)
+    before = snapshot(repo)
+
+    importer.main()
+    importer.main()
+
+    assert snapshot(repo) == before
+
+
+def snapshot(path: Path) -> dict[str, str]:
+    return {
+        str(p.relative_to(path)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(path.rglob("*"))
+        if p.is_file()
+    }
