@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
@@ -24,7 +25,7 @@ from hubd.theme import watch as watch_theme
 from hubd.vault import vault_path
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
-PORT = 8765
+PORT = int(os.environ.get("HUBD_PORT", 8765))  # tests run a second hubd on another port
 # shortcut: the built app is found next to the source, so it only runs from a source checkout.
 WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
 
