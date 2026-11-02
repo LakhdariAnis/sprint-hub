@@ -42,6 +42,7 @@ EXTRA = {
     "by: claude\nmodel: sonnet\nbranch: step/302-search\nneeds: [301]\n---\n\n## Runs\n"
     "- 2026-10-19 09:00 · sonnet · session 5d4c…b21 · task all\n\n## Review\nverdict:\n"
     "comment:\n\n## Questions\n",
+    "notes-repo/.claude/commands/sprint-301.md": "---\nmodel: haiku\n---\nParse the notes.\n",
     "notes-repo/sprint/301-parse.md": "# Step 301 — Parse the notes\n\n## Tasks\n"
     "- Read the files\n- Split into sections\n- Test it\n",
     "notes-repo/sprint/302-search.md": "# Step 302 — Search the notes\n\n## Tasks\n"

@@ -24,7 +24,10 @@ class ClaudeCodeRunner:
         self.hub_url = hub_url
         self.settings = settings  # Claude's settings.json, where the hook must be
 
-    def refusal(self, step_id: str, cwd: Path, fresh: bool) -> str | None:
+    def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> str | None:
+        # Two sessions in one work tree would switch branches under each other.
+        if running:
+            return f"step {running} is running in this repo, wait for it to end"
         # A resumed chat gets the review comment as its prompt, not the command.
         command = cwd / ".claude" / "commands" / f"sprint-{step_id}.md"
         if fresh and not command.is_file():

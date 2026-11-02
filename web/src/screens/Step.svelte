@@ -52,6 +52,10 @@
     router.open = router.open.filter((k) => k !== key(project, id))
     location.hash = '#/today'
   }
+  // The vault step wins over its command file; the screen says so when they differ.
+  const model = $derived(s?.model ?? s?.command_model ?? '–')
+  const overridden = $derived(!!s?.model && !!s?.command_model && s.model !== s.command_model)
+  const lastRun = $derived(s?.runs.at(-1))
   const est = '–' // shortcut: the step file has no estimate field yet; show it when hubd serves one
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
@@ -113,11 +117,14 @@
       <h1>{s.title}</h1>
       {#if lead}<p><Inline text={lead} /></p>{/if}
       <div class="meta">
-        <div><span>MODEL</span>{s.model ?? '–'}</div>
+        <div title={overridden ? `The vault step says ${s.model}, .claude/commands/sprint-${s.step}.md says ${s.command_model}. The vault step wins.` : ''}><span>MODEL</span>{model}{#if overridden} <i class="over">not {s.command_model}</i>{/if}</div>
         <div><span>EST.</span>{est}</div>
         <div title={s.branch ?? ''}><span>BRANCH</span>{s.branch ?? '–'}</div>
         <div><span>BY</span>{s.by}</div>
       </div>
+      {#if lastRun}
+        <div class="last">Run {s.runs.length} · started {lastRun.started?.slice(0, 16).replace('T', ' ')} · {lastRun.model}</div>
+      {/if}
     </section>
 
     <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !qs.length}>
@@ -229,6 +236,8 @@
   .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
   .meta div { border: 1px solid var(--sel); border-radius: 7px; padding: 6px 10px; background: var(--bg); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta span { display: block; font: 10.5px var(--mono); color: var(--fg2); letter-spacing: 0.05em; }
+  .over { font-style: normal; color: var(--y); }
+  .last { font: 12px var(--mono); color: var(--fg2); }
   .ck { grid-column: 1; grid-row: 2; }
   /* No checklist yet: the pane hugs its one line instead of filling the column. */
   .ck.short { align-self: start; }

@@ -12,12 +12,13 @@ export type Step = {
   model: string | null
   branch: string | null
   sprint: number | null
-  runs: { started?: string; minutes: number | null }[]
+  runs: { started?: string; minutes: number | null; model?: string }[]
   tasks: Task[]
   questions: Question[]
   review?: { verdict: 'approve' | 'changes' | null; comment: string } | null
   spec?: string | null
   path?: string
+  command_model?: string | null
 }
 
 // API order is by file name, which is step order.

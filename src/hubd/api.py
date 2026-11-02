@@ -109,7 +109,12 @@ def create_app(
     @app.get("/steps/{project}/{step_id}")
     def step(project: str, step_id: str) -> dict:
         entry = hub.entry(project, step_id)
-        return {**step_json(entry), "spec": spec_text(entry), "path": str(entry.path)}
+        return {
+            **step_json(entry),
+            "spec": spec_text(entry),
+            "path": str(entry.path),
+            "command_model": hub.command_model(entry),
+        }
 
     @app.get("/steps/{project}/{step_id}/diffstat")
     async def diffstat(project: str, step_id: str) -> dict:

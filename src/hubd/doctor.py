@@ -5,7 +5,10 @@ import subprocess
 from pathlib import Path
 
 from hubd import install, theme
+from hubd.model import State
 from hubd.runners import claude
+from hubd.settings import load_settings
+from hubd.vault import load_vault, vault_path
 
 
 def _run(*argv: str) -> str:
@@ -39,8 +42,39 @@ def _theme(path: Path) -> tuple[bool, str]:
     return False, f"theme {path} not found: the app uses its default colours"
 
 
+def _terminal(vault: Path) -> tuple[bool, str]:
+    try:
+        exe = load_settings(vault / "hub.toml").terminal[0]
+    except (OSError, ValueError, IndexError) as exc:
+        return False, f"cannot read the terminal from {vault / 'hub.toml'}: {exc}"
+    found = shutil.which(exe)
+    return (True, f"terminal at {found}") if found else (False, f"terminal {exe} not on PATH")
+
+
+def _commands(vault: Path) -> list[tuple[bool, str]]:
+    """Per project: every todo step needs its command, or its start is refused."""
+    index = load_vault(vault)
+    results = []
+    for name, project in index.projects.items():
+        todo = [
+            e.step.step
+            for e in index.steps
+            if e.project == name and e.step.state == State.todo and e.step.by == "claude"
+        ]
+        commands = vault / project.repo / ".claude" / "commands" if project.repo else None
+        if not todo or commands is None:
+            continue
+        missing = [s for s in todo if not (commands / f"sprint-{s}.md").is_file()]
+        if missing:
+            results.append((False, f"{name}: no command in {commands} for {', '.join(missing)}"))
+        else:
+            results.append((True, f"{name}: command for each of {len(todo)} todo steps"))
+    return results
+
+
 def main(settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY) -> int:
-    results = [*checks(settings), _theme(theme_file)]
+    vault = vault_path()
+    results = [*checks(settings), _theme(theme_file), _terminal(vault), *_commands(vault)]
     for ok, text in results:
         print(f"{'✔' if ok else '✘'} {text}")
     return 0 if all(ok for ok, _ in results) else 1
