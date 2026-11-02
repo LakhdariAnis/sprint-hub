@@ -1,8 +1,10 @@
 """Load the vault into an in-memory index (docs/HUB-DESIGN.md section 4)."""
 
+import math
 import os
 import re
 import shutil
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -31,6 +33,7 @@ _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 _DEADLINE = re.compile(r"^- (?:\[(?P<mark>[ xX])\] )?(?P<date>\S+)(?P<rest>.*)$")
 _TAG = re.compile(r"(?<!\S)#([\w/-]+)")
 _LINK = re.compile(r"\[\[([^\]]+)\]\]")
+_COMMAND_HEAD = re.compile(r"---\n(.*?)^---", re.S | re.M)
 
 
 @dataclass
@@ -54,6 +57,8 @@ class StepEntry:
     seen: dict[str, datetime | None] = field(default_factory=dict)
     # `doing`, but hubd found no live session for it when it started: `f` gets it out.
     run_gone: bool = False
+    # `hours:` of the step's command file; None when it has none.
+    planned: float | None = None
 
 
 @dataclass
@@ -375,12 +380,39 @@ def live_file(repo: Path, folder: str, step_id: str) -> Path | None:
     return max((p for p in paths if p.is_file()), key=lambda p: p.stat().st_mtime, default=None)
 
 
+def command_field(repo: Path, step_id: str, name: str) -> str | None:
+    """A `name:` value in the frontmatter of the step's `sprint-<id>.md` command."""
+    commands = [repo / ".claude/commands" / f"sprint-{step_id}.md"]
+    commands += sorted((repo / "sprint").glob(f"archive/**/commands/sprint-{step_id}.md"))
+    path = next((p for p in commands if p.is_file()), None)
+    if path is None:
+        return None
+    # Line by line: `description: Sprint 402 - Project screen: ...` is not valid YAML.
+    try:
+        head = _COMMAND_HEAD.match(path.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"warning: {path}: {exc}", file=sys.stderr)
+        return None
+    m = re.search(rf"^{name}:\s*([\w.-]+)\s*$", head[1], re.M) if head else None
+    return m[1] if m else None
+
+
+def planned_hours(repo: Path, step_id: str) -> float | None:
+    """`hours:` of the step's command; missing or not a number of hours = None."""
+    try:
+        hours = float(command_field(repo, step_id, "hours") or "")
+    except ValueError:
+        return None
+    return hours if math.isfinite(hours) and hours >= 0 else None
+
+
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
     archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
     if step.by == "me":
         entry.tasks = step_tasks(path)
     if repo:
+        entry.planned = planned_hours(repo, step.step)
         sprint = repo / "sprint"
         entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
         progress = live_file(repo, "progress", step.step)
