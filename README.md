@@ -17,7 +17,15 @@ Open http://127.0.0.1:8765/. Keys: `1 2 3 4` switch screens, `j`/`k` (or arrows)
 columns, `Enter` opens, `Esc` goes back, `b` hides the sidebar, `s` starts a step (Step screen), `a` approves and `c`
 requests changes (Review), `?` shows all keys. A project opens on the step that needs work, a step on its current task.
 
-On your own vault (`~/Hub`, or `HUB_VAULT`):
+On your own vault (`~/Hub`, or `HUB_VAULT`), list your projects in `~/.config/sprint-hub/projects.toml`:
+
+    [[project]]
+    name = "my project"
+    path = "~/Projects/my-project"
+
+Then run `uv run hubd init`. It creates the vault and `projects/my-project/` with its `project.md` and an empty `steps/`.
+Running it again changes nothing: a project already in the vault is never rewritten, and one you removed from
+`projects.toml` stays. A project whose path does not exist is skipped with a warning. Restart `hubd` to see new projects.
 
 - **Deadlines**: one line each in `~/Hub/deadlines.md`, `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub/301]]`
   (tag and step link optional, `[x]` = done). Today lists the next 7 days, overdue first in red.
