@@ -1,7 +1,7 @@
 import { demo } from './demo'
-import type { FileError } from './projects'
-import { loadStep, type OpenQuestion, type Step } from './steps'
-import { key, put, steps } from './store.svelte'
+import { loadProjects, type FileError } from './projects'
+import { loadStep, loadSteps, type OpenQuestion, type Step } from './steps'
+import { key, lists, put, steps } from './store.svelte'
 import { applyTheme, loadTheme } from './theme'
 
 // Live numbers for the frame: hubd health, the fake demo data (`--demo` only), the counts shown in the bar and the tabs, and broken vault files.
@@ -38,6 +38,22 @@ async function load() {
   }
 }
 
+// Re-reads the lists a screen opened with: a step or project that appeared or went (new spec, projects.toml, a deleted file) is not in them otherwise.
+async function relist() {
+  try {
+    if (lists.projects) lists.projects = await loadProjects()
+  } catch {}
+  for (const p of Object.keys(lists.steps)) {
+    try {
+      const l = await loadSteps(p)
+      for (const s of l) put(p, s)
+      lists.steps[p] = l.map((s) => key(p, s.step))
+    } catch {
+      delete lists.steps[p] // the project is gone
+    }
+  }
+}
+
 // The one `/events` stream of the app. `step` and `tasks` carry the whole step; the store takes it as is.
 function connect() {
   const events = new EventSource('/events')
@@ -47,9 +63,21 @@ function connect() {
   }
   // Questions ride on `tasks` events, so the inbox re-reads there too.
   events.addEventListener('tasks', (e) => (take(e), load()))
-  events.addEventListener('step', (e) => (take(e), load()))
+  events.addEventListener('step', (e) => {
+    const { project, step } = JSON.parse(e.data)
+    const known = key(project, step) in steps
+    take(e)
+    load()
+    if (!known) relist()
+  })
   // A fixed file comes back as a `step` event, so every load re-reads the error list.
-  for (const type of ['error', 'removed', 'reload']) events.addEventListener(type, load)
+  for (const type of ['error', 'reload']) events.addEventListener(type, load)
+  events.addEventListener('reload', relist)
+  events.addEventListener('removed', (e) => {
+    const { project, step } = JSON.parse(e.data)
+    // Gone from the lists first, then from the store: a screen still holding the key would read nothing.
+    Promise.all([load(), relist()]).then(() => delete steps[key(project, step)])
+  })
   events.addEventListener('theme', (e) => applyTheme(JSON.parse(e.data)))
   // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
   events.onopen = () => {
