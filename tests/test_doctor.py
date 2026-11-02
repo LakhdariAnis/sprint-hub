@@ -14,6 +14,16 @@ HELP = """Usage: claude [options] [command] [prompt]
 """
 
 
+@pytest.fixture(autouse=True)
+def vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty vault, never the real ~/Hub; a terminal every PATH below has."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "hub.toml").write_text('terminal = ["claude"]\n')
+    monkeypatch.setenv("HUB_VAULT", str(vault))
+    return vault
+
+
 def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, help_text: str) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -40,7 +50,7 @@ def test_all_good(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> No
     out = capsys.readouterr().out.splitlines()
     assert all(line.startswith("✔") for line in out)
     assert "✔ version 9.9.9 (Claude Code)" in out
-    assert len(out) == 7  # path, version, 3 flags, hook, theme
+    assert len(out) == 8  # path, version, 3 flags, hook, theme, terminal
 
 
 def test_missing_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
@@ -58,6 +68,7 @@ def test_no_claude_and_no_hook(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
         "✘ claude not on PATH",
         "✘ SessionEnd hook missing: run hubd install-hook",
         f"✘ theme {tmp_path / 'colors.toml'} not found: the app uses its default colours",
+        "✘ terminal claude not on PATH",
     ]
 
 
@@ -77,3 +88,32 @@ def test_hook_from_other_venv_and_broken_settings(tmp_path: Path) -> None:
     path.write_text("{")
     [(ok, text)] = doctor._hook(path)
     assert not ok and text.startswith("cannot read")
+
+
+def add_step(vault: Path, step: str, state: str = "todo") -> Path:
+    repo = vault / "repo"
+    (repo / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
+    folder = vault / "projects" / "try"
+    (folder / "steps").mkdir(parents=True, exist_ok=True)
+    (folder / "project.md").write_text(
+        "---\nname: try\nrepo: repo\nmodel: haiku\nmerge: manual\n---\n"
+    )
+    (folder / "steps" / f"{step}.md").write_text(
+        f"---\nstep: {step}\ntitle: Note\nstate: {state}\nby: claude\n---\n"
+    )
+    return repo / ".claude" / "commands"
+
+
+def test_todo_steps_need_their_command(vault: Path) -> None:
+    commands = add_step(vault, "901")
+    add_step(vault, "902", "approved")  # no longer starts: needs no command
+    assert doctor._commands(vault) == [(False, f"try: no command in {commands} for 901")]
+    (commands / "sprint-901.md").write_text("Go\n")
+    assert doctor._commands(vault) == [(True, "try: command for each of 1 todo steps")]
+
+
+def test_terminal(vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert doctor._terminal(vault) == (False, "terminal claude not on PATH")
+    (vault / "hub.toml").write_text("terminal = [")
+    assert doctor._terminal(vault)[1].startswith("cannot read the terminal")
