@@ -11,7 +11,14 @@ RunEnded = Callable[[str, str], Awaitable[None]]
 
 
 class AgentRunner(Protocol):
-    """Both methods return once the run is launched. The end comes later, through `RunEnded`."""
+    """`start` and `resume` return once the run is launched. The end comes later: `RunEnded`."""
+
+    def refusal(self, step_id: str, cwd: Path, fresh: bool) -> str | None:
+        """Why this run must not start, checked before any file changes; None = go.
+
+        `fresh`: a new chat with the step's command, not a resumed one.
+        """
+        ...
 
     async def start(
         self, step: Step, session_id: str, model: str, cwd: Path, prompt: str

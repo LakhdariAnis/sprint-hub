@@ -158,8 +158,7 @@ def load_vault(path: Path) -> Index:
     index = Index()
     index.deadlines, index.errors = load_deadlines(path / "deadlines.md")
     if not (path / "projects").is_dir():
-        index.errors.append(FileError(path / "projects", None, "no projects folder"))
-        return index
+        return index  # first run, not a broken file: the app says to run `hubd init`
     for project_dir in sorted(p for p in (path / "projects").iterdir() if p.is_dir()):
         project = _guard(index, project_dir / "project.md", _load_project)
         if project:

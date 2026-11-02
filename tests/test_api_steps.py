@@ -41,9 +41,9 @@ def test_run_ended_from_the_hook(hub: Hub) -> None:
     assert client.post("/runs/ended", json={"session_id": "x"}).status_code == 422
 
 
-def test_missing_vault_is_an_error_not_a_crash(tmp_path: Path) -> None:
+def test_missing_vault_is_empty_not_broken(tmp_path: Path) -> None:
     index = load_vault(tmp_path / "nothing")
-    assert [e.message for e in index.errors] == ["no projects folder"]
+    assert (index.projects, index.steps, index.errors) == ({}, [], [])
 
 
 def test_tick_manual_task(vault: Path, hub: Hub) -> None:

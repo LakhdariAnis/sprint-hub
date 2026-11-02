@@ -114,12 +114,20 @@ class Hub:
         Runs until `stop`. When a project's `sprint/` appears or goes, watching restarts.
         """
         known = self._sprint_dirs()
+        loaded = self.vault.is_dir()
         while not stop.is_set():
-            config = self.projects_file.parent if self.projects_file else None
-            paths = [self.vault, *known, *([config] if config and config.is_dir() else [])]
+            if not loaded and self.vault.is_dir():
+                # `hubd init` made the vault: read it. Nothing is imported, `hubd import` does that.
+                async with self.lock:
+                    self._reload_all()
+                known, loaded = self._sprint_dirs(), True
+            roots = self._roots(known)
+            if not roots:  # nothing to watch yet: the vault is not there
+                await asyncio.sleep(1)
+                continue
             # The timeout also yields: a `sprint/` that appears has no event, this check finds it.
             watching = awatch(
-                *paths,
+                *roots,
                 watch_filter=self._watchable,
                 debounce=50,
                 stop_event=stop,
@@ -135,9 +143,22 @@ class Hub:
                             await self._import_projects(now - known)
                             known = now
                             break
+                        if self._roots(known) != roots:
+                            if self.vault not in roots and self.vault.is_dir():
+                                async with (
+                                    self.lock
+                                ):  # `hubd init` made the vault: read it, no import
+                                    self._reload_all()
+                                known = self._sprint_dirs()
+                            break
             except OSError:  # a watched folder vanished between the check and the watch
                 known = self._sprint_dirs()
                 await asyncio.sleep(1)
+
+    def _roots(self, sprints: set[Path]) -> list[Path]:
+        """The folders to watch that exist now; a missing vault is watched once it appears."""
+        config = self.projects_file.parent if self.projects_file else None
+        return [p for p in (self.vault, *sprints, config) if p and p.is_dir()]
 
     async def _import_projects(self, sprints: set[Path]) -> None:
         """Import the projects whose `sprint/` just appeared: its specs may be there already."""
@@ -334,6 +355,8 @@ class Hub:
                 model, session = resume.model, resume.session
             else:
                 model, session = new.model or settings.model, str(uuid4())
+            if reason := self.runner.refusal(step_id, repo, resume is None):
+                raise InvalidTransition(f"step {step_id}: {reason}")
             started = datetime.now().replace(second=0, microsecond=0)  # the file keeps minutes
             new.runs = [*new.runs, Run(started=started, model=model, session=session)]
             before = entry.path.read_bytes()

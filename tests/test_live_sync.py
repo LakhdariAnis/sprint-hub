@@ -6,8 +6,11 @@ from pathlib import Path
 
 import pytest
 from conftest import Recorder
+from fastapi.testclient import TestClient
 from test_live import drain
 
+from hubd import init
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.runners.fake import FakeRunner
 
@@ -223,3 +226,22 @@ def test_repo_that_gets_sprint_later(vault: Path, notifier: Recorder, tmp_path: 
         await until(lambda: len([e for e in hub.index.steps if e.project == "late"]) == 2)
 
     asyncio.run(watching(hub, body))
+
+
+def test_hubd_starts_without_a_vault_and_picks_it_up(tmp_path: Path, notifier: Recorder) -> None:
+    vault = tmp_path / "Hub"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    hub = Hub(vault, lambda ended: FakeRunner(ended, delay=0), notifier)
+    client = TestClient(create_app(hub))
+    assert (client.get("/projects").json(), client.get("/errors").json()) == ([], [])
+    assert client.post("/steps/demo/101/start").status_code == 404
+
+    async def body() -> None:
+        (vault / "projects").mkdir(parents=True)
+        init.create(vault / "projects" / "late", "late", repo)
+        await until(lambda: "late" in hub.index.projects)
+
+    events = asyncio.run(watching(hub, body))
+    assert [e["type"] for e in events] == ["reload"]
+    assert hub.index.steps == []  # init does not import
