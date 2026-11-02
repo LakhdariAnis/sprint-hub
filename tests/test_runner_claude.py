@@ -22,6 +22,7 @@ def spawned(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
 def test_start_command_and_env(spawned: list[dict], monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", "/home/x")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-1")  # set: session.env() asks no systemctl
     runner = ClaudeCodeRunner(Settings().terminal, URL)
     asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "/sprint-106"))
     [call] = spawned
@@ -39,6 +40,7 @@ def test_start_command_and_env(spawned: list[dict], monkeypatch: pytest.MonkeyPa
     assert call["env"]["HUB_RUN"] == "106"
     assert call["env"]["HUB_URL"] == URL
     assert call["env"]["HOME"] == "/home/x"  # the rest of the env is kept
+    assert call["env"]["WAYLAND_DISPLAY"] == "wayland-1"
     assert call["start_new_session"] is True
 
 

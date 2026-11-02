@@ -1,9 +1,9 @@
 """Run a real Claude Code session in a new terminal. Documented CLI flags only (ROADMAP rule 4)."""
 
-import os
 import subprocess
 from pathlib import Path
 
+from hubd import session
 from hubd.model import Step
 
 # Every flag below is in https://code.claude.com/docs/en/cli-reference (checked 2026-10-16).
@@ -23,7 +23,7 @@ class ClaudeCodeRunner:
         return [arg.replace("{cwd}", str(cwd)) for arg in self.terminal] + ["claude", *claude_args]
 
     def env(self, step: Step) -> dict[str, str]:
-        return {**os.environ, "HUB_RUN": step.step, "HUB_URL": self.hub_url}
+        return {**session.env(), "HUB_RUN": step.step, "HUB_URL": self.hub_url}
 
     async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
         args = [MODEL, model, SESSION_ID, session_id, prompt]
