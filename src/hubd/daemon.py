@@ -23,6 +23,7 @@ from hubd.vault import (
     _load_project,
     _load_step,
     _write_atomic,
+    live_file,
     load_deadlines,
     load_vault,
     parse_questions,
@@ -30,6 +31,7 @@ from hubd.vault import (
     save_step,
     step_tasks,
     tick_task,
+    worktrees,
 )
 
 # shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
@@ -110,9 +112,10 @@ class Hub:
         return repo is not None and not repo.is_dir()
 
     def _sprint_dirs(self) -> set[Path]:
-        return {
-            s for p in self.index.projects if (r := self.repo(p)) and (s := r / "sprint").is_dir()
-        }
+        """Every `sprint/` to watch: each repo's and those of its worktrees."""
+        repos = [r for p in self.index.projects if (r := self.repo(p))]
+        trees = [t for r in repos for t in (r, *worktrees(r))]
+        return {s for t in trees if (s := t / "sprint").is_dir()}
 
     def _watchable(self, _: object, path: str) -> bool:
         return path.endswith(".md") or Path(path) == self.projects_file  # `.md` skips `.tmp` too
@@ -120,7 +123,7 @@ class Hub:
     async def watch(self, stop: asyncio.Event) -> None:
         """Reload each changed file of the vault, the repos' `sprint/` and `projects.toml`.
 
-        Runs until `stop`. When a project's `sprint/` appears or goes, watching restarts.
+        Runs until `stop`. When a repo's or worktree's `sprint/` appears or goes, watching restarts.
         """
         known = self._sprint_dirs()
         loaded = self.vault.is_dir()
@@ -166,7 +169,10 @@ class Hub:
         return [p for p in (self.vault, *sprints, config) if p and p.is_dir()]
 
     async def _import_projects(self, sprints: set[Path]) -> None:
-        """Import the projects whose `sprint/` just appeared: its specs may be there already."""
+        """Import the projects whose `sprint/` just appeared: its specs may be there already.
+
+        Always reads the vault again: a worktree's `sprint/` has no specs but may hold a checklist.
+        """
         async with self.lock:
             for project, settings in self.index.projects.items():
                 repo = self.repo(project)
@@ -284,17 +290,20 @@ class Hub:
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
             repo = self.repo(entry.project)
-            if repo is None:
+            if repo is None or path.name != f"{entry.step.step}.md":
                 continue
-            if path == repo / "sprint" / "questions" / f"{entry.step.step}.md":
-                questions = parse_questions(path.read_text()) if path.exists() else []
+            trees = (repo, *worktrees(repo))
+            if path.parent in [t / "sprint" / "questions" for t in trees]:
+                file = live_file(repo, "questions", entry.step.step)
+                questions = parse_questions(file.read_text()) if file else []
                 if questions != entry.questions:
                     entry.questions = questions
                     self.emit({"type": "tasks", **step_json(entry)})
             if entry.step.by == "me":
                 continue  # a `by: me` checklist is in the step file, reloaded with it
-            if path == repo / "sprint" / "progress" / f"{entry.step.step}.md":
-                tasks = parse_tasks(path.read_text()) if path.exists() else []
+            if path.parent in [t / "sprint" / "progress" for t in trees]:
+                file = live_file(repo, "progress", entry.step.step)
+                tasks = parse_tasks(file.read_text()) if file else []
                 if tasks != entry.tasks:
                     before, now = {t.text: t.state for t in entry.tasks}, datetime.now()
                     entry.seen = {

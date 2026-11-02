@@ -1,19 +1,26 @@
 """Step 506b: a run always gets out of `doing`, and its checklist ticks wherever it works."""
 
 import asyncio
+import os
+import shutil
 import subprocess
+import time
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from conftest import Recorder
 from fastapi.testclient import TestClient
+from test_live import drain
+from test_live_sync import until, watching
 
 from hubd.api import create_app
 from hubd.daemon import Hub
-from hubd.model import State
+from hubd.model import State, TaskState
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.runners.fake import FakeRunner
-from hubd.vault import _load_step
+from hubd.vault import _load_step, live_file, worktrees
 
 STEP = Path("projects") / "demo" / "steps"
 LATE = {"session_id": "3f2a…c91", "step": "102"}  # 102 is `doing` in the fixture
@@ -129,3 +136,119 @@ def test_claude_runner_finds_a_session_on_a_process_argv(tmp_path: Path) -> None
         process.kill()
         process.wait()
     assert runner.running(session) is False
+
+
+@pytest.fixture
+def repo(vault: Path) -> Path:
+    """The demo repo as a git repo, as `git worktree add` needs one."""
+    cwd = vault / "demo-repo"
+    git(cwd, "init", "-q", "-b", "main")
+    name = ("-c", "user.name=t", "-c", "user.email=t@t")
+    git(cwd, *name, "commit", "-q", "--allow-empty", "-m", "t")
+    return cwd
+
+
+def git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+def add_worktree(repo: Path, name: str) -> Path:
+    tree = repo.parent / name
+    git(repo, "worktree", "add", "-q", str(tree), "-b", name)
+    return tree
+
+
+def write(tree: Path, folder: str, step: str, text: str, age: float = 0) -> Path:
+    path = tree / "sprint" / folder / f"{step}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    when = time.time() - age
+    os.utime(path, (when, when))
+    return path
+
+
+def texts(hub: Hub, step: str) -> list[str]:
+    return [t.text for t in hub.entry("demo", step).tasks]
+
+
+def test_worktrees_lists_what_git_lists(repo: Path) -> None:
+    assert worktrees(repo) == []
+    tree = add_worktree(repo, "wt")
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"], cwd=repo, capture_output=True, text=True
+    ).stdout
+    assert f"worktree {tree}\n" in listed
+    assert worktrees(repo) == [tree]
+    shutil.rmtree(tree)  # removed by hand: git still lists it, there is nothing to read
+    assert worktrees(repo) == []
+
+
+def test_worktrees_of_a_folder_that_is_no_repo(tmp_path: Path) -> None:
+    assert worktrees(tmp_path / "nothing") == []
+
+
+def test_worktree_progress_and_questions_load_at_start(repo: Path, notifier: Recorder) -> None:
+    tree = add_worktree(repo, "wt")
+    write(tree, "progress", "103", "# Step 103\n- [x] from worktree\n")
+    write(tree, "questions", "103", "# Step 103\n- [ ] from worktree?\n")
+    hub = Hub(repo.parent, lambda ended: FakeRunner(ended, delay=0), notifier)
+    assert texts(hub, "103") == ["from worktree"]
+    assert hub.entry("demo", "103").questions[0].text == "from worktree?"
+
+
+def test_newest_file_wins(repo: Path, notifier: Recorder) -> None:
+    tree = add_worktree(repo, "wt")
+    write(repo, "progress", "103", "- [ ] main\n", age=100)
+    write(tree, "progress", "103", "- [ ] worktree\n", age=50)
+    assert live_file(repo, "progress", "103") == tree / "sprint" / "progress" / "103.md"
+    write(repo, "progress", "103", "- [ ] main\n")
+    assert live_file(repo, "progress", "103") == repo / "sprint" / "progress" / "103.md"
+
+
+def test_worktree_tick_emits_tasks_and_an_older_file_loses(repo: Path, notifier: Recorder) -> None:
+    tree = add_worktree(repo, "wt")
+    hub = Hub(repo.parent, lambda ended: FakeRunner(ended, delay=0), notifier)
+    older = write(repo, "progress", "103", "- [ ] main\n", age=100)
+    path = write(tree, "progress", "103", "- [x] worktree\n")
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            await hub.reload(path)
+            await hub.reload(older)  # the older file changed on disk: it is still the older one
+            return drain(queue)
+
+    [event] = asyncio.run(main())
+    assert (event["type"], event["tasks"][0]["text"]) == ("tasks", "worktree")
+
+
+def test_worktree_added_during_a_run(repo: Path, notifier: Recorder) -> None:
+    hub = Hub(repo.parent, lambda ended: FakeRunner(ended, delay=0), notifier)
+    ticked = {"Build the API": datetime(2026, 11, 2, 10, 0)}
+    hub.entry("demo", "102").seen = ticked
+
+    async def body() -> None:
+        tree = add_worktree(repo, "wt")
+        write(tree, "progress", "103", "- [ ] one\n")
+        await until(lambda: texts(hub, "103") == ["one"])
+        # Watched from now on: a tick in it arrives without a restart.
+        await asyncio.sleep(0.3)
+        write(tree, "progress", "103", "- [x] one\n")
+        await until(lambda: hub.entry("demo", "103").tasks[0].state == TaskState.done)
+        git(repo, "worktree", "remove", "--force", str(tree))
+        await until(lambda: texts(hub, "103") == [])
+
+    events = asyncio.run(watching(hub, body))
+    assert {"type": "reload"} in events
+    assert hub.entry("demo", "102").seen == ticked  # the full reload keeps the tick times
+
+
+def test_worktree_without_sprint_gets_one_later(repo: Path, notifier: Recorder) -> None:
+    hub = Hub(repo.parent, lambda ended: FakeRunner(ended, delay=0), notifier)
+    tree = add_worktree(repo, "wt")
+
+    async def body() -> None:
+        await asyncio.sleep(1.2)  # a few polls find a worktree with no `sprint/`: nothing to do
+        write(tree, "progress", "103", "- [x] late\n")
+        await until(lambda: texts(hub, "103") == ["late"])
+
+    asyncio.run(watching(hub, body))
