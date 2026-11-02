@@ -19,7 +19,7 @@ def vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An empty vault, never the real ~/Hub; a terminal every PATH below has."""
     vault = tmp_path / "vault"
     vault.mkdir()
-    (vault / "hub.toml").write_text('terminal = ["claude"]\n')
+    (vault / "hub.toml").write_text('terminal = ["claude", "{cwd}"]\n')
     monkeypatch.setenv("HUB_VAULT", str(vault))
     return vault
 
