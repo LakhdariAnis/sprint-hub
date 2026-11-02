@@ -18,10 +18,12 @@
   const manual = $derived(s?.by === 'me')
   const canStart = $derived(s && (s.state === 'todo' || s.state === 'changes') && !manual)
   let busy = $state(false)
-  const start = () => {
+  // From `changes`, `s` resumes the last chat; `n` opens a new one when that chat cannot be resumed.
+  const canFresh = $derived(s?.state === 'changes' && !manual)
+  const start = (fresh = false) => {
     busy = true
     error = ''
-    startStep(project, id)
+    startStep(project, id, fresh)
       .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
@@ -74,7 +76,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => canFresh && !busy && start(true), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -114,7 +116,10 @@
   {#if s}<span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
   <span class="acts">
     {#if canStart}
-      <button class="btn pri" type="button" disabled={busy} onclick={start}>Start <span class="kb">s</span></button>
+      <button class="btn pri" type="button" disabled={busy} onclick={() => start()}>{s?.state === 'changes' ? 'Continue chat' : 'Start'} <span class="kb">s</span></button>
+      {#if canFresh}
+        <button class="btn" type="button" disabled={busy} onclick={() => start(true)} title="Claude cannot resume the old chat: start a new one with your comment">New chat <span class="kb">n</span></button>
+      {/if}
     {:else if s?.state === 'doing'}
       <!-- hubd has no stop API yet -->
       <button class="btn" type="button" disabled title="Stopping a run comes in a later sprint">Stop <span class="kb">s</span></button>
@@ -148,8 +153,9 @@
         <div><span>BY</span>{s.by}</div>
       </div>
       {#if lastRun}
-        <div class="last">Run {s.runs.length} · started {lastRun.started?.slice(0, 16).replace('T', ' ')} · {lastRun.model}</div>
+        <div class="last">{s.runs.length} {s.runs.length === 1 ? 'run' : 'runs'} · last started {lastRun.started?.slice(0, 16).replace('T', ' ')} · {lastRun.model}</div>
       {/if}
+      {#if s.review?.comment}<div class="last cm"><span>YOUR LAST COMMENT</span> {s.review.comment}</div>{/if}
     </section>
 
     <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !qs.length}>
@@ -264,7 +270,8 @@
   .meta div { border: 1px solid var(--sel); border-radius: 7px; padding: 6px 10px; background: var(--bg); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta span { display: block; font: 10.5px var(--mono); color: var(--fg2); letter-spacing: 0.05em; }
   .over { font-style: normal; color: var(--y); }
-  .last { font: 12px var(--mono); color: var(--fg2); }
+  .last { font: 12px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
+  .cm span { color: var(--fgd); }
   .ck { grid-column: 1; grid-row: 2; }
   /* No checklist yet: the pane hugs its one line instead of filling the column. */
   .ck.short { align-self: start; }

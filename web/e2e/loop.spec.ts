@@ -19,6 +19,21 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await expect(page.locator('.big')).toHaveText(/3\s*\/\s*3/, { timeout: 30_000 })
   await expect(chip).toHaveText(/done/, { timeout: 30_000 })
 
+  // One round of changes: the comment (with a ` #`) shows on the Step screen, `n` opens a new chat.
+  await page.goto('/#/review/notes/301')
+  await page.keyboard.press('c')
+  await page.keyboard.type('Add banana #important')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.head .chip')).toHaveText(/changes/)
+  await page.goto('/#/steps/notes/301')
+  await expect(chip).toHaveText(/changes/)
+  await expect(page.getByText('Add banana #important')).toBeVisible()
+  await expect(page.getByText(/^1 run · last started/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Continue chat/ })).toBeVisible()
+  await page.keyboard.press('n')
+  await expect(page.getByText(/^2 runs · last started/)).toBeVisible()
+  await expect(chip).toHaveText(/done/, { timeout: 30_000 })
+
   await page.goto('/#/review/notes/301')
   await page.getByRole('button', { name: /^Approve/ }).click()
   await page.getByRole('button', { name: /^Yes, approve/ }).click()

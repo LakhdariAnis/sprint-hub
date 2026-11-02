@@ -34,5 +34,5 @@ test('the Step screen says when the vault model differs from the command', async
 
 test('the Step screen lists the latest run with its start time', async ({ page }) => {
   await page.goto('/#/steps/notes/302')
-  await expect(page.getByText('Run 1 · started 2026-10-19 09:00 · sonnet')).toBeVisible()
+  await expect(page.getByText('1 run · last started 2026-10-19 09:00 · sonnet')).toBeVisible()
 })

@@ -42,7 +42,8 @@ async function post(project: string, id: string, move: string, body?: object): P
   return reply
 }
 
-export const startStep = (project: string, id: string) => post(project, id, 'start')
+// `fresh`: from `changes`, a new chat with the comment in its prompt instead of resuming the last one.
+export const startStep = (project: string, id: string, fresh = false) => post(project, id, fresh ? 'start?fresh=true' : 'start')
 export const finishStep = (project: string, id: string) => post(project, id, 'finish')
 // `commit`: what the base branch is on after the merge; null when there was nothing to merge.
 export const approveStep = (project: string, id: string) => post(project, id, 'approve') as Promise<Step & { commit: string | null }>
