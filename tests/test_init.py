@@ -166,3 +166,31 @@ def test_command_expands_tilde_and_honours_hub_vault(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert f"repo: {tmp_path}/work/demo\n" in (vault / "projects/demo/project.md").read_text()
+
+
+def git_repo(tmp_path: Path, branch: str) -> Path:
+    path = repo(tmp_path, branch)
+    subprocess.run(["git", "init", "-q", "-b", branch, str(path)], check=True)
+    return path
+
+
+def test_base_is_the_branch_the_repo_is_on(vault: Path, tmp_path: Path) -> None:
+    assert init.main(config(tmp_path, ("v", git_repo(tmp_path, "v2")))) == 0
+    assert load_vault(vault).projects["v"].base == "v2"
+
+
+def test_a_step_branch_is_not_the_base(vault: Path, tmp_path: Path) -> None:
+    path = git_repo(tmp_path, "v2")
+    env = ["-c", "user.name=t", "-c", "user.email=t@hubd.invalid"]
+    subprocess.run(
+        ["git", "-C", str(path), *env, "commit", "-q", "--allow-empty", "-m", "x"], check=True
+    )
+    subprocess.run(["git", "-C", str(path), "branch", "-q", "main"], check=True)
+    subprocess.run(["git", "-C", str(path), "switch", "-q", "-c", "step/1-x"], check=True)
+    assert init.base_branch(path) == "main"
+
+
+def test_no_git_repo_means_the_default_base(vault: Path, tmp_path: Path) -> None:
+    assert init.main(config(tmp_path, ("plain", repo(tmp_path)))) == 0
+    assert "base:" not in (vault / "projects/plain/project.md").read_text()
+    assert load_vault(vault).projects["plain"].base == "main"

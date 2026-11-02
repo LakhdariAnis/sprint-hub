@@ -55,7 +55,7 @@ export const ago = (started: string | undefined, now: number) => {
 
 export const goal = (spec: string | null | undefined) => spec?.match(/^## Goal\s*\n([\s\S]*?)(?=^## |(?![\s\S]))/m)?.[1].trim() ?? ''
 
-// `git diff --stat main...branch` of the step; a refused read throws hubd's reason.
+// `git diff --stat base...branch` of the step; a refused read throws hubd's reason.
 export async function loadDiffstat(project: string, id: string): Promise<string> {
   const r = await fetch(`/steps/${encodeURIComponent(project)}/${encodeURIComponent(id)}/diffstat`)
   const body = await r.json().catch(() => null)

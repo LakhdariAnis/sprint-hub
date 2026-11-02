@@ -7,6 +7,7 @@ from pathlib import Path
 
 import yaml
 
+from hubd.importer import git, main_line
 from hubd.vault import vault_path
 
 PROJECTS = Path("~/.config/sprint-hub/projects.toml").expanduser()
@@ -43,9 +44,17 @@ def load_projects(config: Path) -> list[tuple[str, Path]]:
     return projects
 
 
+def base_branch(repo: Path) -> str | None:
+    """The branch the repo is on. A step branch or a detached HEAD is no base: use the main line."""
+    head = git(repo, "branch", "--show-current")
+    return main_line(repo) if not head or head.startswith("step/") else head
+
+
 def create(folder: Path, name: str, repo: Path) -> None:
     (folder / "steps").mkdir(parents=True, exist_ok=True)
     meta = {"name": name, "repo": str(repo), "model": "sonnet", "merge": "manual"}
+    if base := base_branch(repo):
+        meta["base"] = base
     text = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True)
     # "x": a project.md is never overwritten, whatever happened since the exists() check.
     with (folder / "project.md").open("x") as f:

@@ -296,8 +296,8 @@ def test_branch_merged_into_main_is_approved(vault: Path, repo: Path) -> None:
     assert state(vault, "102") == State.todo
 
 
-def test_main_line_comes_from_origin_head(vault: Path, repo: Path, tmp_path: Path) -> None:
-    """Like sprint-hub: `origin/HEAD` is `v2`; merged only into old `main` does not count."""
+def test_merged_check_uses_the_project_base(vault: Path, repo: Path, tmp_path: Path) -> None:
+    """Like sprint-hub: `base: v2`; merged only into old `main` does not count."""
     origin = tmp_path / "origin"
     origin.mkdir()
     init_git(origin)
@@ -314,6 +314,8 @@ def test_main_line_comes_from_origin_head(vault: Path, repo: Path, tmp_path: Pat
     branch_with_work(clone, "step/102-y", merge=True)
     git(clone, "checkout", "-q", "v2")
     add_project(vault, "clone", "Clone", clone)
+    project = vault / "projects/clone/project.md"
+    project.write_text(project.read_text().replace("model:", "base: v2\nmodel:"))
     spec(clone, "101-x")
     spec(clone, "102-y")
 

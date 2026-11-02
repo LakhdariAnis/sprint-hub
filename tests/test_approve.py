@@ -105,3 +105,18 @@ def test_diffstat(hub: Hub, repo: Path) -> None:
     stat = client.get("/steps/demo/103/diffstat").json()["stat"]
     assert "1 file changed" in stat
     assert client.get("/steps/demo/nope/diffstat").status_code == 404
+
+
+def test_base_other_than_main(vault: Path, hub: Hub, repo: Path) -> None:
+    git(repo, "switch", "-q", "-c", "v2", "main")
+    (repo / "v2.txt").write_text("v2\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "v2")
+    project = vault / "projects/demo/project.md"
+    project.write_text(project.read_text().replace("model:", "base: v2\nmodel:", 1))
+    hub = Hub(hub.vault, lambda _: hub.runner, hub.notifier)
+    assert "ui.txt" in asyncio.run(hub.diffstat("demo", "103"))
+    assert approve(hub).state == State.approved
+    assert git(repo, "branch", "--show-current") == "v2"
+    assert "ui.txt" in git(repo, "ls-tree", "--name-only", "v2")
+    assert "ui.txt" not in git(repo, "ls-tree", "--name-only", "main")

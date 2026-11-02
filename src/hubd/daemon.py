@@ -32,9 +32,6 @@ from hubd.vault import (
     tick_task,
 )
 
-# shortcut: every repo merges into `main`; add a per-project setting when a repo needs another.
-MAIN = "main"
-
 
 class NotFound(Exception):
     pass
@@ -440,14 +437,15 @@ class Hub:
             return new
 
     async def approve(self, project: str, step_id: str) -> Step:
-        """Merge the step branch into main (locally, never pushed), then mark it approved."""
+        """Merge the step branch into the project's base (locally, never pushed), then approve."""
         async with self.lock:
             entry = self.entry(project, step_id)
             new = transition(entry.step, Event.approve, Actor.me)
             repo, branch = self.repo(project), entry.step.branch
             if repo and branch:  # no repo or no branch (a `by: me` step): nothing to merge
                 try:
-                    await asyncio.to_thread(_merge, repo, branch)
+                    base = self.index.projects[project].base
+                    await asyncio.to_thread(_merge, repo, base, branch)
                 except MergeConflict as exc:
                     self.notifier.notify(
                         "Merge conflict", f"{project} {step_id}: {', '.join(exc.files)}"
@@ -470,12 +468,13 @@ class Hub:
             return new
 
     async def diffstat(self, project: str, step_id: str) -> str:
-        """`git diff --stat main...branch`; empty when the step has no repo or branch."""
+        """`git diff --stat base...branch`; empty when the step has no repo or branch."""
         entry = self.entry(project, step_id)
         repo, branch = self.repo(project), entry.step.branch
         if not repo or not branch:
             return ""
-        return await asyncio.to_thread(_git, repo, "diff", "--stat", f"{MAIN}...{branch}")
+        base = self.index.projects[project].base
+        return await asyncio.to_thread(_git, repo, "diff", "--stat", f"{base}...{branch}")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -485,11 +484,11 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _merge(repo: Path, branch: str) -> None:
+def _merge(repo: Path, base: str, branch: str) -> None:
     """`git merge --no-ff branch`; refuse a dirty repo or wrong branch, abort a conflict."""
     head = _git(repo, "branch", "--show-current")
-    if head != MAIN:
-        raise InvalidTransition(f"{repo}: on branch '{head}', not '{MAIN}'; switch to {MAIN} first")
+    if head != base:
+        raise InvalidTransition(f"{repo}: on branch '{head}', not '{base}'; switch to {base} first")
     # Untracked files are not changes; git itself refuses if one would be overwritten.
     if _git(repo, "status", "--porcelain", "--untracked-files=no"):
         raise InvalidTransition(f"{repo}: uncommitted changes; commit or stash them first")
