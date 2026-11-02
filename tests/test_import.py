@@ -71,13 +71,27 @@ def test_no_command_file_leaves_model_out(vault: Path, repo: Path) -> None:
     assert _load_step(step_file(vault, "101")).model is None
 
 
-def test_broken_command_file_warns_and_leaves_model_out(
+def test_model_from_a_command_whose_frontmatter_is_not_yaml(vault: Path, repo: Path) -> None:
+    spec(repo, "101-first")
+    spec(repo, "102-second")
+    commands = repo / ".claude/commands"
+    commands.mkdir(parents=True)
+    (commands / "sprint-101.md").write_text("---\ndescription: A: b\nmodel: sonnet\n---\n")
+    (commands / "sprint-102.md").write_text("---\ndescription: x\n---\nmodel: opus\n")
+
+    assert importer.main() == 0
+
+    assert _load_step(step_file(vault, "101")).model == "sonnet"
+    assert _load_step(step_file(vault, "102")).model is None  # the prompt body does not count
+
+
+def test_unreadable_command_file_warns_and_leaves_model_out(
     vault: Path, repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     spec(repo, "101-first")
     commands = repo / ".claude/commands"
     commands.mkdir(parents=True)
-    (commands / "sprint-101.md").write_text("---\nmodel: [\n---\n")
+    (commands / "sprint-101.md").write_bytes(b"\xff\xfe")
 
     assert importer.main() == 0
 
