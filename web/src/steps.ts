@@ -22,6 +22,10 @@ export type Step = {
   // `doing`, but hubd found no live session when it started.
   run_gone?: boolean
   base?: string
+  // `hours:` of the step's command file; null = none.
+  planned?: number | null
+  // Own time given on approve; null = not recorded, not 0.
+  own_hours?: number | null
 }
 
 // API order is by file name, which is step order.
@@ -45,7 +49,7 @@ async function post(project: string, id: string, move: string, body?: object): P
 export const startStep = (project: string, id: string) => post(project, id, 'start')
 export const finishStep = (project: string, id: string) => post(project, id, 'finish')
 // `commit`: what the base branch is on after the merge; null when there was nothing to merge.
-export const approveStep = (project: string, id: string) => post(project, id, 'approve') as Promise<Step & { commit: string | null }>
+export const approveStep = (project: string, id: string, own_hours: number | null) => post(project, id, 'approve', { own_hours }) as Promise<Step & { commit: string | null }>
 export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
 export const requestChanges = (project: string, id: string, comment: string) => post(project, id, 'changes', { comment })
 

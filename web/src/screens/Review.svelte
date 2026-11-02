@@ -35,6 +35,12 @@
   let comment = $state('')
   let busy = $state(false)
   let moveError = $state('')
+  // The own-hours field. Empty = not recorded; it never stops the merge.
+  let own = $state('')
+  let ownBox = $state<HTMLInputElement>()
+  $effect(() => {
+    if (confirming) ownBox?.focus()
+  })
   // Stays after the step leaves `done` and the selection moves on.
   let merged = $state('')
   const move = (run: () => Promise<unknown>) => {
@@ -46,11 +52,14 @@
   }
   const approve = () => {
     if (!sel) return
-    const [p, i, into] = [sel.project, sel.step, base]
+    const [p, i, into, text] = [sel.project, sel.step, base, own.trim()]
+    const hours = text ? Number(text.replace(',', '.')) : null
+    const good = hours === null || (Number.isFinite(hours) && hours >= 0)
     move(() =>
-      approveStep(p, i).then(({ commit, ...d }) => {
+      approveStep(p, i, good ? hours : null).then(({ commit, ...d }) => {
         put(p, d)
-        merged = commit ? `${i} merged into ${into} as ${commit}, not pushed.` : `${i} approved, nothing to merge.`
+        own = ''
+        merged = (commit ? `${i} merged into ${into} as ${commit}, not pushed.` : `${i} approved, nothing to merge.`) + (good ? '' : ` Hours "${text}" not understood: not recorded.`)
       }),
     )
   }
@@ -83,6 +92,7 @@
     const [p, i] = [selProject, selStep]
     stat = null
     confirming = false
+    own = ''
     moveError = ''
     statError = ''
     loadStep(p, i).then((d) => put(p, d), () => {})
@@ -132,6 +142,13 @@
           <div class="act">
             {#if confirming}
               <span>{#if sel.branch}Merge <span class="mono">{sel.branch}</span> into <span class="mono">{base}</span>?{:else}Approve? Nothing to merge.{/if}</span>
+              <label class="own">Your hours, not overlapping a run
+                <input bind:this={ownBox} bind:value={own} inputmode="decimal" placeholder="empty = not recorded" onkeydown={(e) => {
+                  if (e.key === 'Escape') confirming = false
+                  // No number has these letters: `a` then `a` or `y` still merges with the cursor here.
+                  else if (['Enter', 'a', 'y'].includes(e.key) && !busy) (e.preventDefault(), approve())
+                }} />
+              </label>
               <button class="btn" type="button" disabled={busy} onclick={approve}>Yes, approve <span class="kb">y</span></button>
               <button class="btn ghost" type="button" disabled={busy} onclick={() => (confirming = false)}>Cancel <span class="kb">Esc</span></button>
             {:else}
@@ -217,6 +234,8 @@
   .act form { display: flex; flex: 1; gap: 8px; min-width: 260px; }
   .act input { flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--mu); border-radius: 7px; background: var(--bg); }
   .act .err { flex-basis: 100%; margin: 0; }
+  .own { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; color: var(--fg2); }
+  .act .own input { flex: none; width: 170px; }
   .btn { height: 34px; padding: 0 14px; display: inline-flex; align-items: center; gap: 8px; border-radius: 7px; border: 1px solid var(--g); background: var(--g); color: var(--bg); font-weight: 600; cursor: pointer; }
   .btn .kb { background: color-mix(in srgb, var(--bg) 25%, transparent); color: var(--bg); }
   .btn.ghost { background: transparent; color: var(--fg); border-color: var(--mu); font-weight: 400; }

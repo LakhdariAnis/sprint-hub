@@ -16,7 +16,7 @@
     ['s', 'start the step (Step screen)'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
-    ['a', 'approve; press a or y again to merge (Review)'],
+    ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['?', 'show / hide this help'],
