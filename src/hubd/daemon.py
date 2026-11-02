@@ -492,7 +492,7 @@ def _git(repo: Path, *args: str) -> str:
 def _merge(repo: Path, base: str, branch: str) -> None:
     """`git merge --no-ff branch` into `base`, starting on `base` or on `branch`.
 
-    Any other branch, or tracked changes: refuse. Conflict: abort.
+    Any other branch, or tracked changes: refuse. A failed merge puts the repo back as it was.
     """
     for name in (base, branch):
         if not git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"):
@@ -510,9 +510,13 @@ def _merge(repo: Path, base: str, branch: str) -> None:
         _git(repo, "merge", "--no-ff", "--no-edit", branch)
     except InvalidTransition as exc:
         files = _git(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+        # A hook or a missing git identity also stops a merge halfway, with no conflict.
+        if git(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"):
+            _git(repo, "merge", "--abort")
+        if head != base:
+            _git(repo, "switch", "-q", head)
         if not files:
-            raise  # not a conflict (e.g. no such branch): git's own message says why
-        _git(repo, "merge", "--abort")
+            raise  # not a conflict: git's own message says why
         raise MergeConflict(
             f"merge {branch}: conflict in {', '.join(files)}; merge aborted", files
         ) from exc

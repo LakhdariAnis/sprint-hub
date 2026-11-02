@@ -163,6 +163,60 @@ def test_conflict_aborts_and_notifies(
     assert notifier.sent == [("Merge conflict", "demo 103: ui.txt")]
 
 
+def clash(repo: Path) -> None:
+    (repo / "ui.txt").write_text("other\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "clash")
+
+
+def test_conflict_from_the_step_branch_goes_back_to_it(
+    vault: Path, hub: Hub, repo: Path, notifier: Recorder
+) -> None:
+    clash(repo)
+    git(repo, "checkout", "-q", "step/103-ui")
+    before = repo_state(repo)
+    with pytest.raises(MergeConflict, match="conflict in ui.txt"):
+        approve(hub)
+    assert repo_state(repo) == before
+    assert not (repo / ".git/MERGE_HEAD").exists()
+    assert hub.entry("demo", "103").step.state == State.done
+    assert notifier.sent == [("Merge conflict", "demo 103: ui.txt")]
+
+
+def test_conflict_keeps_untracked_files(hub: Hub, repo: Path) -> None:
+    clash(repo)
+    (repo / "scratch.txt").write_text("mine\n")
+    with pytest.raises(MergeConflict):
+        approve(hub)
+    assert (repo / "scratch.txt").read_text() == "mine\n"
+
+
+def test_untracked_file_in_the_way_changes_nothing(hub: Hub, repo: Path) -> None:
+    (repo / "ui.txt").write_text("mine\n")
+    refused(hub, repo, "would be overwritten")
+    assert (repo / "ui.txt").read_text() == "mine\n"
+
+
+def test_untracked_file_in_the_way_of_the_switch_changes_nothing(hub: Hub, repo: Path) -> None:
+    git(repo, "checkout", "-q", "main")
+    (repo / "base.txt").write_text("base\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "base")
+    git(repo, "checkout", "-q", "step/103-ui")
+    (repo / "base.txt").write_text("mine\n")
+    refused(hub, repo, "would be overwritten")
+    assert (repo / "base.txt").read_text() == "mine\n"
+
+
+def test_merge_stopped_by_a_hook_changes_nothing(hub: Hub, repo: Path) -> None:
+    hook = repo / ".git/hooks/pre-merge-commit"
+    hook.write_text("#!/bin/sh\necho no merges today\nexit 1\n")
+    hook.chmod(0o755)
+    git(repo, "checkout", "-q", "step/103-ui")
+    refused(hub, repo, "no merges today")
+    assert not (repo / ".git/MERGE_HEAD").exists()
+
+
 def test_wrong_state_is_refused(hub: Hub, repo: Path) -> None:
     head = git(repo, "rev-parse", "HEAD")
     with pytest.raises(InvalidTransition, match="no 'approve' from 'changes'"):
