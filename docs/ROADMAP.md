@@ -81,29 +81,30 @@ sprint-hub opens as its own window (Chromium `--app`, no tabs or URL bar) with `
 Ctrl+1/2/3 for the screens if the app window allows it. No new tool: Chromium and Hyprland are already on the machine.
 A Rust/Tauri window can replace it later, with an ADR.
 
-### 0.3.0 — Daily use (Sprints 3–4)
+### 0.3.0 — Daily use (Sprints 3–5)
 Things that make Anis use it every day instead of v1:
 Omarchy theme and the Settings screen (both moved from 0.2.0 on 2026-10-19),
 deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manual tasks (`by: me`), questions inbox
-(read-only), command palette, systemd user service, one-time read-only import of BenWhispers' state.
+(read-only), command palette, systemd user service, one-time read-only import of every project in `projects.toml`.
 
 **Weekly planning** (new, from Anis 2026-10-16), same rules as the `new-sprint` skill:
 - Read `hours:` from step frontmatter. Actual hours = agent time (run start → run-ended hook, recorded by hubd for every run) + Anis's own time not overlapping a run (entered on approve), written as `Time: <h> h (agent <a> h)` in PROGRESS.
 - Sprint bar on the Project screen: planned / 15 h and actual / 18 h; turns red over budget.
 - **Week view** on Today: this week's `work` sprint and `personal` sprint across all projects, hours done vs planned, days left in the week. Warns on two sprints in one track, or none in `work`.
 - **Project ETA**: remaining sprints and hours, finish week, with the calibration factor (actual ÷ planned over the last 3 closed sprints).
-- Close a sprint at week end: move unfinished steps to the next sprint, ask for actual hours.
 - Data only from the md files (zero tokens). No calendar sync.
 
 
-### 0.4.0 — Away from the laptop (Sprint 5)
+### 0.4.0 — Away from the laptop (Sprint 6)
+Close a sprint at week end (moved from 0.3.0 on 2026-11-01): move unfinished steps to the next sprint, ask for actual hours.
+
 Review and approve from the phone without building an app:
 Syncthing + Obsidian approve flow, phone push (ntfy over Tailscale), `--remote-control` on runs.
 Each of these new tools needs its ADR first. If one ADR can't justify its tool, cut that feature.
 
-### 1.0.0 — Insight (Sprints 6–8)
+### 1.0.0 — Insight (Sprints 7–9)
 `needs:` dependencies, create a step from the app, diff view, time and tokens per step, chat history, daily log.
-Sprint 8 (added 2026-10-19): the Chats, New chat and Planning chat screens from the mockups.
+Sprint 9 (added 2026-10-19): the Chats, New chat and Planning chat screens from the mockups.
 Tokens and chats read the undocumented Claude logs through `UsageSource` (rule 4).
 
 ### Parked (not planned)
