@@ -17,6 +17,7 @@
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve; press a or y again to merge (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
+    ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['?', 'show / hide this help'],
   ]
 </script>

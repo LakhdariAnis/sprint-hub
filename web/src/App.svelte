@@ -8,6 +8,7 @@
   import Projects from './screens/Projects.svelte'
   import Step from './screens/Step.svelte'
   import Today from './screens/Today.svelte'
+  import Errors from './Errors.svelte'
   import Help from './Help.svelte'
   import Sidebar from './Sidebar.svelte'
   import StatusLine from './StatusLine.svelte'
@@ -18,6 +19,7 @@
 
 <div class="app">
   <Help />
+  <Errors />
   <Sidebar />
   <div class="mn">
     <TopBar />

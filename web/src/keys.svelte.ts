@@ -5,7 +5,7 @@ import { router } from './route.svelte'
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
-export const keys = $state({ help: false, pending: false, rail: saved, shown: null as string | null })
+export const keys = $state({ help: false, errors: false, pending: false, rail: saved, shown: null as string | null })
 export function toggleRail() {
   keys.rail = !keys.rail
   try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
@@ -37,14 +37,14 @@ const go: Handlers = {
   r: () => (location.hash = '#/review'),
   q: () => (location.hash = '#/questions'),
 }
-// Plain digits and `b`: 1–4 tabs, 6–9 the OPEN steps, b the icon rail. Ctrl+1–4 (app window only, see below) = the tabs too.
+// Plain digits, `b` and `e`: 1–4 tabs, 6–9 the OPEN steps, b the icon rail, e the broken-files list. Ctrl+1–4 (app window only, see below) = the tabs too.
 const openStep = (n: number) => {
   const k = router.open[n]
   if (!k) return
   const i = k.lastIndexOf('/')
   location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
 }
-const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: toggleRail }
+const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, b: toggleRail, e: () => (keys.errors = true) }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q }
@@ -73,8 +73,8 @@ addEventListener('keydown', (e) => {
   const k = alias[e.key] ?? (/^[^\x00-\x7f]$/.test(e.key) && /^Key[A-Z]$/.test(e.code) ? e.code[3].toLowerCase() : e.key)
 
   let run: (() => void) | undefined
-  if (keys.help) {
-    if (k === 'Escape' || k === '?') keys.help = false
+  if (keys.help || keys.errors) {
+    if (k === 'Escape' || k === (keys.help ? '?' : 'e')) keys.help = keys.errors = false
   } else if (keys.pending) {
     run = go[k]
   } else if (k === 'g') {
@@ -88,5 +88,5 @@ addEventListener('keydown', (e) => {
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()
-  if (run || k === 'g' || k === '?' || keys.help) e.preventDefault()
+  if (run || k === 'g' || k === '?' || keys.help || keys.errors) e.preventDefault()
 })
