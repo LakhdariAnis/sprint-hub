@@ -21,6 +21,12 @@ _MODEL = re.compile(r"^model:\s*([\w.-]+)\s*$", re.M)
 BODY = "## Runs\n\n## Review\nverdict:\ncomment:\n\n## Questions\n"
 
 
+def step_id(spec: Path) -> str | None:
+    """`sprint/213a-x.md` -> `213a`; None when the file is not a spec."""
+    m = _SPEC.match(spec.name)
+    return m["id"] if m else None
+
+
 def specs(repo: Path) -> dict[str, Path]:
     """Step id -> spec; `sprint/` wins over the archive, like `vault._join`."""
     found: dict[str, Path] = {}

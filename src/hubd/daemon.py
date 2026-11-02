@@ -3,21 +3,24 @@
 import asyncio
 import subprocess
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import aclosing, contextmanager
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
 
+from hubd import importer, init
 from hubd.model import Deadline, Review, Run, State, Step, TaskState
 from hubd.notify import Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
 from hubd.vault import (
+    FileError,
     StepEntry,
     _guard,
     _join,
+    _load_project,
     _load_step,
     _write_atomic,
     load_deadlines,
@@ -59,9 +62,21 @@ def step_json(entry: StepEntry) -> dict:
     }
 
 
+def spec_text(entry: StepEntry) -> str | None:
+    """The repo spec of a step; None when it has none, or it was removed from the repo."""
+    return entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
+
+
 class Hub:
-    def __init__(self, vault: Path, runner: Callable[[RunEnded], AgentRunner], notifier: Notifier):
+    def __init__(
+        self,
+        vault: Path,
+        runner: Callable[[RunEnded], AgentRunner],
+        notifier: Notifier,
+        projects: Path | None = None,
+    ):
         self.vault = vault = vault.resolve()  # watchfiles reports absolute paths
+        self.projects_file = projects.resolve() if projects else None  # `projects.toml`
         self.index = load_vault(vault)
         self.queues: set[asyncio.Queue[dict]] = set()
         self.runner = runner(self.run_ended)
@@ -85,14 +100,54 @@ class Hub:
         settings = self.index.projects.get(project)
         return self.vault / settings.repo if settings and settings.repo else None
 
+    def _sprint_dirs(self) -> set[Path]:
+        return {
+            s for p in self.index.projects if (r := self.repo(p)) and (s := r / "sprint").is_dir()
+        }
+
+    def _watchable(self, _: object, path: str) -> bool:
+        return path.endswith(".md") or Path(path) == self.projects_file  # `.md` skips `.tmp` too
+
     async def watch(self, stop: asyncio.Event) -> None:
-        """Reload each changed `.md` file in the vault and in each repo's `sprint/` until `stop`."""
-        # shortcut: repos are picked once at start; a project added later needs a hubd restart.
-        repos = [r / "sprint" for p in self.index.projects if (r := self.repo(p))]
-        paths = [self.vault, *(r for r in repos if r.is_dir())]
-        async for changes in awatch(*paths, watch_filter=_is_md, debounce=50, stop_event=stop):
-            for path in sorted({p for _, p in changes}):
-                await self.reload(Path(path))
+        """Reload each changed file of the vault, the repos' `sprint/` and `projects.toml`.
+
+        Runs until `stop`. When a project's `sprint/` appears or goes, watching restarts.
+        """
+        known = self._sprint_dirs()
+        while not stop.is_set():
+            config = self.projects_file.parent if self.projects_file else None
+            paths = [self.vault, *known, *([config] if config and config.is_dir() else [])]
+            # The timeout also yields: a `sprint/` that appears has no event, this check finds it.
+            watching = awatch(
+                *paths,
+                watch_filter=self._watchable,
+                debounce=50,
+                stop_event=stop,
+                rust_timeout=1000,
+                yield_on_timeout=True,
+            )
+            try:
+                async with aclosing(watching):
+                    async for changes in watching:
+                        for path in sorted({p for _, p in changes}):
+                            await self.reload(Path(path))
+                        if (now := self._sprint_dirs()) != known:
+                            await self._import_projects(now - known)
+                            known = now
+                            break
+            except OSError:  # a watched folder vanished between the check and the watch
+                known = self._sprint_dirs()
+                await asyncio.sleep(1)
+
+    async def _import_projects(self, sprints: set[Path]) -> None:
+        """Import the projects whose `sprint/` just appeared: its specs may be there already."""
+        async with self.lock:
+            for project, settings in self.index.projects.items():
+                repo = self.repo(project)
+                if repo and repo / "sprint" in sprints:
+                    folder = self.vault / "projects" / project
+                    await asyncio.to_thread(importer.import_project, folder, settings, repo)
+            self._reload_all()
 
     async def reload(self, path: Path) -> None:
         """Bring one changed file into the index and tell subscribers what changed."""
@@ -101,16 +156,77 @@ class Hub:
             if len(parts) == 4 and parts[0] == "projects" and parts[2] == "steps":
                 self._reload_step(parts[1], path)
             elif len(parts) == 3 and parts[0] == "projects" and parts[2] == "project.md":
-                # shortcut: a project.md edit reloads the whole vault; fine for a few projects.
-                self.index = load_vault(self.vault)
-                self.emit({"type": "reload"})
+                self._reload_all()
             elif parts == ("deadlines.md",):
                 deadlines, errors = load_deadlines(path)
                 kept = [e for e in self.index.errors if e.path != path]
                 self.index.deadlines, self.index.errors = deadlines, kept + errors
                 self.emit({"type": "reload"})
+            elif path == self.projects_file:
+                await self._sync_projects()
+            elif project := self._spec_project(path):
+                await self._reload_spec(project, path)
             else:
                 self._reload_tasks(path)
+
+    def _reload_all(self) -> None:
+        # shortcut: the whole vault is read again; fine for a few projects.
+        self.index = load_vault(self.vault)
+        self.emit({"type": "reload"})
+
+    async def _sync_projects(self) -> None:
+        """`projects.toml` changed: a project the vault lacks gets its folder and its steps."""
+        path = self.projects_file
+        self.index.errors = [e for e in self.index.errors if e.path != path]
+        try:
+            wanted = await asyncio.to_thread(init.load_projects, path)
+        except ValueError as exc:
+            self.index.errors.append(FileError(path, None, str(exc)))
+            self.emit({"type": "error", "path": str(path), "line": None, "message": str(exc)})
+            return
+        created = False
+        for name, repo in wanted:
+            folder = self.vault / "projects" / init.slug(name)
+            if (folder / "project.md").exists() or not repo.is_dir():
+                continue
+            try:
+                await asyncio.to_thread(init.create, folder, name, repo)
+                project = _load_project(folder / "project.md")
+                await asyncio.to_thread(importer.import_project, folder, project, repo)
+            except (OSError, ValueError) as exc:
+                self.index.errors.append(FileError(folder, None, str(exc)))
+                continue
+            created = True
+        if created:
+            self._reload_all()
+
+    def _spec_project(self, path: Path) -> str | None:
+        """The project whose repo has `path` as a `sprint/<id>-*.md` spec."""
+        if not importer.step_id(path):
+            return None
+        return next(
+            (p for p in self.index.projects if (r := self.repo(p)) and path.parent == r / "sprint"),
+            None,
+        )
+
+    async def _reload_spec(self, project: str, path: Path) -> None:
+        """A new spec makes its vault step; an existing vault step is left alone."""
+        step_id = importer.step_id(path) or ""
+        folder = self.vault / "projects" / project
+        target = folder / "steps" / f"{step_id}.md"
+        repo = self.repo(project)
+        if path.exists() and not target.exists() and repo:
+            args = (folder, self.index.projects[project], repo, path)
+            await asyncio.to_thread(importer.import_project, *args)
+            self._reload_step(project, target)
+            return
+        entry = next((e for e in self.index.steps if e.path == target), None)
+        if entry is None:
+            return
+        spec = _join(project, entry.path, entry.step, repo).spec
+        if spec != entry.spec:
+            entry.spec = spec
+            self.emit({"type": "step", **step_json(entry), "spec": spec_text(entry)})
 
     def _reload_step(self, project: str, path: Path) -> None:
         old = next((e for e in self.index.steps if e.path == path), None)
@@ -344,7 +460,3 @@ def _merge(repo: Path, branch: str) -> None:
         raise MergeConflict(
             f"merge {branch}: conflict in {', '.join(files)}; merge aborted", files
         ) from exc
-
-
-def _is_md(_: object, path: str) -> bool:
-    return path.endswith(".md")  # also skips save_step's `.tmp` files

@@ -12,7 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from hubd import reminders
-from hubd.daemon import Hub, MergeConflict, NotFound, step_json
+from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
+from hubd.init import PROJECTS
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -101,8 +102,7 @@ def create_app(
     @app.get("/steps/{project}/{step_id}")
     def step(project: str, step_id: str) -> dict:
         entry = hub.entry(project, step_id)
-        spec = entry.spec.read_text() if entry.spec and entry.spec.is_file() else None
-        return {**step_json(entry), "spec": spec, "path": str(entry.path)}
+        return {**step_json(entry), "spec": spec_text(entry), "path": str(entry.path)}
 
     @app.get("/steps/{project}/{step_id}/diffstat")
     async def diffstat(project: str, step_id: str) -> dict:
@@ -192,5 +192,7 @@ def serve_app() -> FastAPI:
     vault = vault_path()
     settings = load_settings(vault / "hub.toml")
     url = f"http://{HOST}:{PORT}"
-    hub = Hub(vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend())
+    hub = Hub(
+        vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend(), projects=PROJECTS
+    )
     return create_app(hub, theme=OmarchyTheme(), reminder_hour=settings.reminder_hour)
