@@ -10,14 +10,21 @@ from pathlib import Path
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from hubd import doctor, reminders, service
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
-from hubd.settings import Current, Settings, load_current
+from hubd.settings import (
+    Current,
+    Settings,
+    has_comments,
+    load_current,
+    reason,
+    save_settings,
+)
 from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
@@ -161,6 +168,34 @@ def create_app(
             "service": service.state(),
             "checks": doctor.report(hub.vault),
         }
+
+    def settings_json() -> dict:
+        path = hub.vault / "hub.toml"
+        return {
+            "path": str(path),
+            **current.settings.model_dump(),
+            "error": current.error,
+            "comments": has_comments(path),
+            "restart": [],  # both apply at once, see put_settings
+        }
+
+    @app.get("/settings")
+    def get_settings() -> dict:
+        return settings_json()
+
+    @app.put("/settings", response_model=None)
+    def put_settings(body: dict) -> JSONResponse | dict:
+        try:
+            new = Settings.model_validate(body)
+        except ValidationError as exc:  # nothing written
+            return JSONResponse({"detail": reason(exc)}, status_code=422)
+        save_settings(hub.vault / "hub.toml", new)
+        current.settings, current.error = new, None
+        if hour[0] is not None:
+            hour[0] = new.reminder_hour  # the reminder loop reads it on its next check
+        if hasattr(hub.runner, "terminal"):
+            hub.runner.terminal = new.terminal  # the next start opens it
+        return settings_json()
 
     @app.get("/events")
     async def events() -> StreamingResponse:
