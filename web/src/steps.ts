@@ -78,8 +78,20 @@ export type Group = {
   state: 'current' | 'planned' | 'done'
   steps: Step[]
   done: number
-  minutes: number
+  planned: number // a step with no `hours:` counts 0
+  actual: number
 }
+
+// Time rules (`new-sprint` skill): a sprint plans at most 15 h of its 18 h budget.
+export const PLANNED_MAX = 15
+export const ACTUAL_MAX = 18
+
+// Sum of the recorded runs; a run with no end counts 0.
+export const agentHours = (s: Step) => s.runs.reduce((a, r) => a + (r.minutes ?? 0), 0) / 60
+export const actualHours = (s: Step) => agentHours(s) + (s.own_hours ?? 0)
+// Runs with no end; the latest run of a `doing` step is still going, so it is not one.
+export const noEnd = (s: Step) => s.runs.filter((r, i) => r.minutes == null && !(s.state === 'doing' && i === s.runs.length - 1)).length
+export const fmtHours = (h: number) => String(+h.toFixed(2))
 
 const closed = (s: Step) => s.state === 'approved' || s.state === 'done'
 
@@ -93,8 +105,9 @@ export function groupBySprint(steps: Step[]): Group[] {
   const groups = [...by].map(([sprint, v]): Group => {
     const isDone = v.every(closed)
     const state = isDone ? 'done' : sprint === null || sprint === cur ? 'current' : 'planned'
-    const minutes = v.reduce((a, s) => a + s.runs.reduce((b, r) => b + (r.minutes ?? 0), 0), 0)
-    return { key: sprint === null ? '' : String(sprint), sprint, state, steps: v, done: v.filter(closed).length, minutes }
+    const planned = v.reduce((a, s) => a + (s.planned ?? 0), 0)
+    const actual = v.reduce((a, s) => a + actualHours(s), 0)
+    return { key: sprint === null ? '' : String(sprint), sprint, state, steps: v, done: v.filter(closed).length, planned, actual }
   })
   const rank = { current: 0, planned: 1, done: 2 }
   const n = (g: Group) => g.sprint ?? 0
