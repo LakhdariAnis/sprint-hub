@@ -63,6 +63,23 @@ def uninstalled(settings: dict) -> dict:
     return new
 
 
+def confirm_write(path: Path, old: str, new: str, ask: Callable[[str], str] = input) -> bool:
+    """Show the diff of `path`, ask y/N."""
+    sys.stdout.writelines(
+        difflib.unified_diff(
+            old.splitlines(keepends=True), new.splitlines(keepends=True), str(path), str(path)
+        )
+    )
+    try:
+        answer = ask(f"Write {path}? [y/N] ")
+    except EOFError:  # no terminal to ask: treat as no
+        answer = ""
+    if answer.strip().lower() != "y":
+        print("nothing written")
+        return False
+    return True
+
+
 def change(
     edit: Callable[[dict], dict],
     path: Path = SETTINGS,
@@ -76,14 +93,7 @@ def change(
         print(f"{path}: already up to date")
         return 0
     new_text = json.dumps(new, indent=2) + "\n"
-    old_lines, new_lines = text.splitlines(keepends=True), new_text.splitlines(keepends=True)
-    sys.stdout.writelines(difflib.unified_diff(old_lines, new_lines, str(path), str(path)))
-    try:
-        answer = ask(f"Write {path}? [y/N] ")
-    except EOFError:  # no terminal to ask: treat as no
-        answer = ""
-    if answer.strip().lower() != "y":
-        print("nothing written")
+    if not confirm_write(path, text, new_text, ask):
         return 1
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():

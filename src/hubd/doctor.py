@@ -2,9 +2,10 @@
 
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
-from hubd import install, theme
+from hubd import install, service, theme
 from hubd.model import State
 from hubd.runners import claude
 from hubd.settings import load_settings
@@ -72,9 +73,15 @@ def _commands(vault: Path) -> list[tuple[bool, str]]:
     return results
 
 
-def main(settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY) -> int:
+def main(
+    settings: Path = install.SETTINGS,
+    theme_file: Path = theme.OMARCHY,
+    service_state: Callable[[], str] | None = None,
+) -> int:
     vault = vault_path()
     results = [*checks(settings), _theme(theme_file), _terminal(vault), *_commands(vault)]
     for ok, text in results:
         print(f"{'✔' if ok else '✘'} {text}")
+    # Info, not a check: hubd also runs without the service (bin/sprint-hub-app starts it).
+    print(f"ℹ hubd service: {(service_state or service.state)()}")
     return 0 if all(ok for ok, _ in results) else 1

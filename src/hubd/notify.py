@@ -3,6 +3,8 @@
 import subprocess
 from typing import Protocol
 
+from hubd import session
+
 
 class Notifier(Protocol):
     def notify(self, title: str, body: str) -> None: ...
@@ -11,7 +13,8 @@ class Notifier(Protocol):
 class NotifySend:
     def notify(self, title: str, body: str) -> None:
         try:
-            subprocess.Popen(["notify-send", "--app-name=sprint-hub", title, body])
+            argv = ["notify-send", "--app-name=sprint-hub", title, body]
+            subprocess.Popen(argv, env=session.env())
         except OSError:
             pass  # no notify-send: a missed popup must never stop the hub
 
