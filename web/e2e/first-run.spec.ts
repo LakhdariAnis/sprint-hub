@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { expect, test } from '@playwright/test'
 
 // Step 504a: the app says what is wrong. The demo hubd on 8765 stays untouched; the first-run tests start their own hubd on another port, with an empty home.
@@ -65,8 +65,10 @@ test('no vault: Projects says how to init, the others point to it, the vault app
 })
 
 test('a broken step file counts in the status line, lists with file, line and field, and leaves when fixed', async ({ page, request }) => {
-  const { path } = await (await request.get('/steps/notes/301')).json()
-  const original = await readFile(path, 'utf8')
+  // A copy of 301 under its own id: loop.spec.ts runs 301 in another worker, restoring it here would undo that run.
+  const { path: from } = await (await request.get('/steps/notes/301')).json()
+  const path = join(dirname(from), '398.md')
+  const original = (await readFile(from, 'utf8')).replace(/^step: .*$/m, 'step: 398')
   const before = (await (await request.get('/errors')).json()).length
   const count = (n: number) => page.getByRole('button', { name: new RegExp(`⚠ ${n} broken file`) })
   await page.goto('/#/projects/notes')
@@ -75,8 +77,8 @@ test('a broken step file counts in the status line, lists with file, line and fi
     await writeFile(path, original.replace(/^state: .*$/m, 'state: banana'))
     await expect(count(before + 1)).toBeVisible({ timeout: 5000 })
     await count(before + 1).click()
-    const row = page.getByRole('dialog').locator('.er', { hasText: '301.md' })
-    await expect(row).toContainText(/301\.md:\d+/)
+    const row = page.getByRole('dialog').locator('.er', { hasText: '398.md' })
+    await expect(row).toContainText(/398\.md:\d+/)
     await expect(row).toContainText('state')
     await page.setViewportSize({ width: 743, height: 730 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -86,7 +88,7 @@ test('a broken step file counts in the status line, lists with file, line and fi
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
   } finally {
-    await writeFile(path, original)
+    await rm(path, { force: true })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0)
   if (before) await expect(count(before)).toBeVisible({ timeout: 5000 })

@@ -22,7 +22,9 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   // One round of changes: the comment (with a ` #`) shows on the Step screen, `n` opens a new chat.
   await page.goto('/#/review/notes/301')
   await page.keyboard.press('c')
-  await page.keyboard.type('Add banana #important')
+  const box = page.getByLabel('Review comment')
+  await expect(box).toBeFocused()
+  await box.fill('Add banana #important')
   await page.keyboard.press('Enter')
   await expect(page.locator('.head .chip')).toHaveText(/changes/)
   await page.goto('/#/steps/notes/301')
