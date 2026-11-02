@@ -24,6 +24,7 @@ _SIZE = {"k": 1_000, "M": 1_000_000}
 _TASK = re.compile(r"^- \[(?P<mark>[ ~x])\] (?P<text>.+)$", re.M)
 _QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.*))?$", re.M)
 _STEP_DIGITS = re.compile(r"^\d+")
+_ARCHIVE_SPRINT = re.compile(r"sprint-(\d+)")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
 _FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
 # `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
@@ -378,8 +379,11 @@ def _archive_sprint(path: Path | None) -> int | None:
     """`.../archive/sprint-2/203-x.md` or `.../sprint-2/progress/203.md` -> 2."""
     if path is None:
         return None
-    folder = next(p for p in path.parents if p.name.startswith("sprint-"))
-    return int(folder.name.removeprefix("sprint-"))
+    for parent in path.parents:
+        # Only under `archive/`: `archive/steps/` has no sprint, and the repo may be `sprint-hub`.
+        if parent.parent.name == "archive" and (m := _ARCHIVE_SPRINT.fullmatch(parent.name)):
+            return int(m[1])
+    return None
 
 
 def _guard[T](index: Index, path: Path, load: Callable[[Path], T]) -> T | None:

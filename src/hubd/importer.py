@@ -10,11 +10,13 @@ import yaml
 
 from hubd.daemon import vault_path
 from hubd.model import Project, State, TaskState
-from hubd.vault import parse_tasks
+from hubd.vault import _archive_sprint, parse_tasks, split_sections
 
 # `api-fields.md` or `design4-mock-list.md` sit next to the specs and are not steps.
 _SPEC = re.compile(r"^(?P<id>[a-z]?\d+[a-z]?)-.+\.md$")
 _TITLE = re.compile(r"^# Step \S+ — (?P<title>.+?)\s*$", re.M)
+_SPRINT_TABLE = re.compile(r"^Sprint (\d+) — steps$")
+_ROW = re.compile(r"^\|\s*`?(\w+)`?\s*\|")
 BODY = "## Runs\n\n## Review\nverdict:\ncomment:\n\n## Questions\n"
 
 
@@ -86,6 +88,19 @@ def state_of(repo: Path, step_id: str, approved: bool) -> State:
     return State.done if all_ticked(repo, step_id) else State.todo
 
 
+def sprint_tables(repo: Path) -> dict[str, int]:
+    """Step id -> sprint, from the `## Sprint <n> — steps` tables of both READMEs."""
+    sprints: dict[str, int] = {}
+    for path in (repo / "sprint/README.md", repo / "sprint/archive/README.md"):
+        if not path.is_file():
+            continue
+        for heading, lines in split_sections(path.read_text(errors="replace")).items():
+            if m := _SPRINT_TABLE.match(heading):
+                for row in filter(None, map(_ROW.match, lines)):
+                    sprints.setdefault(row[1], int(m[1]))
+    return sprints
+
+
 def model_of(repo: Path, step_id: str) -> str | None:
     commands = [repo / ".claude/commands" / f"sprint-{step_id}.md"]
     commands += sorted((repo / "sprint").glob(f"archive/**/commands/sprint-{step_id}.md"))
@@ -113,6 +128,8 @@ def import_project(folder: Path, project: Project, repo: Path) -> str:
     logged = progress_merged(repo)
     branches = step_branches(repo)
     merged = merged_branches(repo)
+    sprints = sprint_tables(repo)
+    no_sprint: list[str] = []
     for step_id, spec in specs(repo).items():
         target = folder / "steps" / f"{step_id}.md"
         if target.exists():
@@ -136,9 +153,14 @@ def import_project(folder: Path, project: Project, repo: Path) -> str:
         # The real branch when its slug differs from the spec's: approve merges this name.
         branch = f"step/{spec.stem}"
         meta["branch"] = branch if branch in mine or not mine else mine[0]
+        if sprint := sprints.get(step_id) or _archive_sprint(spec):
+            meta["sprint"] = sprint
+        else:
+            no_sprint.append(step_id)
         write_step(target, meta)
         new += 1
-    return f"{project.name}: {new} new, {kept} kept"
+    listed = f" ({', '.join(no_sprint)})" if no_sprint else ""
+    return f"{project.name}: {new} new, {kept} kept, {len(no_sprint)} no sprint{listed}"
 
 
 def main(only: str | None = None) -> int:

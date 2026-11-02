@@ -395,6 +395,65 @@ def test_repo_stays_byte_identical(vault: Path, repo: Path) -> None:
     assert snapshot(repo) == before
 
 
+def test_sprint_from_the_readme_tables(vault: Path, repo: Path) -> None:
+    (repo / "sprint/README.md").write_text(
+        "## Sprints\n\n| Sprint | Track |\n|---|---|\n| 7 | work |\n\n"
+        "## Sprint 9 — steps\n\n| # | File |\n|---|---|\n| a901 | `a901-x.md` |\n\n"
+        "## Sprint 7 — planned (steps not written yet)\n\n| 702 | later |\n"
+    )
+    spec(repo, "a901-x")
+    spec(repo, "702-y")
+
+    importer.main()
+
+    assert _load_step(step_file(vault, "a901")).sprint == 9
+    assert _load_step(step_file(vault, "702")).sprint is None
+
+
+def test_sprint_from_the_archive_readme(vault: Path, repo: Path) -> None:
+    """BenWhispers: `archive/steps/` says nothing, only `archive/README.md` has the sprint."""
+    spec(repo, "a401-x", "sprint/archive/steps")
+    (repo / "sprint/archive/README.md").write_text("## Sprint 4 — steps\n\n| a401 | `x` |\n")
+
+    importer.main()
+
+    assert _load_step(step_file(vault, "a401")).sprint == 4
+
+
+def test_sprint_from_the_archive_folder(vault: Path, repo: Path) -> None:
+    spec(repo, "b12-x", "sprint/archive/sprint-3")
+
+    importer.main()
+
+    assert _load_step(step_file(vault, "b12")).sprint == 3
+
+
+def test_no_sprint_is_left_out_and_listed(
+    vault: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    spec(repo, "a901-x")
+    spec(repo, "101-y")
+
+    importer.main()
+
+    assert "Demo: 2 new, 0 kept, 2 no sprint (101, a901)" in capsys.readouterr().out
+    assert "sprint:" not in step_file(vault, "a901").read_text()
+
+
+def test_sprint_folder_in_the_repo_path_is_not_a_sprint(vault: Path, tmp_path: Path) -> None:
+    """`archive/steps/` under a repo called `sprint-2` or `sprint-hub` has no sprint."""
+    for name in ("sprint-2", "sprint-hub"):
+        repo = tmp_path / name
+        spec(repo, "a401-x", "sprint/archive/steps")
+        add_project(vault, name, name, repo)
+
+    assert importer.main() == 0
+
+    for name in ("sprint-2", "sprint-hub"):
+        assert _load_step(step_file(vault, "a401", name)).sprint is None
+    assert load_vault(vault).errors == []
+
+
 def snapshot(path: Path) -> dict[str, str]:
     return {
         str(p.relative_to(path)): hashlib.sha256(p.read_bytes()).hexdigest()
