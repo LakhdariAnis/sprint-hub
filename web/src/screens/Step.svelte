@@ -4,7 +4,7 @@
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
-  import { ago, goal, startStep, tickTask } from '../steps'
+  import { ago, finishStep, goal, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps } from '../store.svelte'
 
@@ -25,6 +25,20 @@
       .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
+
+  // A run whose end never arrived gets out of `doing` here: first press asks, second moves it.
+  const canFinish = $derived(s?.state === 'doing' && !manual)
+  const ticked = $derived(canFinish && !!s?.tasks.length && done === s.tasks.length)
+  let confirming = $state(false)
+  const finish = () => {
+    busy = true
+    error = ''
+    finishStep(project, id)
+      .then((d) => put(project, d), (e: Error) => (error = `Finish failed: ${e.message}`))
+      .finally(() => ((busy = false), (confirming = false)))
+  }
+  const finishKey = () => canFinish && !busy && (confirming ? finish() : (confirming = true))
+  const back = () => (location.hash = `#/projects/${encodeURIComponent(project)}`)
 
   // The cursor starts on the current task: the one doing, else the first todo.
   // `by: me`: j/k pick a task, x or a click ticks it; hubd moves the step.
@@ -60,7 +74,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), Escape: () => (location.hash = `#/projects/${encodeURIComponent(project)}`) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -90,6 +104,7 @@
   $effect(() => {
     void [project, id]
     error = ''
+    confirming = false
   })
 </script>
 
@@ -104,11 +119,21 @@
       <!-- hubd has no stop API yet -->
       <button class="btn" type="button" disabled title="Stopping a run comes in a later sprint">Stop <span class="kb">s</span></button>
     {/if}
+    {#if canFinish}
+      <button class="btn" type="button" disabled={busy} onclick={finishKey}>Finish <span class="kb">f</span></button>
+    {/if}
     <button class="btn dim" type="button" onclick={close}>Close tab <span class="kb">^W</span></button>
   </span>
 </div>
 {#if error || loadError}
   <p class="err">{error || loadError}</p>
+{/if}
+{#if confirming && canFinish}
+  <p class="note ask">Finish this run? {id} goes to done, even if Claude is still working. <span class="kb">f</span> or <span class="kb">y</span> finish, <span class="kb">Esc</span> cancel.</p>
+{:else if s?.run_gone && canFinish}
+  <p class="note ask">The run is gone: no Claude session for it is running, and its end never arrived. Press <span class="kb">f</span> to finish it.</p>
+{:else if ticked}
+  <p class="note">All tasks ticked. Exit Claude (<code>/exit</code>) to send it to review.</p>
 {/if}
 {#if s}
   <div class="body">
@@ -216,6 +241,8 @@
   .dim { color: var(--fgd); }
   .pad { padding: 12px 16px; }
   .err { margin: 14px 20px 0; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
+  .note { flex: none; margin: 14px 20px 0; padding: 8px 12px; border: 1px solid var(--g); border-radius: 6px; color: var(--g); }
+  .note.ask { border-color: var(--y); color: var(--y); }
   .hd { height: 60px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--sel); }
   .crumb { font: 12.5px var(--mono); color: var(--fg2); }
   .crumb a { color: var(--fg2); text-decoration: none; }
@@ -305,6 +332,8 @@
   /* A half tile at 1.25 scale with the sidebar (~500 px): the head spans the width so the facts fit in one row,
      Checklist and Spec share the row below. A long branch wraps instead of being cut. */
   @container (max-width: 600px) {
+    .btn { white-space: nowrap; }
+    .btn:disabled { display: none; } /* the dead Stop gives its room to Finish and Close tab */
     .body { grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); }
     .head { grid-column: 1 / -1; }
     .right { grid-row: 2; }
