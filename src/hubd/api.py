@@ -6,15 +6,17 @@ from contextlib import asynccontextmanager
 from datetime import date
 from importlib.metadata import version
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 from hubd import reminders
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
+from hubd.model import one_line
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import load_settings
@@ -31,8 +33,8 @@ WEB_DIST = Path(__file__).parents[2] / "web" / "dist"
 
 
 class Changes(BaseModel):
-    # One line: the comment is one `comment:` field in the step file.
-    comment: str = Field(min_length=1, pattern=r"^[^\r\n]*\S[^\r\n]*$")
+    # Pasted lines are joined with spaces: the comment is one `comment:` field in the step file.
+    comment: Annotated[str, BeforeValidator(one_line), Field(min_length=1)]
 
 
 class RunEnded(BaseModel):
@@ -161,8 +163,8 @@ def create_app(
         return StreamingResponse(stream(), media_type="text/event-stream")
 
     @app.post("/steps/{project}/{step_id}/start")
-    async def start(project: str, step_id: str) -> dict:
-        return (await hub.start(project, step_id)).model_dump(mode="json")
+    async def start(project: str, step_id: str, fresh: bool = False) -> dict:
+        return (await hub.start(project, step_id, fresh)).model_dump(mode="json")
 
     @app.post("/steps/{project}/{step_id}/finish")
     async def finish(project: str, step_id: str) -> dict:

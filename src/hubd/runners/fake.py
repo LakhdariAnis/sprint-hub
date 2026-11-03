@@ -15,6 +15,7 @@ class FakeRunner:
         self.delay = delay
         self.tasks: dict[str, asyncio.Task[None]] = {}  # keeps runs alive; tests await them
         self.resumed: list[tuple[str, str]] = []  # (session_id, prompt) of each resume
+        self.started: list[tuple[str, str]] = []  # (session_id, prompt) of each new chat
 
     def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> None:
         return None  # it only writes a progress file, so the demo can run steps side by side
@@ -23,6 +24,7 @@ class FakeRunner:
         return True  # the demo's `doing` steps show a run in progress
 
     async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
+        self.started.append((session_id, prompt))
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
     async def resume(self, step: Step, session_id: str, cwd: Path, prompt: str) -> None:

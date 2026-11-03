@@ -54,7 +54,19 @@
       }),
     )
   }
-  const changesRequested = () => sel && move(() => requestChanges(sel.project, sel.step, comment.trim()).then((d) => put(sel.project, d)))
+  const changesRequested = () => {
+    if (!sel) return
+    if (!comment.trim()) return void (moveError = 'Write what should change first.')
+    move(() => requestChanges(sel.project, sel.step, comment.trim()).then((d) => put(sel.project, d)))
+  }
+  // A one-line box: pasted lines are joined with spaces (the browser would run them together).
+  const paste = (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text')
+    if (!text || !box) return
+    e.preventDefault()
+    box.setRangeText(text.replace(/\s*[\r\n]+\s*/g, ' '), box.selectionStart ?? 0, box.selectionEnd ?? 0, 'end')
+    comment = box.value
+  }
 
   // j/k walk the three groups as one list; the URL holds the selection.
   const flat = $derived(groups.flatMap((g) => g.list))
@@ -138,8 +150,8 @@
               <button class="btn" type="button" disabled={busy} onclick={() => (confirming = true)}>Approve <span class="kb">a</span></button>
             {/if}
             <form onsubmit={(e) => (e.preventDefault(), changesRequested())}>
-              <input bind:this={box} bind:value={comment} onkeydown={(e) => e.key === 'Escape' && box?.blur()} placeholder="What should change? (c)" aria-label="Review comment" />
-              <button class="btn ghost" type="submit" disabled={busy || !comment.trim()}>Request changes</button>
+              <input bind:this={box} bind:value={comment} onpaste={paste} oninput={() => (moveError = '')} onkeydown={(e) => e.key === 'Escape' && box?.blur()} placeholder="What should change? (c)" aria-label="Review comment" />
+              <button class="btn ghost" type="submit" disabled={busy}>Request changes</button>
             </form>
             {#if moveError}<p class="err in">{moveError}</p>{/if}
           </div>

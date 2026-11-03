@@ -390,3 +390,13 @@ def test_archive_steps_layout_finds_spec_and_checklist(tmp_path: Path) -> None:
     assert entry.spec == archive / "steps" / "a401-x.md"
     assert [t.text for t in entry.tasks] == ["done"]
     assert entry.step.sprint is None
+
+
+def test_comment_line_keeps_hash_and_a_second_comment_replaces_it(tmp_path: Path) -> None:
+    path = _copy_step(tmp_path, "102")
+    step = _load_step(path)
+    for text in ("Add banana #important", "Now remove it  # why not"):
+        step.review = Review(verdict="changes", comment=text)
+        save_step(path, step)
+        assert f"comment: {text}\n" in path.read_text()
+        assert _load_step(path).review.comment == text

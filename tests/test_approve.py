@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from hubd.api import create_app
 from hubd.daemon import Hub, MergeConflict
-from hubd.model import State
+from hubd.model import Review, State
 from hubd.states import InvalidTransition
 from hubd.vault import _load_step
 
@@ -268,3 +268,32 @@ def test_base_other_than_main(vault: Path, hub: Hub, repo: Path) -> None:
     assert git(repo, "branch", "--show-current") == "v2"
     assert "ui.txt" in git(repo, "ls-tree", "--name-only", "v2")
     assert "ui.txt" not in git(repo, "ls-tree", "--name-only", "main")
+
+
+def test_two_rounds_of_changes_then_approve(vault: Path, hub: Hub, repo: Path) -> None:
+    (repo / "sprint" / "103-ui.md").write_text("# Step 103\n\n## Tasks\n- Sort\n")
+
+    async def main() -> None:
+        for n, (comment, fresh) in enumerate([("Round one #a", False), ("Round two  # b", True)]):
+            await hub.request_changes("demo", "103", comment)
+            step = await hub.start("demo", "103", fresh=fresh)
+            await hub.runner.tasks[step.runs[-1].session]
+            assert hub.entry("demo", "103").step.state == State.done
+            # Claude's work on the branch; the diffstat is the whole branch, not the last round.
+            git(repo, "checkout", "-q", "step/103-ui")
+            (repo / f"round{n}.txt").write_text("x\n")
+            git(repo, "add", f"round{n}.txt")
+            git(repo, "commit", "-q", "-m", f"round {n}")
+            git(repo, "checkout", "-q", "main")
+            stat = await hub.diffstat("demo", "103")
+            assert "ui.txt" in stat and all(f"round{i}.txt" in stat for i in range(n + 1))
+        await hub.approve("demo", "103")
+
+    asyncio.run(main())
+    path = vault / "projects" / "demo" / "steps" / "103.md"
+    saved = _load_step(path)
+    assert saved.state == State.approved
+    assert saved.review == Review(verdict="changes", comment="Round two  # b")  # kept on approve
+    assert len(saved.runs) == 3
+    assert saved.runs[0].session == saved.runs[1].session != saved.runs[2].session
+    assert path.read_text().count("## Review") == 1
