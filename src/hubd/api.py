@@ -44,6 +44,10 @@ class Changes(BaseModel):
     comment: Annotated[str, BeforeValidator(one_line), Field(min_length=1)]
 
 
+class Approve(BaseModel):
+    own_hours: float | None = Field(None, ge=0, allow_inf_nan=False)
+
+
 class RunEnded(BaseModel):
     session_id: str
     step: str
@@ -219,8 +223,8 @@ def create_app(
         return (await hub.finish(project, step_id)).model_dump(mode="json")
 
     @app.post("/steps/{project}/{step_id}/approve")
-    async def approve(project: str, step_id: str) -> dict:
-        step, commit = await hub.approve(project, step_id)
+    async def approve(project: str, step_id: str, body: Approve | None = None) -> dict:
+        step, commit = await hub.approve(project, step_id, body.own_hours if body else None)
         return {**step.model_dump(mode="json"), "commit": commit}
 
     @app.post("/steps/{project}/{step_id}/changes")

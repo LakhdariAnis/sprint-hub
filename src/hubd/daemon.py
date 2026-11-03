@@ -29,11 +29,15 @@ from hubd.vault import (
     load_vault,
     parse_questions,
     parse_tasks,
+    planned_hours,
     save_step,
+    save_time,
     step_tasks,
     tick_task,
     worktrees,
 )
+
+COMMANDS = Path(".claude/commands")
 
 
 class NotFound(Exception):
@@ -60,6 +64,7 @@ def step_json(entry: StepEntry) -> dict:
         "tasks": tasks,
         "questions": questions,
         "run_gone": entry.run_gone,
+        "planned": entry.planned,
     }
 
 
@@ -109,11 +114,12 @@ class Hub:
         repo = self.repo(project)
         return repo is not None and not repo.is_dir()
 
-    def _sprint_dirs(self) -> set[Path]:
-        """Every `sprint/` to watch: each repo's and those of its worktrees."""
+    def _repo_dirs(self) -> set[Path]:
+        """Every repo folder to watch: `sprint/` of each repo and worktree, each repo's commands."""
         repos = [r for p in self.index.projects if (r := self.repo(p))]
         trees = [t for r in repos for t in (r, *worktrees(r))]
-        return {s for t in trees if (s := t / "sprint").is_dir()}
+        sprints = {s for t in trees if (s := t / "sprint").is_dir()}
+        return sprints | {c for r in repos if (c := r / COMMANDS).is_dir()}
 
     def _watchable(self, _: object, path: str) -> bool:
         return path.endswith(".md") or Path(path) == self.projects_file  # `.md` skips `.tmp` too
@@ -123,14 +129,14 @@ class Hub:
 
         Runs until `stop`. When a repo's or worktree's `sprint/` appears or goes, watching restarts.
         """
-        known = self._sprint_dirs()
+        known = self._repo_dirs()
         loaded = self.vault.is_dir()
         while not stop.is_set():
             if not loaded and self.vault.is_dir():
                 # `hubd init` made the vault: read it. Nothing is imported, `hubd import` does that.
                 async with self.lock:
                     self._reload_all()
-                known, loaded = self._sprint_dirs(), True
+                known, loaded = self._repo_dirs(), True
             roots = self._roots(known)
             if not roots:  # nothing to watch yet: the vault is not there
                 await asyncio.sleep(1)
@@ -150,7 +156,7 @@ class Hub:
                         for path in sorted({p for _, p in changes}):
                             await self.reload(Path(path))
                         # shortcut: a file written while watching restarts shows at its next change.
-                        if (now := self._sprint_dirs()) != known:
+                        if (now := self._repo_dirs()) != known:
                             await self._import_projects(now - known)
                             known = now
                             break
@@ -159,7 +165,7 @@ class Hub:
                         ):  # the vault or projects.toml's folder appeared
                             break
             except OSError:  # a watched folder vanished between the check and the watch
-                known = self._sprint_dirs()
+                known = self._repo_dirs()
                 await asyncio.sleep(1)
 
     def _roots(self, sprints: set[Path]) -> list[Path]:
@@ -195,6 +201,8 @@ class Hub:
                 self.emit({"type": "reload"})
             elif path == self.projects_file:
                 await self._sync_projects()
+            elif path.parent.parts[-2:] == COMMANDS.parts:
+                self._reload_command(path)
             elif project := self._spec_project(path):
                 await self._reload_spec(project, path)
             else:
@@ -285,6 +293,16 @@ class Hub:
         self.index.steps.sort(key=lambda e: (e.project, e.path))
         if old is None or old.step != step or old.tasks != entry.tasks:
             self.emit({"type": "step", **step_json(entry)})
+
+    def _reload_command(self, path: Path) -> None:
+        """A command file changed: its step's planned hours may have."""
+        for entry in self.index.steps:
+            repo = self.repo(entry.project)
+            if repo and path == repo / COMMANDS / f"sprint-{entry.step.step}.md":
+                planned = planned_hours(repo, entry.step.step)
+                if planned != entry.planned:
+                    entry.planned = planned
+                    self.emit({"type": "step", **step_json(entry)})
 
     def _reload_tasks(self, path: Path) -> None:
         for entry in self.index.steps:
@@ -470,16 +488,24 @@ class Hub:
             entry = self.entry(project, step_id)
             if entry.step.by == "me":
                 raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
-            return self._end_run(entry)
+            runs = entry.step.runs
+            # A session already gone ended at some unknown time: no end, the run counts 0.
+            return self._end_run(entry, bool(runs) and self.runner.running(runs[-1].session))
 
-    def _end_run(self, entry: StepEntry) -> Step:
+    def _end_run(self, entry: StepEntry, ended_now: bool = True) -> Step:
         new = transition(entry.step, Event.run_ended, Actor.daemon)
+        if ended_now and new.runs and new.runs[-1].minutes is None:
+            last = new.runs[-1]
+            minutes = max((datetime.now() - last.started) // timedelta(minutes=1), 0)
+            new.runs = [*new.runs[:-1], last.model_copy(update={"minutes": minutes})]
         save_step(entry.path, new)
         entry.step = new
         self.emit({"type": "step", **step_json(entry)})
         return new
 
-    async def approve(self, project: str, step_id: str) -> tuple[Step, str | None]:
+    async def approve(
+        self, project: str, step_id: str, own_hours: float | None = None
+    ) -> tuple[Step, str | None]:
         """Merge the step branch into the project's base (locally, never pushed), then approve.
 
         Returns the step and the commit `base` is on now; None when nothing was merged.
@@ -487,6 +513,7 @@ class Hub:
         async with self.lock:
             entry = self.entry(project, step_id)
             new = transition(entry.step, Event.approve, Actor.me)
+            new.own_hours = own_hours
             repo, branch, commit = self.repo(project), entry.step.branch, None
             if entry.step.by == "claude" and not branch:
                 raise InvalidTransition(f"step {step_id}: no branch to merge, nothing was approved")
@@ -504,7 +531,27 @@ class Hub:
             save_step(entry.path, new)
             entry.step = new
             self.emit({"type": "step", **step_json(entry)})
+            if repo:
+                await asyncio.to_thread(self._write_time, project, repo, new, commit)
             return new, commit
+
+    def _write_time(self, project: str, repo: Path, step: Step, commit: str | None) -> None:
+        """The one repo file hubd writes. The merge is done: a failure only warns."""
+        if not (repo / "sprint").is_dir():
+            return
+        reason = None
+        # A tracked PROGRESS.md left changed would make the next approve refuse to merge.
+        if git(repo, "ls-files", "sprint/PROGRESS.md"):
+            reason = "sprint/PROGRESS.md is tracked by git, add the line by hand"
+        else:
+            base = self.index.projects[project].base
+            merged = f"Merged into `{base}` in `{commit}`." if commit else None
+            try:
+                save_time(repo / "sprint/PROGRESS.md", step, merged, date.today())
+            except (OSError, ValueError) as exc:
+                reason = str(exc)
+        if reason:
+            self.notifier.notify("Time not written", f"{project} {step.step}: {reason}")
 
     async def request_changes(self, project: str, step_id: str, comment: str) -> Step:
         """Save the comment in `## Review`, state `changes`; the next start resumes the chat."""

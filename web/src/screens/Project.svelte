@@ -10,7 +10,7 @@
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { untrack } from 'svelte'
-  import { goal, groupBySprint, loadStep, needsWork, type Step } from '../steps'
+  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, type Step } from '../steps'
   import { key, lists, put, steps as store } from '../store.svelte'
 
   let { project }: { project: string } = $props()
@@ -18,12 +18,6 @@
   const ids = $derived(lists.steps[project])
   const gone = $derived(lists.projects?.find((p) => p.id === project && p.repoMissing))
   const steps = $derived((ids ?? []).map((k) => store[k]))
-
-  // Hours = time of the recorded runs; the vault has no planned hours.
-  const hours = (s: Step) => {
-    const m = s.runs.reduce((a, r) => a + (r.minutes ?? 0), 0)
-    return m ? (m / 60).toFixed(1) : '–'
-  }
 
   const groups = $derived(groupBySprint(steps))
   const work = $derived.by(() => {
@@ -103,6 +97,13 @@
   })
 </script>
 
+{#snippet meter(what: string, hours: number, max: number)}
+  <div class="m" class:over={hours > max}>
+    <span class="pbar"><i style="width: {Math.min(hours / max, 1) * 100}%"></i></span>
+    <span class="v">{fmtHours(hours)} h / {max} h {what}</span>
+  </div>
+{/snippet}
+
 <div class="page">
 <Header>
   {#snippet crumb()}<a href="#/projects">Projects</a> › {project}{/snippet}
@@ -133,7 +134,15 @@
     </section>
 
     <section class="pn list" class:f={col === 't'}>
-      <div class="ph">Steps<span class="n">{group?.steps.length ?? 0}</span><span class="r"><span class="kb">↵</span> open</span></div>
+      <div class="stick">
+        <div class="ph">Steps<span class="n">{group?.steps.length ?? 0}</span><span class="r"><span class="kb">↵</span> open</span></div>
+        {#if group && group.sprint !== null}
+          <div class="budget" aria-label="Sprint {group.sprint} hours">
+            {@render meter('planned', group.planned, PLANNED_MAX)}
+            {@render meter('actual', group.actual, ACTUAL_MAX)}
+          </div>
+        {/if}
+      </div>
       {#each group?.steps ?? [] as s, i (s.step)}
         {@const done = s.tasks.filter((t) => t.state === 'done').length}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -159,10 +168,16 @@
         <div class="pv">
           <div class="ti"><span class="id">{cur.step}</span> · {cur.title}</div>
           <div class="st">
-            <span class="chip s-{cur.state}">{cur.state}</span><span>{cur.model ?? '–'}</span><span>{hours(cur)} h</span><span class="tk">{done}/{cur.tasks.length} tasks</span>
+            <span class="chip s-{cur.state}">{cur.state}</span><span>{cur.model ?? '–'}</span><span class="tk">{done}/{cur.tasks.length} tasks</span>
+          </div>
+          <div class="tm">
+            <span>planned {cur.planned == null ? '–' : `${fmtHours(cur.planned)} h`}</span>
+            <span>agent {fmtHours(agentHours(cur))} h</span>
+            <span>Anis {cur.own_hours == null ? '–' : `${fmtHours(cur.own_hours)} h`}</span>
+            {#if noEnd(cur)}<span class="noend" title="Counted as 0: hubd never saw these runs end">{noEnd(cur)} {noEnd(cur) === 1 ? 'run' : 'runs'} with no end</span>{/if}
           </div>
           <div class="br"><span class="mono">{cur.branch ?? ''}</span>{#if cur.branch}<Copy text={cur.branch} label="branch" />{/if}</div>
-          <div class="lb">GOAL</div>
+          <div class="lb gl">GOAL</div>
           <p class="desc">{#if detail}<Inline text={goal(detail.spec) || 'No goal in the spec.'} />{:else}…{/if}</p>
           <div class="lb">TASKS<span>{done}/{cur.tasks.length}</span></div>
           <div class="tl">
@@ -195,6 +210,16 @@
   .short { display: none; }
   .list { overflow-y: auto; }
   .ph { position: sticky; top: 0; background: var(--dk); z-index: 1; }
+  .stick { position: sticky; top: 0; z-index: 1; flex: none; background: var(--dk); }
+  /* The selected sprint's budget, next to the sprint list and above its steps. Red only past the limit. */
+  .budget { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 16px; border-bottom: 1px solid var(--sel); font: 12px var(--mono); color: var(--fg2); }
+  .m { flex: 1 1 170px; min-width: 0; display: flex; align-items: center; gap: 8px; --x: var(--b); }
+  .m .pbar { flex: 1; min-width: 16px; }
+  .v { white-space: nowrap; }
+  .m.over { color: var(--r); --x: var(--r); font-weight: 600; }
+  .tm { flex: none; display: flex; flex-wrap: wrap; gap: 2px 8px; font: 12.5px var(--mono); color: var(--fg2); }
+  .tm > span + span::before { content: "·"; margin-right: 8px; }
+  .noend { color: var(--y); }
   .grid { display: grid; align-items: center; column-gap: 12px; padding: 0 16px; grid-template-columns: 10px 40px minmax(0, 1fr) 96px 80px; }
   /* A sprint: its number in a badge coloured by state, then name and progress. Half screen keeps the badge only. */
   .lr.gh { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 52px; }
@@ -259,12 +284,12 @@
     .body > .pn:first-child { grid-row: 1 / span 2; }
     .nb { width: 26px; height: 26px; }
     .grid.row { min-height: 34px; }
-  }
-  /* Both narrow and short: Step info drops its header and the branch line, the goal takes 2 lines. */
-  @container (max-width: 600px) and (max-height: 640px) {
-    .body > .pn:last-child > .ph, .br { display: none; }
-    .pv { padding: 10px 12px; }
     .desc { height: calc(2 * 1.55em); -webkit-line-clamp: 2; line-clamp: 2; }
+  }
+  /* Both narrow and short: Step info drops its header, the branch line and the GOAL label. */
+  @container (max-width: 600px) and (max-height: 640px) {
+    .body > .pn:last-child > .ph, .br, .gl { display: none; }
+    .pv { padding: 10px 12px; }
   }
   /* Short windows: the header and gaps give back room, the columns scroll alone. */
   @container (max-height: 640px) {

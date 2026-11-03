@@ -95,6 +95,8 @@ class Step(BaseModel):
     due: date | None = None
     runs: list[Run] = []
     review: Review | None = None
+    # Anis's own time, not overlapping a run, given on approve; None = not recorded, not 0.
+    own_hours: float | None = None
 
 
 class Deadline(BaseModel):

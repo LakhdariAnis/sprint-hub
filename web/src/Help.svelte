@@ -18,7 +18,7 @@
     ['n', 'new chat for a step in changes, with your comment in its prompt, when the old chat cannot be resumed (Step)'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
-    ['a', 'approve; press a or y again to merge (Review)'],
+    ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
     ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],

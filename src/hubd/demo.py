@@ -27,9 +27,15 @@ EXTRA = {
     "demo-repo/sprint/progress/104.md": "# Step 104\n- [x] Write the intro\n"
     "- [x] Add the install section\n- [x] Link the API\n",
     # Sprint 2 (approved) next to the fixture's sprint 1: two groups for the Project screen to fold.
+    # Its 19 h run and 16 planned hours put sprint 2 over budget, for the sprint bar.
     "projects/demo/steps/201.md": "---\nstep: 201\ntitle: Tag the release\nstate: approved\n"
-    "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
-    "comment:\n",
+    "by: claude\nmodel: sonnet\nsprint: 2\nown_hours: 0.5\n---\n\n## Runs\n"
+    "- 2026-10-12 09:00 · sonnet · session a1b2…c3d · 1140 min · task all\n\n"
+    "## Review\nverdict: approve\ncomment:\n",
+    "demo-repo/.claude/commands/sprint-201.md": "---\nmodel: sonnet\nhours: 10\n---\nTag it.\n",
+    "demo-repo/.claude/commands/sprint-202.md": "---\nmodel: sonnet\nhours: 6\n---\nWrite it.\n",
+    "demo-repo/.claude/commands/sprint-102.md": "---\nmodel: sonnet\nhours: 1\n---\nBuild it.\n",
+    "demo-repo/.claude/commands/sprint-103.md": "---\nmodel: sonnet\nhours: 0.5\n---\nShow it.\n",
     "projects/demo/steps/202.md": "---\nstep: 202\ntitle: Write the changelog\nstate: approved\n"
     "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
     "comment:\n",

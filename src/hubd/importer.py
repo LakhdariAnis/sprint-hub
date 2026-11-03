@@ -9,15 +9,13 @@ import frontmatter
 import yaml
 
 from hubd.model import Project, State, TaskState
-from hubd.vault import _archive_sprint, parse_tasks, split_sections, vault_path
+from hubd.vault import _archive_sprint, command_field, parse_tasks, split_sections, vault_path
 
 # `api-fields.md` or `design4-mock-list.md` sit next to the specs and are not steps.
 _SPEC = re.compile(r"^(?P<id>[a-z]?\d+[a-z]?)-.+\.md$")
 _TITLE = re.compile(r"^# Step \S+ — (?P<title>.+?)\s*$", re.M)
 _SPRINT_TABLE = re.compile(r"^Sprint (\d+) — steps$")
 _ROW = re.compile(r"^\|\s*`?(\w+)`?\s*\|")
-_COMMAND_HEAD = re.compile(r"---\n(.*?)^---", re.S | re.M)
-_MODEL = re.compile(r"^model:\s*([\w.-]+)\s*$", re.M)
 BODY = "## Runs\n\n## Review\nverdict:\ncomment:\n\n## Questions\n"
 
 
@@ -111,19 +109,7 @@ def sprint_tables(repo: Path) -> dict[str, int]:
 
 
 def model_of(repo: Path, step_id: str) -> str | None:
-    commands = [repo / ".claude/commands" / f"sprint-{step_id}.md"]
-    commands += sorted((repo / "sprint").glob(f"archive/**/commands/sprint-{step_id}.md"))
-    path = next((p for p in commands if p.is_file()), None)
-    if path is None:
-        return None
-    # Line by line: `description: Sprint 402 - Project screen: ...` is not valid YAML.
-    try:
-        head = _COMMAND_HEAD.match(path.read_text())
-    except (OSError, ValueError) as exc:
-        print(f"warning: {path}: {exc}", file=sys.stderr)
-        return None
-    m = _MODEL.search(head[1]) if head else None
-    return m[1] if m else None
+    return command_field(repo, step_id, "model")
 
 
 def write_step(path: Path, meta: dict[str, object]) -> None:

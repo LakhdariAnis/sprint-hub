@@ -1,8 +1,10 @@
 """Load the vault into an in-memory index (docs/HUB-DESIGN.md section 4)."""
 
+import math
 import os
 import re
 import shutil
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,11 +28,12 @@ _QUESTION = re.compile(r"^- \[(?P<mark>[ x])\] (?P<text>.+?)(?: → (?P<answer>.
 _STEP_DIGITS = re.compile(r"^\d+")
 _ARCHIVE_SPRINT = re.compile(r"sprint-(\d+)")
 _FIELD = re.compile(r"^(?P<key>\w+):(?P<rest>.*?)(?P<eol>\r?)$")
-_FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due")
+_FRONTMATTER_FIELDS = ("state", "by", "model", "branch", "needs", "due", "own_hours")
 # `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub v2/301]]`; the checkbox is optional.
 _DEADLINE = re.compile(r"^- (?:\[(?P<mark>[ xX])\] )?(?P<date>\S+)(?P<rest>.*)$")
 _TAG = re.compile(r"(?<!\S)#([\w/-]+)")
 _LINK = re.compile(r"\[\[([^\]]+)\]\]")
+_COMMAND_HEAD = re.compile(r"---\n(.*?)^---", re.S | re.M)
 
 
 @dataclass
@@ -54,6 +57,8 @@ class StepEntry:
     seen: dict[str, datetime | None] = field(default_factory=dict)
     # `doing`, but hubd found no live session for it when it started: `f` gets it out.
     run_gone: bool = False
+    # `hours:` of the step's command file; None when it has none.
+    planned: float | None = None
 
 
 @dataclass
@@ -249,7 +254,20 @@ def save_step(path: Path, step: Step) -> None:
 
 
 def _save_runs(lines: list[str], old: list[Run], new: list[Run], eol: str) -> None:
-    """Append the runs in `new` after `old`; existing run lines are never rewritten."""
+    """Append the runs in `new` after `old`, or set the end of the latest run.
+
+    Any other change to an existing run line is refused.
+    """
+    if len(new) == len(old) and old and new[:-1] == old[:-1]:
+        last, was = new[-1], old[-1]
+        if last.model_copy(update={"minutes": was.minutes}) == was:
+            heading = _find_heading(lines, "Runs")
+            end = next(
+                (i for i in range(heading + 1, len(lines)) if _HEADING.match(lines[i])), len(lines)
+            )
+            at = max(i for i in range(heading + 1, end) if lines[i].startswith("- "))
+            lines[at] = format_run(last) + eol
+            return
     if new[: len(old)] != old:
         raise ValueError("runs can only be appended")
     added = [format_run(run) + eol for run in new[len(old) :]]
@@ -385,12 +403,81 @@ def live_file(repo: Path, folder: str, step_id: str) -> Path | None:
     return max((p for p in paths if p.is_file()), key=lambda p: p.stat().st_mtime, default=None)
 
 
+def command_field(repo: Path, step_id: str, name: str) -> str | None:
+    """A `name:` value in the frontmatter of the step's `sprint-<id>.md` command."""
+    commands = [repo / ".claude/commands" / f"sprint-{step_id}.md"]
+    commands += sorted((repo / "sprint").glob(f"archive/**/commands/sprint-{step_id}.md"))
+    path = next((p for p in commands if p.is_file()), None)
+    if path is None:
+        return None
+    # Line by line: `description: Sprint 402 - Project screen: ...` is not valid YAML.
+    try:
+        head = _COMMAND_HEAD.match(path.read_text())
+    except (OSError, ValueError) as exc:
+        print(f"warning: {path}: {exc}", file=sys.stderr)
+        return None
+    m = re.search(rf"^{name}:\s*([\w.-]+)\s*$", head[1], re.M) if head else None
+    return m[1] if m else None
+
+
+def planned_hours(repo: Path, step_id: str) -> float | None:
+    """`hours:` of the step's command; missing or not a number of hours = None."""
+    try:
+        hours = float(command_field(repo, step_id, "hours") or "")
+    except ValueError:
+        return None
+    return hours if math.isfinite(hours) and hours >= 0 else None
+
+
+def time_line(step: Step) -> str:
+    """The `Time:` line of a step's PROGRESS entry; a run with no end counts 0."""
+    agent = sum(r.minutes or 0 for r in step.runs) / 60
+    a = f"{round(agent, 2):g}"
+    if step.own_hours is None:
+        return f"Time: {a} h (agent {a} h, Anis not recorded)"
+    return f"Time: {round(agent + step.own_hours, 2):g} h (agent {a} h)"
+
+
+def save_time(path: Path, step: Step, merged: str | None, today: date) -> None:
+    """Set the `Time:` line in the step's newest `sprint/PROGRESS.md` entry; no other line changes.
+
+    No entry: add one on top, in the file's format. `merged`: its "Merged into ..." sentence.
+    """
+    path.touch()
+    lines = path.read_text().split("\n")
+    line = time_line(step)
+    heading = re.compile(rf"^## .*— Step {re.escape(step.step)}\b")
+    at = next((i for i, text in enumerate(lines) if heading.match(text)), None)
+    if at is None:
+        branch = f" (branch {step.branch})" if step.branch else ""
+        entry = [f"## {today} — Step {step.step} approved{branch}", ""]
+        entry += [merged, ""] if merged else []
+        entry += [line, ""]
+        top = next((i for i, text in enumerate(lines) if text.startswith("## ")), None)
+        if top is None:  # no entry at all: after what the file has, with one blank line between
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines += ["", *entry] if lines else ["# Progress", "", *entry]
+        else:
+            lines[top:top] = entry
+    else:
+        end = next((i for i in range(at + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+        old = next((i for i in range(at + 1, end) if lines[i].startswith("Time: ")), None)
+        if old is not None:
+            lines[old] = line
+        else:
+            gap = [""] if at + 1 < len(lines) and lines[at + 1].strip() else []
+            lines[at + 1 : at + 1] = ["", line, *gap]
+    _write_atomic(path, "\n".join(lines).encode())
+
+
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
     entry = StepEntry(project=project, path=path, step=step)
     archived: Path | None = None  # a file taken from `sprint/archive/sprint-<n>/`
     if step.by == "me":
         entry.tasks = step_tasks(path)
     if repo:
+        entry.planned = planned_hours(repo, step.step)
         sprint = repo / "sprint"
         entry.spec = next(iter(sorted(sprint.glob(f"{step.step}-*.md"))), None)
         progress = live_file(repo, "progress", step.step)
