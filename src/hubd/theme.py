@@ -75,6 +75,36 @@ def derive(css: dict[str, str], mode: str) -> None:
         css.setdefault("--o", mix(css["--r"], css["--y"], 0.5))
 
 
+# About 4.5 (WCAG AA). 4.2: the Everforest red chip is 4.27 and Everforest is the reference look.
+MIN_CONTRAST = 4.2
+TEXT = ("--fg2",)  # --fg is the reference: it is never moved
+STATES = ("--r", "--y", "--o", "--g", "--b", "--c", "--m")  # chip text, deadline red
+
+
+def contrast(a: str, b: str) -> float:
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def ratios(css: dict[str, str], var: str) -> list[tuple[str, float]]:
+    """Contrast of `var` on each surface it is drawn on. A chip is 16 % of itself over --dk."""
+    bg, dk, color = css["--bg"], css["--dk"], css[var]
+    if var in STATES:
+        return [("chip", contrast(color, mix(color, dk, 0.16))), ("page", contrast(color, bg))]
+    return [("page", contrast(color, bg)), ("panel", contrast(color, dk))]
+
+
+def readable(css: dict[str, str]) -> None:
+    """Pull text and state colours under MIN_CONTRAST toward --fg until they pass. Every theme."""
+    if not {"--bg", "--fg", "--dk"} <= css.keys():
+        return
+    for var in (*TEXT, *STATES):
+        for _ in range(20):
+            if var not in css or min(r for _, r in ratios(css, var)) >= MIN_CONTRAST:
+                break
+            css[var] = mix(css["--fg"], css[var], 0.1)
+
+
 class ThemeSource(Protocol):
     path: Path  # shown in /errors next to a warning
 
@@ -143,6 +173,7 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
     if mode not in ("dark", "light"):  # old format has no mode: judge by the background
         mode = "light" if "--bg" in css and luminance(css["--bg"]) > 0.4 else "dark"
     derive(css, mode)
+    readable(css)
     return {"vars": css, "mode": mode}, warnings
 
 
