@@ -11,15 +11,22 @@ from typing import Annotated
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, ValidationError
 
-from hubd import reminders
+from hubd import doctor, reminders, service
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import NotifySend
 from hubd.runners.claude import ClaudeCodeRunner
-from hubd.settings import load_settings
+from hubd.settings import (
+    Current,
+    Settings,
+    has_comments,
+    load_current,
+    reason,
+    save_settings,
+)
 from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
@@ -47,9 +54,13 @@ def create_app(
     demo: bool = False,
     theme: ThemeSource | None = None,
     reminder_hour: int | None = None,
+    current: Current | None = None,
 ) -> FastAPI:
     """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo)."""
     theme = theme or FakeTheme()
+    # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
+    current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
+    hour = [reminder_hour]
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -62,7 +73,7 @@ def create_app(
             tasks.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
         if reminder_hour is not None:
             path = reminders.state_path()
-            tasks.append(asyncio.create_task(reminders.loop(hub, path, reminder_hour, stop)))
+            tasks.append(asyncio.create_task(reminders.loop(hub, path, lambda: hour[0], stop)))
         yield
         stop.set()
         await asyncio.gather(*tasks)
@@ -151,6 +162,43 @@ def create_app(
             for e in hub.index.errors
         ] + [{"path": str(theme.path), "line": None, "message": m} for m in read_theme(theme)[1]]
 
+    @app.get("/doctor")
+    def get_doctor() -> dict:
+        return {
+            "vault": str(hub.vault),
+            "version": version("hubd"),
+            "service": service.state(),
+            "checks": doctor.report(hub.vault),
+        }
+
+    def settings_json() -> dict:
+        path = hub.vault / "hub.toml"
+        return {
+            "path": str(path),
+            **current.settings.model_dump(),
+            "error": current.error,
+            "comments": has_comments(path),
+            "restart": [],  # both apply at once, see put_settings
+        }
+
+    @app.get("/settings")
+    def get_settings() -> dict:
+        return settings_json()
+
+    @app.put("/settings", response_model=None)
+    def put_settings(body: dict) -> JSONResponse | dict:
+        try:
+            new = Settings.model_validate(body)
+        except ValidationError as exc:  # nothing written
+            return JSONResponse({"detail": reason(exc)}, status_code=422)
+        save_settings(hub.vault / "hub.toml", new)
+        current.settings, current.error = new, None
+        if hour[0] is not None:
+            hour[0] = new.reminder_hour  # the reminder loop reads it on its next check
+        if hasattr(hub.runner, "terminal"):
+            hub.runner.terminal = new.terminal  # the next start opens it
+        return settings_json()
+
     @app.get("/events")
     async def events() -> StreamingResponse:
         async def stream() -> AsyncIterator[str]:
@@ -210,9 +258,16 @@ def _relative(path: Path, root: Path) -> Path:
 def serve_app() -> FastAPI:
     """`hubd serve`: the real vault, Claude runner, notify-send and Omarchy theme."""
     vault = vault_path()
-    settings = load_settings(vault / "hub.toml")
+    current = load_current(
+        vault / "hub.toml"
+    )  # a broken file: defaults, the Settings screen says why
     url = f"http://{HOST}:{PORT}"
     hub = Hub(
-        vault, lambda _: ClaudeCodeRunner(settings.terminal, url), NotifySend(), projects=PROJECTS
+        vault,
+        lambda _: ClaudeCodeRunner(current.settings.terminal, url),
+        NotifySend(),
+        projects=PROJECTS,
     )
-    return create_app(hub, theme=OmarchyTheme(), reminder_hour=settings.reminder_hour)
+    return create_app(
+        hub, theme=OmarchyTheme(), reminder_hour=current.settings.reminder_hour, current=current
+    )

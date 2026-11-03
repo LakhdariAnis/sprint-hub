@@ -2,8 +2,10 @@ import json
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from hubd import doctor, install
+from hubd.api import create_app
 
 THEME = Path(__file__).parent / "fixtures" / "theme" / "colors.toml"
 
@@ -19,7 +21,7 @@ def vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """An empty vault, never the real ~/Hub; a terminal every PATH below has."""
     vault = tmp_path / "vault"
     vault.mkdir()
-    (vault / "hub.toml").write_text('terminal = ["claude"]\n')
+    (vault / "hub.toml").write_text('terminal = ["claude", "{cwd}"]\n')
     monkeypatch.setenv("HUB_VAULT", str(vault))
     return vault
 
@@ -131,3 +133,29 @@ def test_terminal(vault: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert doctor._terminal(vault) == (False, "terminal claude not on PATH")
     (vault / "hub.toml").write_text("terminal = [")
     assert doctor._terminal(vault)[1].startswith("cannot read the terminal")
+
+
+def test_report_has_a_fix_for_the_hook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, vault: Path
+) -> None:
+    fake_claude(tmp_path, monkeypatch, HELP)
+    path = settings(tmp_path, {})
+    rows = doctor.report(vault, path, THEME)
+    hook = [r for r in rows if "hook" in r["text"]]
+    assert hook == [
+        {
+            "ok": False,
+            "text": "SessionEnd hook missing: run hubd install-hook",
+            "fix": "uv run hubd install-hook",
+        }
+    ]
+    assert all(r["fix"] is None for r in rows if r["ok"])
+
+
+def test_get_doctor(hub, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))  # no claude, no terminal
+    body = TestClient(create_app(hub)).get("/doctor").json()
+    assert body["vault"] == str(hub.vault)
+    assert body["service"] == "not installed"
+    assert body["version"]
+    assert {"ok": False, "text": "claude not on PATH", "fix": None} in body["checks"]

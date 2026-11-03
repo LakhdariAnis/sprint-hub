@@ -73,15 +73,27 @@ def _commands(vault: Path) -> list[tuple[bool, str]]:
     return results
 
 
+def fix_for(text: str) -> str | None:
+    """The command that fixes a failed line, when there is one."""
+    return "uv run hubd install-hook" if "run hubd install-hook" in text else None
+
+
+def report(
+    vault: Path, settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY
+) -> list[dict]:
+    """Every check as `{ok, text, fix}`; `hubd doctor` and `GET /doctor` share it."""
+    results = [*checks(settings), _theme(theme_file), _terminal(vault), *_commands(vault)]
+    return [{"ok": ok, "text": text, "fix": None if ok else fix_for(text)} for ok, text in results]
+
+
 def main(
     settings: Path = install.SETTINGS,
     theme_file: Path = theme.OMARCHY,
     service_state: Callable[[], str] | None = None,
 ) -> int:
-    vault = vault_path()
-    results = [*checks(settings), _theme(theme_file), _terminal(vault), *_commands(vault)]
-    for ok, text in results:
-        print(f"{'✔' if ok else '✘'} {text}")
+    results = report(vault_path(), settings, theme_file)
+    for r in results:
+        print(f"{'✔' if r['ok'] else '✘'} {r['text']}")
     # Info, not a check: hubd also runs without the service (bin/sprint-hub-app starts it).
     print(f"ℹ hubd service: {(service_state or service.state)()}")
-    return 0 if all(ok for ok, _ in results) else 1
+    return 0 if all(r["ok"] for r in results) else 1

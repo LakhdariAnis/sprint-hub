@@ -83,7 +83,9 @@ def test_loop_checks_at_start_and_stops(vault: Path, notifier: Recorder, tmp_pat
 
     async def main() -> None:
         stop = asyncio.Event()
-        task = asyncio.create_task(loop(hub, tmp_path / "r.json", 9, stop, clock=lambda: at(10)))
+        task = asyncio.create_task(
+            loop(hub, tmp_path / "r.json", lambda: 9, stop, clock=lambda: at(10))
+        )
         await asyncio.sleep(0.05)
         stop.set()
         await asyncio.wait_for(task, 1)

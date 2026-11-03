@@ -46,13 +46,13 @@ def check(hub: Hub, path: Path, hour: int, now: datetime) -> None:
 async def loop(
     hub: Hub,
     path: Path,
-    hour: int,
+    hour: Callable[[], int],
     stop: asyncio.Event,
     clock: Callable[[], datetime] = datetime.now,
 ) -> None:
     """Check at start, then every `EVERY` seconds, until `stop`."""
     while not stop.is_set():
-        check(hub, path, hour, clock())
+        check(hub, path, hour(), clock())
         with suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), EVERY)
 
