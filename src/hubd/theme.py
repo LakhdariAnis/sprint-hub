@@ -31,6 +31,7 @@ VARS = {
     "blue": "--b",
     "magenta": "--m",
 }
+DERIVED = {"--dk", "--dkr", "--lt", "--fg2", "--fg3", "--o"}  # no key in the old format
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 # Old-format colors.toml has no named colours: the standard terminal meaning of each slot.
 # A named key wins.
@@ -51,6 +52,27 @@ def luminance(color: str) -> float:
     rgb = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
     r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb)
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """`#rrggbb` of `t` parts `a` and the rest `b`."""
+    mixed = (round(int(a[i : i + 2], 16) * t + int(b[i : i + 2], 16) * (1 - t)) for i in (1, 3, 5))
+    return "#{:02x}{:02x}{:02x}".format(*mixed)
+
+
+def derive(css: dict[str, str], mode: str) -> None:
+    """Fill the vars an old-format theme has no key for, from its background and foreground."""
+    bg, fg = css.get("--bg"), css.get("--fg")
+    if bg is None or fg is None:
+        return
+    shade = (0.06, 0.12) if mode == "light" else (0.2, 0.35)
+    css.setdefault("--dk", mix("#000000", bg, shade[0]))
+    css.setdefault("--dkr", mix("#000000", bg, shade[1]))
+    css.setdefault("--lt", mix(fg, bg, 0.08))
+    css.setdefault("--fg2", mix(fg, bg, 0.7))
+    css.setdefault("--fg3", mix(fg, bg, 0.25))
+    if "--r" in css and "--y" in css:
+        css.setdefault("--o", mix(css["--r"], css["--y"], 0.5))
 
 
 class ThemeSource(Protocol):
@@ -109,6 +131,8 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
     css, warnings = {}, []
     for name, var in VARS.items():
         value = colors.get(name, colors.get(OLD_KEYS.get(name, "")))
+        if value is None and var in DERIVED:
+            continue  # derive() fills it
         if value is None:
             warnings.append(f"theme has no {name}: {var} keeps its default")
         elif isinstance(value, str) and HEX.fullmatch(value):
@@ -118,6 +142,7 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
     mode = colors.get("mode")
     if mode not in ("dark", "light"):  # old format has no mode: judge by the background
         mode = "light" if "--bg" in css and luminance(css["--bg"]) > 0.4 else "dark"
+    derive(css, mode)
     return {"vars": css, "mode": mode}, warnings
 
 

@@ -136,3 +136,15 @@ def test_mode_from_background_when_absent(tmp_path: Path) -> None:
     path.write_text('background = "#fafafa"\nforeground = "#222222"\n')
     assert read(OmarchyTheme(path))[0]["mode"] == "light"
     assert read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["mode"] == "dark"
+
+
+def test_old_format_derives_the_rest() -> None:
+    v = read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["vars"]
+    assert set(v) == set(VARS.values())
+    assert v["--dk"] < v["--bg"] < v["--lt"]  # darker panel, lighter panel (same-length hex)
+    assert v["--o"] == "#8e8e8e"  # between red #7c7c7c and yellow #a0a0a0
+
+
+def test_new_format_has_nothing_derived() -> None:
+    v = read(OmarchyTheme(FIXTURE))[0]["vars"]
+    assert v["--dk"] == "#020600" and v["--fg2"] == "#f3f2ef" and v["--o"] == "#6d9626"
