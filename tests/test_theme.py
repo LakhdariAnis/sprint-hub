@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from hubd.api import create_app
 from hubd.daemon import Hub
-from hubd.theme import VARS, FakeTheme, OmarchyTheme, read
+from hubd.theme import MIN_CONTRAST, VARS, FakeTheme, OmarchyTheme, ratios, read
 
 FIXTURE = Path(__file__).parent / "fixtures" / "theme" / "colors.toml"
 THEME_CSS = Path(__file__).parents[1] / "web" / "src" / "theme.css"
@@ -111,3 +111,45 @@ def test_theme_swap_emits_one_theme_event(tmp_path: Path) -> None:
     assert events[0]["type"] == "theme"
     assert events[0]["mode"] == "light"
     assert events[0]["vars"]["--bg"] == "#fafafa"
+
+
+def test_old_format_maps_terminal_colors() -> None:
+    # Contract: a copy of a real old-format colors.toml (hinterlands).
+    theme, warnings = read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))
+    v = theme["vars"]
+    assert (v["--mu"], v["--sel"], v["--bg"]) == ("#525252", "#686868", "#222222")
+    assert not any("--r" in w or "--sel" in w or "--mu" in w for w in warnings)
+
+
+def test_named_keys_win_over_old_keys(tmp_path: Path) -> None:
+    path = tmp_path / "colors.toml"
+    path.write_text(FIXTURE.with_name("colors-old.toml").read_text() + 'red = "#ff9090"\n')
+    v = read(OmarchyTheme(path))[0]["vars"]
+    assert v["--r"] == "#ff9090" and v["--g"] != "#ff9090"
+
+
+def test_mode_from_background_when_absent(tmp_path: Path) -> None:
+    path = tmp_path / "colors.toml"
+    path.write_text('background = "#fafafa"\nforeground = "#222222"\n')
+    assert read(OmarchyTheme(path))[0]["mode"] == "light"
+    assert read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["mode"] == "dark"
+
+
+def test_old_format_derives_the_rest() -> None:
+    v = read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["vars"]
+    assert set(v) == set(VARS.values())
+    assert v["--dk"] < v["--bg"] < v["--lt"]  # darker panel, lighter panel (same-length hex)
+    assert v["--o"] != FakeTheme().colors()["orange"]
+
+
+def test_new_format_has_nothing_derived() -> None:
+    v = read(OmarchyTheme(FIXTURE))[0]["vars"]
+    assert v["--dk"] == "#020600" and v["--fg2"] == "#f3f2ef" and v["--o"] == "#6d9626"
+
+
+def test_low_contrast_pulled_toward_foreground() -> None:
+    v = read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["vars"]
+    for var in ("--fg2", "--r", "--g", "--y", "--b", "--m", "--c", "--o"):
+        assert min(r for _, r in ratios(v, var)) >= MIN_CONTRAST, var
+    assert v["--r"] != "#7c7c7c"  # was 3.9:1 on the page
+    assert v["--y"] == "#a0a0a0"  # color3 was already readable: untouched

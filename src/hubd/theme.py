@@ -31,7 +31,78 @@ VARS = {
     "blue": "--b",
     "magenta": "--m",
 }
+DERIVED = {"--dk", "--dkr", "--lt", "--fg2", "--fg3", "--o"}  # no key in the old format
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
+# Old-format colors.toml has no named colours: the standard terminal meaning of each slot.
+# A named key wins.
+OLD_KEYS = {
+    "red": "color1",
+    "green": "color2",
+    "yellow": "color3",
+    "blue": "color4",
+    "magenta": "color5",
+    "cyan": "color6",
+    "muted": "color8",
+    "selection": "selection_background",
+}
+
+
+def luminance(color: str) -> float:
+    """WCAG relative luminance of `#rrggbb`."""
+    rgb = [int(color[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """`#rrggbb` of `t` parts `a` and the rest `b`."""
+    mixed = (round(int(a[i : i + 2], 16) * t + int(b[i : i + 2], 16) * (1 - t)) for i in (1, 3, 5))
+    return "#{:02x}{:02x}{:02x}".format(*mixed)
+
+
+def derive(css: dict[str, str], mode: str) -> None:
+    """Fill the vars an old-format theme has no key for, from its background and foreground."""
+    bg, fg = css.get("--bg"), css.get("--fg")
+    if bg is None or fg is None:
+        return
+    shade = (0.06, 0.12) if mode == "light" else (0.2, 0.35)
+    css.setdefault("--dk", mix("#000000", bg, shade[0]))
+    css.setdefault("--dkr", mix("#000000", bg, shade[1]))
+    css.setdefault("--lt", mix(fg, bg, 0.08))
+    css.setdefault("--fg2", mix(fg, bg, 0.7))
+    css.setdefault("--fg3", mix(fg, bg, 0.25))
+    if "--r" in css and "--y" in css:
+        css.setdefault("--o", mix(css["--r"], css["--y"], 0.5))
+
+
+# About 4.5 (WCAG AA). 4.2: the Everforest red chip is 4.27 and Everforest is the reference look.
+MIN_CONTRAST = 4.2
+TEXT = ("--fg2",)  # --fg is the reference: it is never moved
+STATES = ("--r", "--y", "--o", "--g", "--b", "--c", "--m")  # chip text, deadline red
+
+
+def contrast(a: str, b: str) -> float:
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def ratios(css: dict[str, str], var: str) -> list[tuple[str, float]]:
+    """Contrast of `var` on each surface it is drawn on. A chip is 16 % of itself over --dk."""
+    bg, dk, color = css["--bg"], css["--dk"], css[var]
+    if var in STATES:
+        return [("chip", contrast(color, mix(color, dk, 0.16))), ("page", contrast(color, bg))]
+    return [("page", contrast(color, bg)), ("panel", contrast(color, dk))]
+
+
+def readable(css: dict[str, str]) -> None:
+    """Pull text and state colours under MIN_CONTRAST toward --fg until they pass. Every theme."""
+    if not {"--bg", "--fg", "--dk"} <= css.keys():
+        return
+    for var in (*TEXT, *STATES):
+        for _ in range(20):
+            if var not in css or min(r for _, r in ratios(css, var)) >= MIN_CONTRAST:
+                break
+            css[var] = mix(css["--fg"], css[var], 0.1)
 
 
 class ThemeSource(Protocol):
@@ -89,7 +160,9 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
         return {"vars": {}, "mode": "dark"}, [f"cannot read theme: {exc}"]
     css, warnings = {}, []
     for name, var in VARS.items():
-        value = colors.get(name)
+        value = colors.get(name, colors.get(OLD_KEYS.get(name, "")))
+        if value is None and var in DERIVED:
+            continue  # derive() fills it
         if value is None:
             warnings.append(f"theme has no {name}: {var} keeps its default")
         elif isinstance(value, str) and HEX.fullmatch(value):
@@ -97,7 +170,11 @@ def read(source: ThemeSource) -> tuple[dict, list[str]]:
         else:
             warnings.append(f"theme {name} = {value!r} is not #rrggbb: {var} keeps its default")
     mode = colors.get("mode")
-    return {"vars": css, "mode": mode if mode in ("dark", "light") else "dark"}, warnings
+    if mode not in ("dark", "light"):  # old format has no mode: judge by the background
+        mode = "light" if "--bg" in css and luminance(css["--bg"]) > 0.4 else "dark"
+    derive(css, mode)
+    readable(css)
+    return {"vars": css, "mode": mode}, warnings
 
 
 async def watch(source: OmarchyTheme, emit: Callable[[dict], None], stop: asyncio.Event) -> None:
