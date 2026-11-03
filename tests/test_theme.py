@@ -111,3 +111,28 @@ def test_theme_swap_emits_one_theme_event(tmp_path: Path) -> None:
     assert events[0]["type"] == "theme"
     assert events[0]["mode"] == "light"
     assert events[0]["vars"]["--bg"] == "#fafafa"
+
+
+def test_old_format_maps_terminal_colors() -> None:
+    # Contract: a copy of a real old-format colors.toml (hinterlands).
+    theme, warnings = read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))
+    v = theme["vars"]
+    assert (v["--r"], v["--g"], v["--y"], v["--b"], v["--m"], v["--c"]) == (
+        "#7c7c7c", "#8b8b8b", "#a0a0a0", "#686868", "#747474", "#868686",
+    )  # fmt: skip
+    assert (v["--mu"], v["--sel"], v["--bg"]) == ("#525252", "#686868", "#222222")
+    assert not any("--r" in w or "--sel" in w or "--mu" in w for w in warnings)
+
+
+def test_named_keys_win_over_old_keys(tmp_path: Path) -> None:
+    path = tmp_path / "colors.toml"
+    path.write_text(FIXTURE.with_name("colors-old.toml").read_text() + 'red = "#ff0000"\n')
+    v = read(OmarchyTheme(path))[0]["vars"]
+    assert v["--r"] == "#ff0000" and v["--g"] == "#8b8b8b"
+
+
+def test_mode_from_background_when_absent(tmp_path: Path) -> None:
+    path = tmp_path / "colors.toml"
+    path.write_text('background = "#fafafa"\nforeground = "#222222"\n')
+    assert read(OmarchyTheme(path))[0]["mode"] == "light"
+    assert read(OmarchyTheme(FIXTURE.with_name("colors-old.toml")))[0]["mode"] == "dark"
