@@ -8,7 +8,7 @@ README = (Path(__file__).parent / "fixtures" / "sprints" / "README.md").read_tex
 
 def test_parse_fixture() -> None:
     sprints, warnings = parse_sprints("p", README)
-    assert [s.number for s in sprints] == [1, 2, 3, 4, 5, 6]
+    assert [s.number for s in sprints] == [1, 2, 3, 4, 5, 6]  # the `–` row is no sprint
     s1, s2, s3, _, _, s6 = sprints
     assert (s1.track, s1.week, s1.planned, s1.actual, s1.status) == (
         "personal",

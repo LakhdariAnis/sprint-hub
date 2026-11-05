@@ -24,6 +24,7 @@ Some words about the time rules.
 | 9 | work | 2026-W47 | 0.4.0 | Bad status | 5 h | | someday |
 | 10 | work | 2026-W47 | 0.4.0 | Bad hours | lots | | planned |
 | ten | work | 2026-W47 | 0.4.0 | Bad number | 5 h | | planned |
+| – | – | – | Parked | Phone app, not before the applications | | | parked |
 
 ## Sprint 4 — steps
 

@@ -54,8 +54,11 @@ def parse_sprints(project: str, text: str) -> tuple[list[Sprint], list[tuple[int
         return [], [(table[0][0], f"sprint table lacks column {', '.join(missing)}")]
     sprints, warnings = [], []
     for n, line in table[2:]:  # table[1] is the `|---|` line
+        cells = _cells(line)
+        if cells[0] in ("–", "—", "-"):  # `| – | … | parked |`: meant as no sprint, no warning
+            continue
         try:
-            sprints.append(_row(project, head, _cells(line)))
+            sprints.append(_row(project, head, cells))
         except ValueError as exc:
             warnings.append((n, f"sprint row skipped: {exc}"))
     return sprints, warnings
