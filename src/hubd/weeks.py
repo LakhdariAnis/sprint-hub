@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
+from hubd.vault import StepEntry
+
 TRACKS = ("work", "personal")
 OPEN = ("planned", "current")
 STATUSES = (*OPEN, "closed", "moved")
@@ -96,3 +98,67 @@ def _valid_week(week: str) -> bool:
         return bool(m) and bool(date.fromisocalendar(int(m[1]), int(m[2]), 1))
     except ValueError:
         return False
+
+
+def week_of(day: date) -> str:
+    year, week, _ = day.isocalendar()
+    return f"{year}-W{week:02d}"
+
+
+def sunday_of(week: str) -> date:
+    year, number = map(int, week.split("-W"))
+    return date.fromisocalendar(year, number, 7)
+
+
+def step_hours(entry: StepEntry) -> float:
+    """Agent time (a run with no end counts 0) plus Anis's own time, like the sprint bar."""
+    return sum(r.minutes or 0 for r in entry.step.runs) / 60 + (entry.step.own_hours or 0)
+
+
+def _progress(sprint: Sprint, steps: list[StepEntry]) -> tuple[int, int, float]:
+    mine = [e for e in steps if e.project == sprint.project and e.step.sprint == sprint.number]
+    done = sum(e.step.state == "approved" for e in mine)
+    return done, len(mine), sum(step_hours(e) for e in mine)
+
+
+def week_view(
+    tables: dict[str, list[Sprint]], steps: list[StepEntry], names: dict[str, str], today: date
+) -> dict:
+    """This ISO week's sprints per track, with the flow D warnings."""
+    week = week_of(today)
+    sunday = sunday_of(week)
+    tracks: dict[str, list[dict]] = {t: [] for t in TRACKS}
+    for sprints in tables.values():
+        for s in sprints:
+            if s.week != week or s.track is None or s.status == "moved":
+                continue
+            done, total, hours = _progress(s, steps)
+            tracks[s.track].append(
+                {
+                    "project": s.project,
+                    "name": names.get(s.project, s.project),
+                    "sprint": s.number,
+                    "goal": s.goal,
+                    "status": s.status,
+                    "steps_done": done,
+                    "steps_total": total,
+                    "planned": s.planned,
+                    "hours_done": round(s.actual if s.actual is not None else hours, 2),
+                }
+            )
+    warnings = []
+    for track, found in tracks.items():
+        found.sort(key=lambda r: (r["name"], r["sprint"]))
+        if len(found) > 1:
+            who = ", ".join(f"{r['name']} {r['sprint']}" for r in found)
+            warnings.append(f"{len(found)} {track} sprints in {week} ({who}). One per track.")
+    if not tracks["work"]:
+        warnings.append(f"No work sprint in {week}.")
+    return {
+        "week": week,
+        "monday": date.fromisocalendar(*map(int, week.split("-W")), 1).isoformat(),
+        "sunday": sunday.isoformat(),
+        "days_left": (sunday - today).days + 1,  # today counts: Monday 7, Sunday 1
+        "tracks": tracks,
+        "warnings": warnings,
+    }

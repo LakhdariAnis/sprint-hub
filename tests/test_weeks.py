@@ -1,6 +1,7 @@
+from datetime import date
 from pathlib import Path
 
-from hubd.weeks import parse_sprints
+from hubd.weeks import Sprint, parse_sprints, sunday_of, week_of, week_view
 
 README = (Path(__file__).parent / "fixtures" / "sprints" / "README.md").read_text()
 
@@ -41,3 +42,71 @@ def test_missing_column() -> None:
     )
     assert sprints == []
     assert "lacks column track, week, planned, status" in warnings[0][1]
+
+
+def test_week_edges() -> None:
+    assert week_of(date(2026, 11, 2)) == "2026-W45"  # Monday
+    assert week_of(date(2026, 11, 8)) == "2026-W45"  # Sunday
+    assert week_of(date(2026, 11, 9)) == "2026-W46"
+    assert week_of(date(2026, 12, 31)) == "2026-W53"  # the year changes inside a week
+    assert week_of(date(2027, 1, 3)) == "2026-W53"
+    assert week_of(date(2025, 12, 29)) == "2026-W01"
+    assert sunday_of("2026-W53") == date(2027, 1, 3)
+
+
+def sprint(n: int, track: str, week: str, status: str = "current", **kw) -> Sprint:
+    base = dict(
+        project="a",
+        number=n,
+        track=track,
+        week=week,
+        goal=f"goal {n}",
+        planned=10.0,
+        actual=None,
+        status=status,
+    )
+    return Sprint(**{**base, **kw})
+
+
+def view(tables: dict[str, list[Sprint]], today: date) -> dict:
+    return week_view(tables, [], {"a": "A", "b": "B"}, today)
+
+
+def test_week_view_days_left() -> None:
+    tables = {"a": [sprint(1, "work", "2026-W45")]}
+    assert view(tables, date(2026, 11, 2))["days_left"] == 7  # Monday
+    assert view(tables, date(2026, 11, 8))["days_left"] == 1  # Sunday
+    assert view(tables, date(2026, 11, 8))["sunday"] == "2026-11-08"
+    assert view(tables, date(2026, 11, 8))["monday"] == "2026-11-02"
+    assert view(tables, date(2026, 12, 31))["days_left"] == 4  # W53 ends Sunday 2027-01-03
+    assert view(tables, date(2026, 12, 31))["week"] == "2026-W53"
+
+
+def test_week_view_lists_the_tracks() -> None:
+    tables = {
+        "a": [
+            sprint(1, "work", "2026-W45"),
+            sprint(2, "work", "2026-W46"),
+            sprint(3, "work", "2026-W45", "moved"),
+        ],
+        "b": [sprint(7, "personal", "2026-W45", project="b")],
+    }
+    v = view(tables, date(2026, 11, 5))
+    assert [r["sprint"] for r in v["tracks"]["work"]] == [1]
+    assert [(r["name"], r["goal"]) for r in v["tracks"]["personal"]] == [("B", "goal 7")]
+    assert v["warnings"] == []
+
+
+def test_warn_two_in_one_track() -> None:
+    tables = {"a": [sprint(1, "work", "2026-W45"), sprint(2, "work", "2026-W45")]}
+    assert view(tables, date(2026, 11, 5))["warnings"] == [
+        "2 work sprints in 2026-W45 (A 1, A 2). One per track."
+    ]
+
+
+def test_warn_no_work_sprint() -> None:
+    tables = {"a": [sprint(1, "personal", "2026-W45")]}
+    assert view(tables, date(2026, 11, 5))["warnings"] == ["No work sprint in 2026-W45."]
+    assert view({}, date(2026, 11, 5))["warnings"] == [
+        "No work sprint in 2026-W45."
+    ]  # no personal warning
