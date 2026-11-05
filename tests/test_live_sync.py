@@ -66,7 +66,7 @@ def test_files_that_are_not_specs_import_nothing(vault: Path, hub: Hub) -> None:
                 await hub.reload(path)
             return drain(queue)
 
-    assert asyncio.run(main()) == []
+    assert asyncio.run(main()) == [{"type": "sprints"}]  # README.md: the sprint table, no step
     assert len(hub.index.steps) == 5
 
 

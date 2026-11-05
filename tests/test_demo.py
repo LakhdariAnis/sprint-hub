@@ -4,7 +4,10 @@ from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 
+from hubd.daemon import Hub
 from hubd.demo import demo_app, demo_vault
+from hubd.notify import NullNotifier
+from hubd.runners.fake import FakeRunner
 
 
 def test_demo_vault_is_a_git_repo_without_broken() -> None:
@@ -77,3 +80,17 @@ def test_demo_manual_step_ticks() -> None:
         step = client.get("/steps/demo/101").json()
         assert (step["by"], step["state"], len(step["tasks"])) == ("me", "todo", 3)
         assert client.post("/steps/demo/101/tasks/0/tick").json()["state"] == "doing"
+
+
+def test_demo_has_a_work_and_a_personal_sprint_this_week() -> None:
+    from datetime import date
+
+    from hubd.demo import demo_vault
+
+    hub = Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier())
+    week = hub.week(date.today())
+    assert [r["name"] for r in week["tracks"]["work"]] == ["notes"]
+    assert [r["name"] for r in week["tracks"]["personal"]] == ["demo"]
+    assert week["warnings"] == []
+    assert hub.sprint_tables()[1] == []
+    assert hub.eta("demo", date.today())["sprints"] == 2

@@ -69,7 +69,7 @@ test('a broken step file counts in the status line, lists with file, line and fi
   const { path: from } = await (await request.get('/steps/notes/301')).json()
   const path = join(dirname(from), '398.md')
   const original = (await readFile(from, 'utf8')).replace(/^step: .*$/m, 'step: 398')
-  const before = (await (await request.get('/errors')).json()).length
+  const before = (await (await request.get('/errors')).json()).filter((e: { level?: string }) => e.level !== 'warning').length // warnings have their own button
   const count = (n: number) => page.getByRole('button', { name: new RegExp(`⚠ ${n} broken file`) })
   await page.goto('/#/projects/notes')
   await expect(page.getByRole('button', { name: /Sprint 3/ })).toBeVisible()

@@ -1,5 +1,6 @@
 import type { Row } from './projects'
 import type { Step } from './steps'
+import type { Eta } from './week'
 
 // Every step a screen has loaded, by `project/id`. Screens read it; Start and SSE events (step 207) write it.
 export const steps = $state<Record<string, Step>>({})
@@ -14,3 +15,6 @@ export function put(project: string, s: Partial<Step> & { step: string }) {
 
 // Lists a screen opens with, so a switch shows them at once (step 406): the project rows, and each project's step keys in API order.
 export const lists = $state({ projects: null as Row[] | null, steps: {} as Record<string, string[]> })
+
+// The ETA of each project a screen asked for, by project id; hub.svelte.ts keeps them fresh.
+export const etas = $state<Record<string, Eta | null>>({})

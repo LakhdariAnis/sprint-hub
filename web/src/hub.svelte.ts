@@ -1,8 +1,9 @@
 import { demo } from './demo'
 import { loadProjects, type FileError } from './projects'
 import { loadStep, loadSteps, type OpenQuestion, type Step } from './steps'
-import { key, lists, put, steps } from './store.svelte'
+import { etas, key, lists, put, steps } from './store.svelte'
 import { applyTheme, loadTheme } from './theme'
+import { loadEta, loadWeek, type Week } from './week'
 
 // Live numbers for the frame: hubd health, the fake demo data (`--demo` only), the counts shown in the bar and the tabs, and broken vault files.
 export type Deadline = { date: string; text: string; tags: string[]; link: string | null; overdue: boolean }
@@ -10,6 +11,8 @@ export type Deadline = { date: string; text: string; tags: string[]; link: strin
 export const hub = $state({ live: null as boolean | null, ready: false, vault: '', vaultFound: true, version: '', demo: null as typeof demo | null, running: 0, review: 0, next: 0, projects: 0, errors: [] as FileError[], deadlines: [] as Deadline[],
   // Open questions of every step (GET /questions), in hubd's order.
   questions: [] as OpenQuestion[],
+  // This ISO week's sprints (GET /week); null until the first load.
+  week: null as Week | null,
   // `project/id` of the steps in each Today pane, in hubd's order; the steps themselves are in the store.
   today: { running: [], review: [], next: [] } as Record<'running' | 'review' | 'next', string[]>,
 })
@@ -35,10 +38,19 @@ async function load() {
     hub.errors = await e.json()
     hub.questions = await q.json()
     hub.deadlines = await dl.json()
+    hub.week = await loadWeek()
+    await Promise.all(Object.keys(etas).map(watchEta))
     hub.ready = true
   } catch {
     hub.live = false
   }
+}
+
+// A project screen asks for its ETA once; every load after that keeps it fresh.
+export async function watchEta(project: string) {
+  try {
+    etas[project] = await loadEta(project)
+  } catch {}
 }
 
 // Re-reads the lists a screen opened with: a step or project that appeared or went (new spec, projects.toml, a deleted file) is not in them otherwise.
@@ -74,7 +86,7 @@ function connect() {
     if (!known) relist()
   })
   // A fixed file comes back as a `step` event, so every load re-reads the error list.
-  for (const type of ['error', 'reload']) events.addEventListener(type, load)
+  for (const type of ['error', 'reload', 'sprints']) events.addEventListener(type, load)
   events.addEventListener('reload', relist)
   events.addEventListener('removed', (e) => {
     const { project, step } = JSON.parse(e.data)

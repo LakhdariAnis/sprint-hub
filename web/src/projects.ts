@@ -1,5 +1,6 @@
 export type Row = { id: string; name: string; path: string; base: string; repoMissing: boolean; model: string; approved: number; total: number; running: number; review: number; todo: number }
-export type FileError = { path: string; line: number | null; message: string }
+// `level: 'warning'`: the file still works, something in it was skipped (a sprint row).
+export type FileError = { path: string; line: number | null; message: string; level?: 'warning' }
 
 // Counts come from each project's steps: /projects has none. running = doing, review = done, todo = todo + changes.
 export async function loadProjects(): Promise<Row[]> {
