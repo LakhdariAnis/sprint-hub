@@ -162,3 +162,69 @@ def week_view(
         "tracks": tracks,
         "warnings": warnings,
     }
+
+
+def calibration(project: str, tables: dict[str, list[Sprint]]) -> tuple[float, int, str]:
+    """(factor, sprints used, where from): actual ÷ planned of the last 3 closed sprints.
+
+    The project's own; none of them recorded = the same track in all projects; else 1.0.
+    """
+
+    def last3(sprints: list[Sprint]) -> list[Sprint]:
+        done = [s for s in sprints if s.status == "closed" and s.actual is not None and s.planned]
+        return sorted(done, key=lambda s: (s.week or "", s.number))[-3:]
+
+    mine = tables.get(project, [])
+    used, source = last3(mine), "project"
+    if not used:
+        tracks = {s.track for s in mine if s.track}
+        used = last3([s for t in tables.values() for s in t if s.track in tracks])
+        source = "track"
+    if not used:
+        return 1.0, 0, "none"
+    return sum(s.actual for s in used) / sum(s.planned for s in used), len(used), source  # type: ignore[misc]
+
+
+def eta(project: str, tables: dict[str, list[Sprint]], steps: list[StepEntry], today: date) -> dict:
+    """Flow C: open sprints, hours left times the factor, the week of the last one, and flags."""
+    mine = tables.get(project, [])
+    factor, used, source = calibration(project, tables)
+    week = week_of(today)
+    raw, flags, weeks = 0.0, [], []
+    open_ = [s for s in mine if s.status in OPEN]
+    for s in open_:
+        done, total, _ = _progress(s, steps)
+        # A sprint under way only counts the share of its steps that is not approved yet.
+        raw += (s.planned or 0) * (1 - done / total if total else 1)
+        if s.week is None:
+            continue
+        weeks.append(s.week)
+        if s.week < week:
+            flags.append(
+                {
+                    "sprint": s.number,
+                    "kind": "overdue",
+                    "text": f"Sprint {s.number} is overdue: its week was {s.week}.",
+                }
+            )
+        elif s.status == "current" and s.week > week:
+            flags.append(
+                {
+                    "sprint": s.number,
+                    "kind": "wrong_week",
+                    "text": f"Sprint {s.number} is current but planned for {s.week}.",
+                }
+            )
+    finish = max([week, *weeks]) if open_ and weeks else None
+    return {
+        "data": bool(mine),
+        "sprints": len(open_),
+        "raw_hours": round(raw, 2),
+        "hours": round(raw * factor, 2),
+        "factor": round(factor, 2),
+        "factor_sprints": used,
+        "factor_from": source,
+        "week": finish,
+        "sunday": sunday_of(finish).isoformat() if finish else None,
+        "flags": flags,
+    }

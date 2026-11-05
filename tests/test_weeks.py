@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from hubd.weeks import Sprint, parse_sprints, sunday_of, week_of, week_view
+from hubd.weeks import Sprint, calibration, eta, parse_sprints, sunday_of, week_of, week_view
 
 README = (Path(__file__).parent / "fixtures" / "sprints" / "README.md").read_text()
 
@@ -110,3 +110,55 @@ def test_warn_no_work_sprint() -> None:
     assert view({}, date(2026, 11, 5))["warnings"] == [
         "No work sprint in 2026-W45."
     ]  # no personal warning
+
+
+def test_calibration_without_data() -> None:
+    assert calibration("a", {}) == (1.0, 0, "none")
+    # Closed with "not recorded" hours does not count.
+    assert calibration("a", {"a": [sprint(1, "work", "2026-W43", "closed")]}) == (1.0, 0, "none")
+
+
+def test_calibration_last_three_closed() -> None:
+    closed = [
+        sprint(n, "work", f"2026-W4{n}", "closed", planned=10.0, actual=a)
+        for n, a in ((1, 100.0), (2, 5.0), (3, 10.0), (4, 15.0))
+    ]
+    factor, used, source = calibration("a", {"a": closed})
+    assert (factor, used, source) == (
+        1.0,
+        3,
+        "project",
+    )  # sprint 1 (100 h) is older than the last 3
+
+
+def test_calibration_falls_back_on_the_track() -> None:
+    tables = {
+        "a": [sprint(1, "work", "2026-W45", "planned")],
+        "b": [sprint(1, "work", "2026-W43", "closed", project="b", planned=10.0, actual=5.0)],
+    }
+    assert calibration("a", tables) == (0.5, 1, "track")
+
+
+def test_eta() -> None:
+    tables = {
+        "a": [
+            sprint(1, "work", "2026-W43", "closed", planned=10.0, actual=5.0),
+            sprint(2, "work", "2026-W44", "current"),  # late: its week is over
+            sprint(3, "work", "2026-W46", "planned", planned=14.0),
+            sprint(4, "work", "2026-W48", "planned", planned=6.0),
+            sprint(5, "work", None, "planned", planned=None),
+        ]
+    }
+    e = eta("a", tables, [], date(2026, 11, 5))
+    assert (e["sprints"], e["raw_hours"], e["factor"], e["hours"]) == (4, 30.0, 0.5, 15.0)
+    assert (e["week"], e["sunday"]) == ("2026-W48", "2026-11-29")
+    assert [(f["sprint"], f["kind"]) for f in e["flags"]] == [(2, "overdue")]
+
+
+def test_eta_flags_current_in_the_future_and_no_data() -> None:
+    e = eta("a", {"a": [sprint(1, "work", "2026-W47")]}, [], date(2026, 11, 5))
+    assert [f["kind"] for f in e["flags"]] == ["wrong_week"]
+    assert (e["factor"], e["factor_from"]) == (1.0, "none")
+    none = eta("a", {}, [], date(2026, 11, 5))
+    assert none["data"] is False
+    assert none["week"] is None
