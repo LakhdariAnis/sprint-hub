@@ -10,7 +10,8 @@ import { key, lists, put, steps } from './store.svelte'
 // `failed`: why that load failed (an HTTP status or an error), for the screen's own error line. `slow`: the load passed 300 ms.
 export const nav = $state({ route: null as Route | null, failed: null as unknown, slow: false })
 
-const project = (p: string) =>
+// A project's steps into the store, with the spec of the step the info column opens on.
+export const loadProject = (p: string) =>
   loadSteps(p).then((l) => {
     for (const s of l) put(p, s)
     lists.steps[p] = l.map((s) => key(p, s.step))
@@ -24,7 +25,7 @@ const cached = (have: unknown, load: () => Promise<unknown>) => (have ? (load().
 
 function data(r: Route): Promise<unknown> {
   if (r.name === 'projects' || r.name === 'today') return cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
-  if (r.name === 'project') return cached(lists.steps[r.project], () => project(r.project))
+  if (r.name === 'project') return cached(lists.steps[r.project], () => loadProject(r.project))
   if (r.name === 'step') {
     const s = steps[key(r.project, r.id)]
     return cached(s && 'spec' in s, () => loadStep(r.project, r.id).then((d) => put(r.project, d)))
@@ -36,7 +37,7 @@ function data(r: Route): Promise<unknown> {
   // The review queue spans every project. j/k there only change the URL's selection.
   if (r.name === 'review') {
     if (nav.route?.name === 'review') return Promise.resolve()
-    const all = () => fetch('/projects').then((x) => x.json()).then((ps: { id: string }[]) => Promise.all(ps.map((p) => project(p.id))))
+    const all = () => fetch('/projects').then((x) => x.json()).then((ps: { id: string }[]) => Promise.all(ps.map((p) => loadProject(p.id))))
     return cached(lists.projects && lists.projects.every((p) => lists.steps[p.id]), all)
   }
   return Promise.resolve()

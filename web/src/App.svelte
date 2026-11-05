@@ -12,6 +12,7 @@
   import Today from './screens/Today.svelte'
   import Errors from './Errors.svelte'
   import Help from './Help.svelte'
+  import Palette from './Palette.svelte'
   import Sidebar from './Sidebar.svelte'
   import StatusLine from './StatusLine.svelte'
   import TopBar from './TopBar.svelte'
@@ -22,6 +23,7 @@
 <div class="app">
   <Help />
   <Errors />
+  <Palette />
   <Sidebar />
   <div class="mn">
     <TopBar />

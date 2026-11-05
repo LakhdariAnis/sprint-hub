@@ -5,11 +5,13 @@ import { router } from './route.svelte'
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
-export const keys = $state({ help: false, errors: false, pending: false, rail: saved, shown: null as string | null })
+export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null })
 export function toggleRail() {
   keys.rail = !keys.rail
   try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
 }
+
+export const openPalette = () => (keys.palette = true)
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
@@ -21,6 +23,13 @@ export function release(hash: string) {
   keys.shown = hash
   if (location.hash !== hash) return
   for (const key of held.splice(0)) (current[key] ?? current[alias[key] ?? key])?.()
+}
+
+// Runs a key of the screen at `hash` (a palette action): at once if it is on show, else when it shows.
+export function press(hash: string, key: string) {
+  if (keys.shown === hash && location.hash === hash) return void (current[key] ?? current[alias[key] ?? key])?.()
+  held.push(key)
+  location.hash = hash
 }
 
 // Keys of the screen on show, by `KeyboardEvent.key`; an arrow can have its own handler, else it acts as j / k / Enter / Esc. Handlers read state when called, so pass the map once.
@@ -45,7 +54,7 @@ const openStep = (n: number) => {
   const i = k.lastIndexOf('/')
   location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
 }
-const plain: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s, b: toggleRail, e: () => (keys.errors = true) }
+const plain: Handlers = { '/': openPalette, '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s, b: toggleRail, e: () => (keys.errors = true) }
 for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s }
@@ -59,6 +68,13 @@ addEventListener('hashchange', () => {
 })
 
 addEventListener('keydown', (e) => {
+  // The palette's box has its own keys.
+  if (keys.palette) return
+  // Ctrl+K opens it, also from a box.
+  if (e.ctrlKey && !e.shiftKey && !e.metaKey && !e.altKey && (e.key.toLowerCase() === 'k' || e.code === 'KeyK')) {
+    keys.palette = true
+    return e.preventDefault()
+  }
   const el = e.target as HTMLElement
   // Off while typing; Enter on a focused button or link keeps its own click.
   if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.altKey) return
