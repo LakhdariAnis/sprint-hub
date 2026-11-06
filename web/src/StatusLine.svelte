@@ -32,6 +32,8 @@
   let width = $state(1920)
   const tight = $derived(width < 1036 && !keys.rail)
   const list = $derived([...(hints[r.name] ?? []), ...common.map((h): [string, string] => (tight && h[0] === 'b' ? ['b', 'more room'] : h))])
+  const warned = $derived(hub.errors.filter((e) => e.level === 'warning').length)
+  const broken = $derived(hub.errors.length - warned)
   const mode = $derived(keys.pending ? 'GO' : r.name === 'step' ? `STEP ${r.id}` : r.name.toUpperCase())
   // shortcut: focus names the route, not the selected row; screens set their own focus from step 213c on.
   const focus = $derived(
@@ -45,8 +47,11 @@
 <svelte:window bind:innerWidth={width} />
 <footer class="keys">
   <span class="md">{mode}</span>
-  {#if hub.errors.length}
-    <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {hub.errors.length} broken {hub.errors.length === 1 ? 'file' : 'files'}</button>
+  {#if broken}
+    <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {broken} broken {broken === 1 ? 'file' : 'files'}</button>
+  {/if}
+  {#if warned}
+    <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {warned} {warned === 1 ? 'warning' : 'warnings'}</button>
   {/if}
   {#each list as [key, text]}
     <span>{#each key.split(' ') as k}<span class="kb">{k}</span> {/each}{text}</span>

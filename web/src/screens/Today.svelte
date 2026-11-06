@@ -5,7 +5,7 @@
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { lists, steps } from '../store.svelte'
-  import { ago } from '../steps'
+  import { ago, fmtHours } from '../steps'
 
   const groups = [
     { id: 'running', title: 'RUNNING', mark: '●', state: 'doing', empty: 'Nothing is running.' },
@@ -30,12 +30,10 @@
   })
   const hello = $derived(d.getHours() < 12 ? 'morning' : d.getHours() < 18 ? 'afternoon' : 'evening')
   const monday = $derived(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)))
-  const days = $derived(Array.from({ length: 7 }, (_, i) => new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)))
-  const sunday = $derived(days[6])
+  const sunday = $derived(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6))
   const range = $derived(
     `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${monday.getMonth() === sunday.getMonth() ? '' : sunday.toLocaleDateString('en-US', { month: 'short' }) + ' '}${sunday.getDate()}`,
   )
-  const todayIdx = $derived((d.getDay() + 6) % 7)
 
   const open = (k: string) => (location.hash = `#/steps/${k}`)
 
@@ -179,22 +177,32 @@
   </div>
 
   <section class="pn wp" class:f={focus === 'w'} style="grid-column: span 8">
-    <div class="ph"><span class="hk">w</span>This week<span class="n">{range}</span></div>
-    {#if hub.demo}
-      <div class="wk">
-        {#each days as day, i}
-          <div class="day">
-            <div class="dh" class:today={i === todayIdx}>{day.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase()}<b>{day.getDate()}</b></div>
-            <div class="dc" class:f={i === todayIdx}>
-              {#each hub.demo.week.filter((e) => e.day === i) as e}
-                <div class="ev" style="border-left-color: var(--{e.color})"><span class="t">{e.time}</span>{e.text}</div>
-              {/each}
-            </div>
-          </div>
+    <div class="ph"><span class="hk">w</span>This week<span class="n">{hub.week?.week ?? ''} · {range}</span></div>
+    {#if hub.week}
+      {#each hub.week.warnings as w}
+        <div class="wn">⚠ {w}</div>
+      {/each}
+      {#each ['work', 'personal'] as const as track}
+        <div class="gr">{track.toUpperCase()}</div>
+        {#each hub.week.tracks[track] as s (s.project + s.sprint)}
+          {@const over = s.planned != null && s.hours_done > s.planned}
+          <a class="sp" href="#/projects/{encodeURIComponent(s.project)}">
+            <span class="top">
+              <b class="nm">{s.name}</b><span class="id">Sprint {s.sprint}</span>
+              <span class="st">
+                <span class="id">{s.steps_done}/{s.steps_total} steps</span>
+                <span class="id" class:r={over}>{fmtHours(s.hours_done)} / {s.planned == null ? '–' : fmtHours(s.planned)} h</span>
+                <span class="id">{hub.week.days_left} d left</span>
+              </span>
+            </span>
+            <span class="goal">{s.goal}</span>
+          </a>
+        {:else}
+          <p class="dim pad">No {track} sprint.</p>
         {/each}
-      </div>
+      {/each}
     {:else}
-      <p class="dim pad">Nothing planned this week.</p>
+      <p class="dim pad">Reading the sprint tables…</p>
     {/if}
   </section>
 </div>
@@ -222,17 +230,6 @@
   .pr.f { background: var(--sel); box-shadow: inset 3px 0 0 var(--ac); }
   .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .id { font: 12.5px var(--mono); color: var(--fg2); }
-  .wk { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: 36px 1fr; min-height: 0; }
-  .day { display: contents; }
-  .dh { grid-row: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font: 10.5px var(--mono); color: var(--fg2); border-bottom: 1px solid var(--sel); line-height: 1.2; }
-  .dh b { font-size: 13px; color: var(--fg); }
-  .dh.today { box-shadow: inset 0 -2px 0 var(--ac); }
-  .dh.today b { color: var(--ac); }
-  .dc { grid-row: 2; border-right: 1px solid var(--sel); padding: 8px 6px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-  .day:last-child .dc { border-right: 0; }
-  .dc.f { background: color-mix(in srgb, var(--ac) 7%, transparent); }
-  .ev { border-radius: 5px; padding: 4px 7px; font-size: 12px; line-height: 1.35; background: var(--bg); border-left: 3px solid var(--fg3); }
-  .ev .t { display: block; font: 10.5px var(--mono); color: var(--fg2); }
   .rm { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); }
   .qa { color: inherit; text-decoration: none; }
   .qr { grid-template-columns: 36px minmax(0, 1fr); color: inherit; text-decoration: none; }
@@ -241,6 +238,15 @@
   .more { display: block; font-size: 13px; }
   .dl { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 16px; min-height: 44px; border-bottom: 1px solid var(--sel); font-size: 14px; }
   .dl .chip { margin-left: 8px; }
+  .wn { padding: 8px 16px; color: var(--y); border-bottom: 1px solid var(--sel); overflow-wrap: anywhere; }
+  /* A sprint: name, number and numbers on one line that wraps; the goal below it, in full. */
+  .sp { display: block; padding: 8px 16px; border-bottom: 1px solid var(--sel); color: inherit; text-decoration: none; }
+  .sp:hover { background: var(--lt); }
+  .sp .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .sp .nm { overflow-wrap: anywhere; }
+  .sp .st { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  .sp .r { color: var(--r); }
+  .goal { display: block; margin-top: 2px; font-size: 13.5px; color: var(--fg2); overflow-wrap: anywhere; }
   .ck { width: 16px; height: 16px; border: 1.5px solid var(--mu); border-radius: 4px; }
   @container (max-width: 1060px) {
     .body { gap: 12px; padding: 8px 16px 14px; }
@@ -268,15 +274,6 @@
     .dl > :nth-child(3) { grid-column: 2; }
     .dl .chip { display: inline-block; margin: 4px 6px 0 0; }
     .dl .chip:first-of-type { margin-left: 8px; }
-  }
-  /* Day columns under about 75 px: one row per day. */
-  @container (max-width: 560px) {
-
-    .day { display: grid; grid-template-columns: 56px minmax(0, 1fr); border-bottom: 1px solid var(--sel); }
-    .day:last-child { border-bottom: 0; }
-    .dh, .dc { grid-row: auto; }
-    .dh { border-bottom: 0; }
-    .dc { border-right: 0; min-height: 36px; justify-content: center; }
   }
   @container (max-height: 640px) {
     .body { gap: 10px; padding-bottom: 10px; }

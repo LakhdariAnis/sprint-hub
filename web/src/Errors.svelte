@@ -6,11 +6,11 @@
 {#if keys.errors}
   <div class="back" role="presentation" onclick={() => (keys.errors = false)}>
     <div class="box" role="dialog" aria-label="Broken files">
-      <h2>Broken files <span class="n">{hub.errors.length}</span></h2>
+      <h2>Broken files and warnings <span class="n">{hub.errors.length}</span></h2>
       {#each hub.errors as e}
-        <div class="er"><span class="at">{e.path}{e.line ? `:${e.line}` : ''}</span><span class="msg">{e.message}</span></div>
+        <div class="er"><span class="at">{e.level === 'warning' ? 'warning · ' : ''}{e.path}{e.line ? `:${e.line}` : ''}</span><span class="msg">{e.message}</span></div>
       {:else}
-        <p class="dim">No broken files.</p>
+        <p class="dim">Nothing broken.</p>
       {/each}
       <p class="dim">Fix the file and save: it leaves this list by itself. <span class="kb">Esc</span> closes.</p>
     </div>

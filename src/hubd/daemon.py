@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd import importer, init
+from hubd import importer, init, weeks
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
 from hubd.notify import Notifier
@@ -36,6 +36,7 @@ from hubd.vault import (
     tick_task,
     worktrees,
 )
+from hubd.weeks import Sprint, parse_sprints
 
 COMMANDS = Path(".claude/commands")
 
@@ -203,6 +204,8 @@ class Hub:
                 await self._sync_projects()
             elif path.parent.parts[-2:] == COMMANDS.parts:
                 self._reload_command(path)
+            elif self._readme_project(path):
+                self.emit({"type": "sprints"})
             elif project := self._spec_project(path):
                 await self._reload_spec(project, path)
             else:
@@ -243,6 +246,48 @@ class Hub:
         if created:
             self._reload_all()
 
+    def _readme_project(self, path: Path) -> str | None:
+        """The project whose repo has `path` as its `sprint/README.md`."""
+        return next(
+            (
+                p
+                for p in self.index.projects
+                if (r := self.repo(p)) and path == r / "sprint/README.md"
+            ),
+            None,
+        )
+
+    def sprint_tables(self) -> tuple[dict[str, list[Sprint]], list[FileError]]:
+        """The sprint table of each project, read now; what a file got wrong comes back as errors.
+
+        Read per request, not kept: a few small files, and the answer is never stale.
+        """
+        tables: dict[str, list[Sprint]] = {}
+        problems: list[FileError] = []
+        for project in self.index.projects:
+            repo = self.repo(project)
+            path = repo / "sprint/README.md" if repo else None
+            if path is None or not path.is_file():
+                continue  # a project without sprints has nothing to say
+            try:
+                tables[project], found = parse_sprints(project, path.read_text())
+            except (OSError, ValueError) as exc:
+                problems.append(FileError(path, None, f"cannot read the sprint table: {exc}"))
+                continue
+            problems += [FileError(path, line, message) for line, message in found]
+        return tables, problems
+
+    def week(self, today: date | None = None) -> dict:
+        tables, _ = self.sprint_tables()
+        names = {k: p.name for k, p in self.index.projects.items()}
+        return weeks.week_view(tables, self.index.steps, names, today or date.today())
+
+    def eta(self, project: str, today: date | None = None) -> dict:
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        tables, _ = self.sprint_tables()
+        return weeks.eta(project, tables, self.index.steps, today or date.today())
+
     def _spec_project(self, path: Path) -> str | None:
         """The project whose repo has `path` as a `sprint/<id>-*.md` spec."""
         if not importer.step_id(path):
@@ -275,10 +320,13 @@ class Hub:
         old = next((e for e in self.index.steps if e.path == path), None)
         if old:
             self.index.steps.remove(old)
+        broken = any(e.path == path for e in self.index.errors)
         self.index.errors = [e for e in self.index.errors if e.path != path]
         if not path.exists():
             if old:
                 self.emit({"type": "removed", "project": project, "step": old.step.step})
+            elif broken:  # a broken file deleted: its error leaves the list
+                self.emit({"type": "error", "path": str(path), "removed": True})
             return
         step = _guard(self.index, path, _load_step)
         if step is None:

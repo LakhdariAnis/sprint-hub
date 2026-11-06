@@ -97,6 +97,23 @@ def test_broken_edit_is_an_error_then_fixed(vault: Path, hub: Hub) -> None:
     assert all(e.path != path for e in hub.index.errors)
 
 
+def test_broken_file_deleted_takes_its_error_away(vault: Path, hub: Hub) -> None:
+    path = hub.vault / STEPS / "106.md"
+
+    async def main() -> list[dict]:
+        with hub.subscribe() as queue:
+            path.write_text("---\nstep: 106\ntitle: New\nstate: nope\n---\n")
+            await hub.reload(path)
+            path.unlink()
+            await hub.reload(path)
+            return drain(queue)
+
+    broken, gone = asyncio.run(main())
+    assert broken["type"] == "error"
+    assert gone == {"type": "error", "path": str(path), "removed": True}
+    assert all(e.path != path for e in hub.index.errors)
+
+
 def test_new_and_removed_step(vault: Path, hub: Hub) -> None:
     path = hub.vault / STEPS / "106.md"
 

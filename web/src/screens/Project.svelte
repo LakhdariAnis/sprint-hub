@@ -11,13 +11,19 @@
   import { useKeys } from '../keys.svelte'
   import { untrack } from 'svelte'
   import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, type Step } from '../steps'
-  import { key, lists, put, steps as store } from '../store.svelte'
+  import { etas, key, lists, put, steps as store } from '../store.svelte'
+  import { watchEta } from '../hub.svelte'
+  import { etaLine, factorNote } from '../week'
 
   let { project }: { project: string } = $props()
   // Loaded before the screen shows (nav.svelte.ts), then live from the store: no keys means that load failed.
   const ids = $derived(lists.steps[project])
   const gone = $derived(lists.projects?.find((p) => p.id === project && p.repoMissing))
   const steps = $derived((ids ?? []).map((k) => store[k]))
+
+  // From the sprint table; asked for once per project, then kept fresh by every load (hub.svelte.ts).
+  $effect(() => void watchEta(project))
+  const eta = $derived(etas[project])
 
   const groups = $derived(groupBySprint(steps))
   const work = $derived.by(() => {
@@ -113,6 +119,13 @@
 {#if gone}
   <p class="gone">The repo {gone.path} does not exist. Steps cannot start until it is back or <span class="mono">repo:</span> is fixed in the project file.</p>
 {/if}
+{#if eta}
+  <div class="eta">
+    <span class="line">{etaLine(eta)}</span>
+    {#if factorNote(eta)}<span class="note">{factorNote(eta)}</span>{/if}
+    {#each eta.flags as f}<span class="flag">⚠ {f.text}</span>{/each}
+  </div>
+{/if}
 {#if !ids}
   <p class="dim pad">Cannot load {project}. Is hubd running?</p>
 {:else}
@@ -203,6 +216,10 @@
 <style>
   .gone { flex: none; margin: 0; padding: 8px 28px; color: var(--y); overflow-wrap: anywhere; }
   .dim { color: var(--fgd); }
+  /* Under the header: one line of ETA, its factor, and the sprints that are late or in the wrong week. Wraps, never cuts. */
+  .eta { flex: none; display: flex; flex-wrap: wrap; gap: 2px 16px; padding: 0 28px 8px; font: 12.5px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
+  .eta .line { color: var(--fg); }
+  .eta .flag { color: var(--y); }
   .pad { padding: 12px 16px; margin: 0; }
   /* Fixed fractions: the columns keep their width whatever is selected. */
   .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: grid; grid-template-columns: 220px minmax(0, 5fr) minmax(0, 4fr); gap: 20px; align-items: stretch; }
@@ -269,6 +286,7 @@
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
   /* Half screen (sidebar open: ~720 px of content): Sprints shrink to a strip, Steps drop the state chip. */
   @container (max-width: 1060px) {
+    .eta { padding: 0 16px 6px; }
     .body { grid-template-columns: 56px minmax(0, 5fr) minmax(0, 4fr); gap: 12px; padding: 8px 16px 14px; }
     .full, .ph .n { display: none; }
     .short { display: inline; }

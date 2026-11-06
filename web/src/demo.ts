@@ -27,14 +27,6 @@ export const demo = {
       { text: 'Compilation TP report', when: 'Nov 10' },
     ],
   },
-  // This week, Monday = day 0. `time` is a clock time, or `step` for a planned step; `color` is a theme token.
-  week: [
-    { day: 0, time: 'step', text: '102 Serve the API', color: 'ac' },
-    { day: 1, time: '10:00', text: 'Compilation lab', color: 'm' },
-    { day: 2, time: '14:00', text: 'Call Bosch HR', color: 'y' },
-    { day: 3, time: 'step', text: '104 Write the docs', color: 'ac' },
-    { day: 4, time: '17:00', text: 'Sprint 2 review', color: 'g' },
-  ],
   // One running step's chat.
   chat: {
     step: 'notes/302', session: '5d4c', count: 14,

@@ -13,6 +13,7 @@ from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.notify import NullNotifier
 from hubd.runners.fake import FakeRunner
+from hubd.weeks import week_of
 
 # shortcut: the demo data is the test fixture, so it only runs from a source checkout.
 FIXTURE = Path(__file__).parents[2] / "tests" / "fixtures" / "vault"
@@ -76,6 +77,8 @@ def demo_vault() -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     (vault / "deadlines.md").write_text(demo_deadlines(date.today()))
+    for name, text in demo_readmes(date.today()).items():
+        (vault / name).write_text(text)
     # The step files have fixed `due:` dates: date them from today, so the overdue one stays first.
     for name, days in (("projects/demo/steps/102.md", 1), ("projects/notes/steps/301.md", 5)):
         path = vault / name
@@ -108,6 +111,29 @@ def demo_deadlines(today: date) -> str:
         f"- [ ] {d[2]} Release notes for the demo #work [[demo/104]]\n"
         f"- [x] {d[3]} PFE topic form #school\n"
     )
+
+
+def demo_readmes(today: date) -> dict[str, str]:
+    """A sprint table per repo, weeks counted from today: one work and one personal sprint now."""
+    wk = [week_of(today + timedelta(weeks=n)) for n in (-1, 0, 1, 2)]
+    head = (
+        "# Demo\n\n## Sprints\n\n"
+        "| Sprint | Track | Week | Version | Goal | Planned | Actual | Status |\n"
+        "|---|---|---|---|---|---|---|---|\n"
+    )
+    demo = [
+        f"| 1 | personal | {wk[1]} | 0.2.0 | Show the list and serve the API | 12 h | | current |",
+        f"| 2 | personal | {wk[0]} | 0.2.0 | Tag the release | 16 h | 19.5 h | closed |",
+        f"| 3 | personal | {wk[2]} | 0.3.0 | Docs and polish | ~10 h | | planned |",
+    ]
+    notes = [
+        f"| 3 | work | {wk[1]} | 0.1.0 | Search the notes | 8 h | | current |",
+        f"| 4 | work | {wk[3]} | 0.2.0 | Tags and links | ~6 h | | planned |",
+    ]
+    return {
+        "demo-repo/sprint/README.md": head + "\n".join(demo) + "\n",
+        "notes-repo/sprint/README.md": head + "\n".join(notes) + "\n",
+    }
 
 
 def git(cwd: Path, *args: str) -> None:

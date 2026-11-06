@@ -142,6 +142,14 @@ def create_app(
     def today() -> dict[str, list[dict]]:
         return {k: [step_json(e) for e in v] for k, v in hub.today().items()}
 
+    @app.get("/week")
+    def week() -> dict:
+        return hub.week()
+
+    @app.get("/projects/{project}/eta")
+    def project_eta(project: str) -> dict:
+        return hub.eta(project)
+
     @app.get("/questions")
     def questions() -> list[dict]:
         return [
@@ -161,10 +169,17 @@ def create_app(
 
     @app.get("/errors")
     def errors() -> list[dict]:
-        return [
-            {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
-            for e in hub.index.errors
-        ] + [{"path": str(theme.path), "line": None, "message": m} for m in read_theme(theme)[1]]
+        return (
+            [
+                {"path": str(_relative(e.path, hub.vault)), "line": e.line, "message": e.message}
+                for e in hub.index.errors
+            ]
+            + [{"path": str(theme.path), "line": None, "message": m} for m in read_theme(theme)[1]]
+            + [  # a sprint table with a bad row still works: a warning, not a broken file
+                {"path": str(e.path), "line": e.line, "message": e.message, "level": "warning"}
+                for e in hub.sprint_tables()[1]
+            ]
+        )
 
     @app.get("/doctor")
     def get_doctor() -> dict:
