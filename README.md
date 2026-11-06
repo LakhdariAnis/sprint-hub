@@ -27,8 +27,6 @@ Then run `uv run hubd init`. It creates the vault and `projects/my-project/` wit
 Running it again changes nothing: a project already in the vault is never rewritten, and one you removed from
 `projects.toml` stays. A project whose path does not exist is skipped with a warning. Restart `hubd` to see new projects.
 
-To try a real run without touching a real project: `scripts/hub-try.sh` makes a throwaway repo `~/tmp/hub-try` and a
-vault project `hub-try` with three tiny haiku steps; `scripts/hub-try.sh --remove` deletes both.
 
 - **Deadlines**: one line each in `~/Hub/deadlines.md`, `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub/301]]`
   (tag and step link optional, `[x]` = done). Today lists the next 7 days, overdue first in red.
