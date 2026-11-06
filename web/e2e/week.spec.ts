@@ -39,7 +39,7 @@ test('This week lists the work and the personal sprint of the demo', async ({ pa
   await expect(pane).toContainText('Search the notes') // notes: work
   await expect(pane).toContainText('Show the list and serve the API') // demo: personal
   await expect(pane.locator('.sp', { hasText: 'Search the notes' })).toContainText(/\d\/2 steps/) // other specs approve notes steps
-  await expect(pane.locator('.sp', { hasText: 'Search the notes' })).toContainText('0 / 8 h')
+  await expect(pane.locator('.sp', { hasText: 'Search the notes' })).toContainText(/[\d.]+ \/ 8 h/) // other specs' runs add agent hours
   await expect(pane.locator('.sp', { hasText: 'Search the notes' })).toContainText(/[1-7] d left/)
 })
 

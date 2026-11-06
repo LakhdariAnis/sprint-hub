@@ -7,7 +7,7 @@ for (const [name, reply] of [
 ] as const) {
   test(`a merge ${name} is shown as text, the confirm stays and the step stays done`, async ({ page }) => {
     await page.route('**/approve', (route) => route.fulfill({ status: 409, json: reply }))
-    await page.goto('/#/review')
+    await page.goto('/#/review/demo/103') // other specs add done steps that may sort first
     await expect(page.locator('.head .chip')).toHaveText(/done/)
     await page.keyboard.press('a')
     await expect(page.getByText(/ into main\?/)).toBeVisible()

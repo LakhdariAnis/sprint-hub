@@ -320,10 +320,13 @@ class Hub:
         old = next((e for e in self.index.steps if e.path == path), None)
         if old:
             self.index.steps.remove(old)
+        broken = any(e.path == path for e in self.index.errors)
         self.index.errors = [e for e in self.index.errors if e.path != path]
         if not path.exists():
             if old:
                 self.emit({"type": "removed", "project": project, "step": old.step.step})
+            elif broken:  # a broken file deleted: its error leaves the list
+                self.emit({"type": "error", "path": str(path), "removed": True})
             return
         step = _guard(self.index, path, _load_step)
         if step is None:

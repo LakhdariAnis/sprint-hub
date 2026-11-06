@@ -36,8 +36,8 @@ for (const [w, h] of [[1920, 1080], [743, 730]]) {
     await page.keyboard.press('Control+k')
     await expect(box(page)).toBeVisible()
     await expect(box(page).getByRole('combobox')).toBeFocused()
-    // Empty query: the steps that need you, open work first (demo 102 is doing, 103 done).
-    await expect(first(page)).toContainText('demo/102')
+    // Empty query: the steps that need you, open work first (demo 102 is doing; other specs may start more).
+    await expect(first(page)).toContainText(/doing\s*$/)
     await expect(box(page).getByRole('option').filter({ hasText: 'pal/952' })).toHaveCount(0)
 
     await page.keyboard.type('951')
