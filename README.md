@@ -13,20 +13,32 @@ Needs `uv` and Node 24. No Claude, Omarchy or your own projects needed: the demo
     cd web && npm ci && npm run build && cd ..   # once: builds the UI that hubd serves
     uv run hubd --demo
 
-Open http://127.0.0.1:8765/. Keys: `1 2 3 4` switch screens, `j`/`k` (or arrows) walk a list, `h`/`l` move between
-columns, `Enter` opens, `Esc` goes back, `b` hides the sidebar, `s` starts a step and `f` finishes a run whose end never arrived (Step screen), `a` approves and `c`
-requests changes (Review), `?` shows all keys. A project opens on the step that needs work, a step on its current task.
+Open http://127.0.0.1:8765/. Keys: `1` Projects, `2` Today, `3` Review, `4` Questions, `5` Settings; `j`/`k` (or arrows)
+walk a list, `h`/`l` move between columns, `Enter` opens, `Esc` goes back, `b` hides the sidebar, `Ctrl+K` or `/` opens
+the command palette, `e` shows the errors. On the Step screen `s` starts a step and `f` finishes a run whose end never
+arrived; on Review `a` approves and `c` requests changes. `?` shows all keys. A project opens on the step that needs
+work, a step on its current task.
 
-On your own vault (`~/Hub`, or `HUB_VAULT`), list your projects in `~/.config/sprint-hub/projects.toml`:
+### Set it up on your own projects
 
-    [[project]]
-    name = "my project"
-    path = "~/Projects/my-project"
+In this order, from this repo:
 
-Then run `uv run hubd init`. It creates the vault and `projects/my-project/` with its `project.md` and an empty `steps/`.
-Running it again changes nothing: a project already in the vault is never rewritten, and one you removed from
-`projects.toml` stays. A project whose path does not exist is skipped with a warning. Restart `hubd` to see new projects.
+1. List your projects in `~/.config/sprint-hub/projects.toml`:
 
+       [[project]]
+       name = "my project"
+       path = "~/Projects/my-project"
+
+2. `uv run hubd init` creates the vault (`~/Hub`, or `HUB_VAULT`) and `projects/my-project/` with its `project.md`
+   and an empty `steps/`. Running it again changes nothing: a project already in the vault is never rewritten, and one
+   you removed from `projects.toml` stays. A project whose path does not exist is skipped with a warning.
+3. `uv run hubd import` writes one vault step per spec in each repo's `sprint/` (`uv run hubd import my-project` for one
+   project). It reads the repos and writes only in the vault.
+4. `uv run hubd install-hook` adds the SessionEnd hook to `~/.claude/settings.json`, so hubd hears when a run ends.
+5. `uv run hubd install-service` runs hubd from login on (see below).
+6. `uv run hubd doctor` checks all of the above; every line should be `✔`.
+
+After that, a project added to `projects.toml` and a new spec in a repo's `sprint/` show up by themselves.
 
 - **Deadlines**: one line each in `~/Hub/deadlines.md`, `- [ ] 2026-11-05 PFE report draft #school [[sprint-hub/301]]`
   (tag and step link optional, `[x]` = done). Today lists the next 7 days, overdue first in red.
@@ -86,4 +98,5 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull req
 ## Roadmap
 
 Versions and scope: [docs/ROADMAP.md](docs/ROADMAP.md). Long-term design: [docs/HUB-DESIGN.md](docs/HUB-DESIGN.md).
-Current version: 0.2.0 (core loop, laptop only). The v1 Textual app is on `main` (tag `v0.1.0`).
+Current version: 0.3.0 (daily use: theme, deadlines, questions, palette, service, weekly planning). Next: 0.4.0,
+away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
