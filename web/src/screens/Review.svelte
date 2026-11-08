@@ -6,7 +6,7 @@
   import Spec from '../Spec.svelte'
   import { useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
-  import { approveStep, loadDiffstat, loadStep, requestChanges } from '../steps'
+  import { approveStep, loadDiffstat, loadStep, requestChanges, type Step } from '../steps'
   import { put, steps } from '../store.svelte'
 
   let { project, id }: { project?: string; id?: string } = $props()
@@ -14,10 +14,12 @@
   const error = $derived(nav.failed == null ? '' : 'Cannot load steps. Is hubd running?')
 
   const started = (s: { runs: { started?: string }[] }) => s.runs.at(-1)?.started ?? ''
-  // Oldest first: the step that has waited longest is on top.
-  const waiting = $derived(Object.values(steps).filter((s) => s.state === 'done').sort((a, b) => started(a).localeCompare(started(b))))
-  const changes = $derived(Object.values(steps).filter((s) => s.state === 'changes'))
-  const approved = $derived(Object.values(steps).filter((s) => s.state === 'approved'))
+  // Newest first: latest run, then the newest sprint, then the highest id.
+  const newest = (a: Step, b: Step) => started(b).localeCompare(started(a)) || (b.sprint ?? 0) - (a.sprint ?? 0) || b.step.localeCompare(a.step, undefined, { numeric: true })
+  const inState = (state: string) => Object.values(steps).filter((s) => s.state === state).sort(newest)
+  const waiting = $derived(inState('done'))
+  const changes = $derived(inState('changes'))
+  const approved = $derived(inState('approved'))
   const groups = $derived([
     { state: 'done', title: 'Waiting for you', list: waiting, empty: 'Nothing to review.' },
     { state: 'changes', title: 'Changes requested', list: changes, empty: 'None.' },
@@ -55,9 +57,13 @@
     const [p, i, into, text] = [sel.project, sel.step, base, own.trim()]
     const hours = text ? Number(text.replace(',', '.')) : null
     const good = hours === null || (Number.isFinite(hours) && hours >= 0)
+    // Fast review: the next waiting step opens after the merge, so `a` `a` goes down the list.
+    const at = waiting.indexOf(sel)
+    const next = waiting[at + 1] ?? waiting[at - 1]
     move(() =>
       approveStep(p, i, good ? hours : null).then(({ commit, ...d }) => {
         put(p, d)
+        if (next) open(next.project, next.step)
         own = ''
         merged = (commit ? `${i} merged into ${into} as ${commit}, not pushed.` : `${i} approved, nothing to merge.`) + (good ? '' : ` Hours "${text}" not understood: not recorded.`)
       }),

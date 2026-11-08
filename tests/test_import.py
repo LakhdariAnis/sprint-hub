@@ -378,12 +378,70 @@ def test_merged_beats_ticked(vault: Path, repo: Path) -> None:
 
 @pytest.mark.parametrize("folder", ["sprint/archive/sprint-2/progress", "sprint/archive/progress"])
 def test_archived_checklist_counts(vault: Path, repo: Path, folder: str) -> None:
-    spec(repo, "201-x", "sprint/archive/sprint-2")
+    spec(repo, "201-x")
     progress(repo, "201", "- [x] one\n", folder)
 
     importer.main()
 
     assert state(vault, "201") == State.done
+
+
+def test_closed_sprint_spec_is_approved(vault: Path, repo: Path) -> None:
+    spec(repo, "201-x", "sprint/archive/steps")
+    progress(repo, "201", "- [ ] open\n", "sprint/archive/progress")
+
+    importer.main()
+
+    assert state(vault, "201") == State.approved
+
+
+def test_kept_todo_and_done_become_approved_once_reviewed(
+    vault: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("201-a", "202-b", "203-c"):
+        spec(repo, name, "sprint/archive/steps")
+    spec(repo, "101-open")
+    importer.main()
+    for step_id, old in (("201", "todo"), ("202", "done"), ("203", "doing")):
+        path = step_file(vault, step_id)
+        path.write_text(path.read_text().replace("state: approved", f"state: {old}") + "mine\n")
+    capsys.readouterr()
+
+    importer.main()
+
+    assert "Demo: 0 new, 4 kept, 2 now approved" in capsys.readouterr().out
+    assert [state(vault, i) for i in ("201", "202", "203", "101")] == [
+        State.approved,
+        State.approved,
+        State.doing,
+        State.todo,
+    ]
+    assert step_file(vault, "202").read_text().endswith("mine\n")
+
+
+def test_branch_on_the_remote_is_approved(vault: Path, repo: Path, tmp_path: Path) -> None:
+    """Pushed to GitHub = reviewed: merged into a remote branch, or pushed as its own branch."""
+    init_git(repo)
+    git(tmp_path, "init", "-q", "--bare", "remote.git")
+    git(repo, "remote", "add", "origin", str(tmp_path / "remote.git"))
+    for step_id in ("101", "102", "103", "104"):
+        spec(repo, f"{step_id}-x")
+    git(repo, "checkout", "-q", "-b", "dev")
+    branch_with_work(repo, "step/101-x", merge=True, line="dev")
+    branch_with_work(repo, "step/102-x", merge=False, line="dev")
+    branch_with_work(repo, "step/103-x", merge=False, line="dev")
+    git(repo, "branch", "step/104-x")  # no work yet, at the tip of the pushed `dev`
+    git(repo, "push", "-q", "origin", "dev", "step/102-x")
+    git(repo, "checkout", "-q", "main")
+
+    importer.main()
+
+    assert [state(vault, i) for i in ("101", "102", "103", "104")] == [
+        State.approved,
+        State.approved,
+        State.todo,
+        State.todo,
+    ]
 
 
 def test_branch_is_the_real_one_when_its_slug_differs(vault: Path, repo: Path) -> None:
@@ -452,7 +510,7 @@ def test_no_sprint_is_left_out_and_listed(
 
     importer.main()
 
-    assert "Demo: 2 new, 0 kept, 2 no sprint (101, a901)" in capsys.readouterr().out
+    assert "Demo: 2 new, 0 kept, 0 now approved, 2 no sprint (101, a901)" in capsys.readouterr().out
     assert "sprint:" not in step_file(vault, "a901").read_text()
 
 
