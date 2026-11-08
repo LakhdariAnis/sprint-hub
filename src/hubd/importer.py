@@ -9,7 +9,15 @@ import frontmatter
 import yaml
 
 from hubd.model import Project, State, TaskState
-from hubd.vault import _archive_sprint, command_field, parse_tasks, split_sections, vault_path
+from hubd.vault import (
+    _archive_sprint,
+    _load_step,
+    command_field,
+    parse_tasks,
+    save_step,
+    split_sections,
+    vault_path,
+)
 
 # `api-fields.md` or `design4-mock-list.md` sit next to the specs and are not steps.
 _SPEC = re.compile(r"^(?P<id>[a-z]?\d+[a-z]?)-.+\.md$")
@@ -67,6 +75,27 @@ def merged_branches(repo: Path, base: str) -> set[str]:
     return {name for name, sha in map(str.split, rows) if sha != tip}
 
 
+def pushed_branches(repo: Path, base: str) -> set[str]:
+    """Step branches whose work is in a remote branch: pushed to GitHub means Anis reviewed it."""
+    full = "--format=%(refname) %(objectname)"
+    refs = git(repo, "for-each-ref", full, "refs/remotes/").splitlines()
+    remotes = [ref for ref, _ in map(str.split, refs) if not ref.endswith("/HEAD")]
+    # A step branch still at the tip of a main line (local or remote) has no work of its own yet.
+    lines = [ref for ref in remotes if "/step/" not in ref]
+    tips = {git(repo, "rev-parse", ref) for ref in [*lines, base, main_line(repo) or ""] if ref}
+    fmt = "--format=%(refname:short) %(objectname)"
+    pushed: set[str] = set()
+    for ref in remotes:
+        rows = git(repo, "for-each-ref", f"--merged={ref}", fmt, "refs/heads/step/").splitlines()
+        pushed |= {name for name, sha in map(str.split, rows) if sha not in tips}
+    return pushed
+
+
+def archived(repo: Path, spec: Path) -> bool:
+    """A spec under `sprint/archive/` belongs to a closed sprint."""
+    return spec.relative_to(repo / "sprint").parts[0] == "archive"
+
+
 def progress_merged(repo: Path) -> set[str]:
     """Step ids whose `## date — Step <id> ...` entry in PROGRESS.md says "Merged"."""
     path = repo / "sprint/PROGRESS.md"
@@ -121,24 +150,29 @@ def write_step(path: Path, meta: dict[str, object]) -> None:
 
 
 def import_project(folder: Path, project: Project, repo: Path, only: Path | None = None) -> str:
-    """Write the missing step files of a project; `only` limits it to one spec file."""
-    new = kept = 0
+    """Write the missing step files of a project; `only` limits it to one spec file.
+
+    A step file already there is kept, except a `todo` or `done` one that is now known reviewed: it
+    becomes `approved`.
+    """
+    new = kept = upgraded = 0
     logged = progress_merged(repo)
     branches = step_branches(repo)
-    merged = merged_branches(repo, project.base)
+    merged = merged_branches(repo, project.base) | pushed_branches(repo, project.base)
     sprints = sprint_tables(repo)
     no_sprint: list[str] = []
     for step_id, spec in specs(repo).items():
         if only and spec != only:
             continue
         target = folder / "steps" / f"{step_id}.md"
+        mine = [b for b in branches if b.startswith(f"step/{step_id}-")]
+        approved = archived(repo, spec) or step_id in logged or any(b in merged for b in mine)
         if target.exists():
             kept += 1
+            upgraded += approve_kept(target) if approved else 0
             continue
         try:
             m = _TITLE.search(spec.read_text())
-            mine = [b for b in branches if b.startswith(f"step/{step_id}-")]
-            approved = step_id in logged or any(b in merged for b in mine)
             state = state_of(repo, step_id, approved)
         except (OSError, ValueError) as exc:
             print(f"warning: {project.name}: {spec}: {exc}", file=sys.stderr)
@@ -160,7 +194,23 @@ def import_project(folder: Path, project: Project, repo: Path, only: Path | None
         write_step(target, meta)
         new += 1
     listed = f" ({', '.join(no_sprint)})" if no_sprint else ""
-    return f"{project.name}: {new} new, {kept} kept, {len(no_sprint)} no sprint{listed}"
+    return (
+        f"{project.name}: {new} new, {kept} kept, {upgraded} now approved,"
+        f" {len(no_sprint)} no sprint{listed}"
+    )
+
+
+def approve_kept(path: Path) -> int:
+    """Set a kept `todo` / `done` step to `approved`; 1 when it changed. Broken file: left alone."""
+    try:
+        step = _load_step(path)
+        if step.state not in (State.todo, State.done):
+            return 0
+        save_step(path, step.model_copy(update={"state": State.approved}))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"warning: {path}: {exc}", file=sys.stderr)
+        return 0
+    return 1
 
 
 def main(only: str | None = None) -> int:

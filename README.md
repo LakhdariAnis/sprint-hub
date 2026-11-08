@@ -33,7 +33,9 @@ In this order, from this repo:
    and an empty `steps/`. Running it again changes nothing: a project already in the vault is never rewritten, and one
    you removed from `projects.toml` stays. A project whose path does not exist is skipped with a warning.
 3. `uv run hubd import` writes one vault step per spec in each repo's `sprint/` (`uv run hubd import my-project` for one
-   project). It reads the repos and writes only in the vault.
+   project). It reads the repos and writes only in the vault. A step from a closed sprint (`sprint/archive/`), or
+   whose branch is already in a remote branch (pushed = reviewed), imports as `approved`; running it again also moves
+   such a step from `todo` or `done` to `approved` and leaves every other step file as it is.
 4. `uv run hubd install-hook` adds the SessionEnd hook to `~/.claude/settings.json`, so hubd hears when a run ends.
 5. `uv run hubd install-service` runs hubd from login on (see below).
 6. `uv run hubd doctor` checks all of the above; every line should be `✔`.
