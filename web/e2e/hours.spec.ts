@@ -47,7 +47,7 @@ test('approve with the hours field empty merges, and says not recorded', async (
   await confirm(page, '801')
   await page.keyboard.press('y')
   await expect(page.getByRole('status')).toHaveText(/801 approved/)
-  await expect(page.locator('.head .chip')).toHaveText(/approved/)
+  await expect(page.locator('.head h2')).not.toContainText('801') // fast review: the next waiting step opens
   expect(await progress()).toContain('Time: 0.5 h (agent 0.5 h, Anis not recorded)')
 })
 

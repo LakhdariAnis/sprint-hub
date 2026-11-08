@@ -14,7 +14,7 @@
     : undefined,
   )
   const canStart = $derived(!!cur && (cur.state === 'todo' || cur.state === 'changes') && cur.by !== 'me')
-  // Review without a step in the URL shows the oldest waiting one.
+  // Review without a step in the URL shows the newest waiting one.
   const canReview = $derived(cur ? cur.state === 'done' : r.name === 'review' && hub.review > 0)
   const when = (on: boolean, h: [string, string][]) => (on ? h : [])
   const hints = $derived<Record<string, [string, string][]>>({
