@@ -34,6 +34,6 @@ The README pitch, the README state-machine section, and the "Decision" and "Why"
 
 ## Versions
 
-sprint-hub uses semver. `0.1.0` = v1 (`main`, tag `v0.1.0`). Planned: `0.2.0` core loop, `0.3.0` daily use, `0.4.0` away from the laptop, `1.0.0` insight (`docs/ROADMAP.md`).
+sprint-hub uses semver. `0.1.0` = v1 (`main`, tag `v0.1.0`). Planned: `0.2.0` core loop, `0.3.0` daily use, `0.4.0` chat in the app, `0.5.0` away from the laptop, `1.0.0` insight (`docs/ROADMAP.md`).
 - `pyproject.toml` holds `<next version>.dev0` while a version is being built (e.g. `0.2.0.dev0`).
 - When Anis approves the last step of a version: set the plain version in `pyproject.toml`, commit `chore(<version>): release <version>`, and tag it `v<version>` (annotated). Never push the tag unless Anis asks.

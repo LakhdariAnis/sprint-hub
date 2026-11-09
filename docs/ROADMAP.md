@@ -95,16 +95,23 @@ deadlines file + reminders (asyncio loop + notify-send), overdue on Today, manua
 - Data only from the md files (zero tokens). No calendar sync.
 
 
-### 0.4.0 — Away from the laptop (Sprint 6)
+### 0.4.0 — Chat in the app (Sprint 6)
+Moved ahead of "Away from the laptop" (Anis, 2026-11-09). New chat is the home screen: the app opens on it. Claude
+runs in the page through the documented headless mode (`claude -p`, stream-json in and out, `--session-id` /
+`--resume`), behind a `ChatRunner` adapter with a fake for tests and demo (rule 4). Model, effort and project pills, a
+`/` menu, project / sprint / step context, permission prompts in the page, tool calls, open chats in the sidebar,
+a markdown subset without a new tool. Also: Ctrl+W asks before closing the app window, and a second window can be opened.
+
+### 0.5.0 — Away from the laptop (Sprint 7)
 Close a sprint at week end (moved from 0.3.0 on 2026-11-01): move unfinished steps to the next sprint, ask for actual hours.
 
 Review and approve from the phone without building an app:
 Syncthing + Obsidian approve flow, phone push (ntfy over Tailscale), `--remote-control` on runs.
 Each of these new tools needs its ADR first. If one ADR can't justify its tool, cut that feature.
 
-### 1.0.0 — Insight (Sprints 7–9)
+### 1.0.0 — Insight (Sprints 8–10)
 `needs:` dependencies, create a step from the app, diff view, time and tokens per step, chat history, daily log.
-Sprint 9 (added 2026-10-19): the Chats, New chat and Planning chat screens from the mockups.
+Sprint 10 (added 2026-10-19): the Chats and Planning chat screens from the mockups (New chat moved to 0.4.0).
 Tokens and chats read the undocumented Claude logs through `UsageSource` (rule 4).
 
 ### Parked (not planned)

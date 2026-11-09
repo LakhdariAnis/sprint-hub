@@ -101,4 +101,4 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull req
 
 Versions and scope: [docs/ROADMAP.md](docs/ROADMAP.md). Long-term design: [docs/HUB-DESIGN.md](docs/HUB-DESIGN.md).
 Current version: 0.3.0 (daily use: theme, deadlines, questions, palette, service, weekly planning). Next: 0.4.0,
-away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
+chat in the app, then 0.5.0, away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
