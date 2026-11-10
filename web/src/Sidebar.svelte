@@ -23,7 +23,7 @@
 
 <nav class="sb" class:rail={keys.rail} aria-label="Tabs">
   <div class="brand"><span class="wm">{#if !keys.rail}sprint{/if}<i>hub</i></span><span class="lbl ver">{hub.version}</span></div>
-  <button class="newc" type="button" title="New chat comes in a later sprint"><b>+</b><span class="lbl">New chat</span><span class="k">^N</span></button>
+  <button class="newc" type="button" title="New chat comes in a later sprint"><b>+</b><span class="lbl">New chat</span></button>
   <div class="sl">
   <div class="sg">TABS</div>
   {#each tabs as t}
@@ -99,7 +99,7 @@
   .sb { transition: width 0.16s ease; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
   .rail { width: 56px; }
-  .rail .lbl, .rail .k, .rail .newc .k { display: none; }
+  .rail .lbl, .rail .k { display: none; }
   .rail .sl { margin: 0 -10px; }
   .rail .sg { font-size: 0; height: 1px; padding: 0; margin: 10px 8px; background: var(--sel); }
   .rail .brand { padding-left: 0; padding-right: 0; justify-content: center; }

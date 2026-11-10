@@ -56,6 +56,12 @@ After that, a project added to `projects.toml` and a new spec in a repo's `sprin
 
     o.bind("SUPER + SHIFT + P", "Sprint hub", "/path/to/sprint-hub/bin/sprint-hub-app")
 
+`bin/sprint-hub-app --new` always opens one more window (same `hubd`, own screen and cursor); bind it too if you want:
+
+    o.bind("SUPER + SHIFT + ALT + P", "Sprint hub (new window)", "/path/to/sprint-hub/bin/sprint-hub-app --new")
+
+Ctrl+W, Alt+F4 and the close button ask "Leave site?" first. Chromium keeps Ctrl+W, Ctrl+N and Ctrl+T for itself in an app window.
+
 This runs the real `hubd` on your vault, not the demo. Closing the window leaves `hubd` running.
 
 ### Run hubd as a service
