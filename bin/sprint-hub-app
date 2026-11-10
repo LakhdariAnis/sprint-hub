@@ -1,5 +1,6 @@
 #!/bin/bash
 # Open sprint-hub as its own app window (Chromium --app). Starts hubd first if it is down: via its service if installed.
+# No flag: focus the open window. `--new`: always open one more window (same hubd, own screen and cursor).
 repo=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 url=http://127.0.0.1:8765
 
@@ -16,5 +17,6 @@ if ! curl -sf -m1 "$url/health" >/dev/null; then
   curl -sf -m1 "$url/health" >/dev/null || { notify-send -u critical "sprint-hub" "hubd did not start"; exit 1; }
 fi
 
+[ "$1" = --new ] && exec omarchy-launch-webapp "$url/?w=$RANDOM"
 # Pattern = Hyprland window class of a Chrome --app window on this URL (`hyprctl clients`); \b in the matcher needs it to end on a letter.
 exec omarchy-launch-or-focus-webapp chrome-127.0.0.1__-Default "$url"
