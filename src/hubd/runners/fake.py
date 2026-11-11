@@ -76,6 +76,7 @@ class FakeChat:
         self.delay = delay
         self.turns: dict[str, asyncio.Task[None]] = {}  # the turn under way, per open chat
         self.chats: set[str] = set()
+        self.models: dict[str, str] = {}
         self.ask = no_one
         self.opened: list[tuple[str, str, str | None]] = []  # (chat id, model, effort) per open
         self.systems: list[str | None] = []  # `system` per open
@@ -90,6 +91,7 @@ class FakeChat:
         scratch: bool = False,
     ) -> None:
         self.opened.append((chat_id, model, effort))
+        self.models[chat_id] = model
         self.systems.append(system)
         self.chats.add(chat_id)
 
@@ -128,7 +130,13 @@ class FakeChat:
         for piece in reply[3:]:
             await self.on_event(chat_id, {"type": "text", "text": piece})
             await sleep(self.delay)
-        end = {"type": "turn_end", "cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0}
+        end = {
+            "type": "turn_end",
+            "model": self.models.get(chat_id),
+            "cost_usd": 0.02,
+            "input_tokens": 4100,
+            "output_tokens": 380,
+        }
         await self.on_event(chat_id, end | {"duration_ms": int(self.delay * 1000 * len(reply))})
 
 

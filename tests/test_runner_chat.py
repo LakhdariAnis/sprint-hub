@@ -149,15 +149,25 @@ def test_tool_input_and_result_are_cut_at_40_lines() -> None:
 
 
 def test_result_ends_the_turn() -> None:
-    assert Parser().events(RESULT) == [
+    parser = Parser()
+    parser.events(INIT)  # no model in INIT: the field is None
+    assert parser.events(RESULT) == [
         {
             "type": "turn_end",
+            "model": None,
             "cost_usd": 0.00388972,
             "input_tokens": 4 + 17015 + 31832,
             "output_tokens": 336,
             "duration_ms": 4120,
         }
     ]
+
+
+def test_turn_end_names_the_model_of_the_process() -> None:
+    parser = Parser()
+    parser.events(INIT.replace('"cwd"', '"model":"claude-haiku-5-5","cwd"'))
+    (end,) = parser.events(RESULT)
+    assert end["model"] == "claude-haiku-5-5"
 
 
 def test_turn_cost_is_its_share_of_the_running_total() -> None:

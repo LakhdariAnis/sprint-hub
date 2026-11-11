@@ -34,5 +34,5 @@ def test_sample_maps_to_text_a_tool_call_and_its_result_then_the_turn_end(sample
     assert result["id"] == tool["id"] and not result["error"] and "notes.txt" in result["text"]
     assert "".join(e["text"] for e in events if e["type"] == "text").strip()
     assert end["cost_usd"] > 0 and end["output_tokens"] > 0 and end["input_tokens"] > 0
-    assert end["duration_ms"] > 0
+    assert end["duration_ms"] > 0 and end["model"].startswith("claude-")
     assert parser.unknown == set()  # a new message type from Claude Code shows here first

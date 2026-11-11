@@ -170,12 +170,13 @@ class Parser:
 
     # Message types documented in the Agent SDK `SDKMessage` union that carry nothing hubd shows
     # yet. https://code.claude.com/docs/en/agent-sdk/typescript (checked 2026-11-11)
-    QUIET = {"system", "rate_limit_event", "prompt_suggestion"}
+    QUIET = {"rate_limit_event", "prompt_suggestion"}
 
     def __init__(self, cwd: Path | None = None) -> None:
         self.cwd = cwd  # paths inside it are shown relative
         self.unknown: set[str] = set()  # types logged once already
         self.spent = 0.0  # `total_cost_usd` so far: it adds up over the process's turns
+        self.model: str | None = None  # from `system` `init`: the model this process runs
 
     def events(self, line: str) -> list[dict[str, Any]]:
         try:
@@ -192,6 +193,11 @@ class Parser:
         if kind not in self.QUIET and kind not in self.unknown:
             self.unknown.add(kind)
             log.warning("chat: skipped unknown stream-json type %r", kind)
+        return []
+
+    def _system(self, message: dict) -> list[dict[str, Any]]:
+        if message.get("subtype") == "init":
+            self.model = message.get("model")
         return []
 
     # Text arrives as deltas; the full `assistant` message that follows repeats it.
@@ -237,6 +243,7 @@ class Parser:
         self.spent = total if total is not None else self.spent
         end = {
             "type": "turn_end",
+            "model": self.model,
             "cost_usd": cost,  # this turn's
             # Most of the prompt is cached: `input_tokens` alone is a handful.
             "input_tokens": sum(
