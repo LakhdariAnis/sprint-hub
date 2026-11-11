@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { answer, answerOf, asksOf, change, chats, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
+  import { answer, answerOf, asksOf, toolsOf, change, chats, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
   import { costLine } from '../cost'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
@@ -37,6 +37,19 @@
     failed = ''
     await stop(cid).then(() => refocus && focusBox(), (e: Error) => (failed = e.message))
   }
+  // NORMAL mode (the box has no focus): j k pick a turn, ↵ opens or closes its tool lines.
+  let sel = $state<number | null>(null)
+  function pick(step: number) {
+    if (!turns.length) return
+    sel = Math.max(0, Math.min(turns.length - 1, (sel ?? (step > 0 ? -1 : turns.length)) + step))
+    tick().then(() => log?.querySelectorAll('.turn')[sel!]?.scrollIntoView({ block: 'nearest' }))
+  }
+  function fold() {
+    const turn = sel === null ? undefined : turns[sel]
+    const tools = turn ? toolsOf(turn) : []
+    const open = tools.some((t) => !t.open)
+    for (const t of tools) t.open = open
+  }
   let lastEsc = 0
   function esc() {
     const now = Date.now()
@@ -46,7 +59,7 @@
     } else lastEsc = now
   }
   const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
-  useKeys({ c: focusBox, i: focusBox, Escape: esc, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  useKeys({ c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
   const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
   const outcome: Record<string, string> = {
     allow: 'Allowed',
@@ -59,6 +72,7 @@
   // On load, and when the URL names another chat (n again, a link): the cursor goes to the box.
   $effect(() => {
     cid = id
+    sel = null
     failed = ''
     untrack(() => id && !chats[id] && loadChat(id).catch((e) => (failed = e.message)))
     tick().then(focusBox)
@@ -229,8 +243,8 @@
               {/each}
             </div>
           {/if}
-          {#each turns as t}
-            <div class="turn">
+          {#each turns as t, i}
+            <div class="turn" class:foc={i === sel} aria-current={i === sel ? 'true' : undefined}>
               <div class="me">{t.me}</div>
               {#each t.blocks as b}
                 {#if b.kind === 'text'}
@@ -340,7 +354,8 @@
   .ai { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
-  .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 10px; margin-left: -10px; }
+  .turn.foc { box-shadow: inset 3px 0 0 var(--ac); }
   .cost { overflow-wrap: anywhere; }
   .stopped { align-self: flex-start; padding: 0 8px; border: 1px solid var(--sel); border-radius: 999px; font-size: 11px; color: var(--fgd); }
   .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
