@@ -91,6 +91,15 @@
               {/each}
             </div>
           {/if}
+          {#each turns as t}
+            <div class="me">{t.me}</div>
+            {#each parts(t.ai) as p}
+              {#if p.code}<pre>{p.text}</pre>{:else}<p class="ai">{p.text}</p>{/if}
+            {/each}
+            {#if !t.ai && !t.done}<div class="think">thinking…</div>{/if}
+            {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
+          {/each}
+          {#if failed}<div class="err" role="alert">{failed}</div>{/if}
         </div>
       </div>
       <form class="cmp" onsubmit={(e) => (e.preventDefault(), submit())}>
