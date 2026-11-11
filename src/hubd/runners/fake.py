@@ -68,7 +68,8 @@ TOOL_RESULT = {"type": "tool_result", "id": "fake_tool", "error": False, "text":
 class FakeChat:
     """ChatRunner without Claude: each message gets REPLY in deltas, one tool call, `turn_end`.
 
-    A message "run <command>" asks permission for Bash first, as Claude would.
+    A message "run <command>" asks permission for Bash first, as Claude would. A message that
+    starts with "stall" takes 40 times longer.
     """
 
     def __init__(self, on_event: ChatEvent, delay: float = 0.05):
@@ -116,20 +117,21 @@ class FakeChat:
         if previous:
             await asyncio.gather(previous, return_exceptions=True)
         reply = REPLY
+        delay = self.delay * 40 if text.startswith("stall") else self.delay  # time to press Stop
         if text.startswith("run "):
             answer = await self.ask(chat_id, "Bash", {"command": text.removeprefix("run ")})
             if answer["behavior"] != "allow":
                 reply = [f"Not run: {answer['message']}"]
         for piece in reply[:3]:
             await self.on_event(chat_id, {"type": "text", "text": piece})
-            await sleep(self.delay)
+            await sleep(delay)
         if reply is REPLY:
             await self.on_event(chat_id, TOOL)
-            await sleep(self.delay)
+            await sleep(delay)
             await self.on_event(chat_id, TOOL_RESULT)
         for piece in reply[3:]:
             await self.on_event(chat_id, {"type": "text", "text": piece})
-            await sleep(self.delay)
+            await sleep(delay)
         end = {
             "type": "turn_end",
             "model": self.models.get(chat_id),
@@ -137,7 +139,7 @@ class FakeChat:
             "input_tokens": 4100,
             "output_tokens": 380,
         }
-        await self.on_event(chat_id, end | {"duration_ms": int(self.delay * 1000 * len(reply))})
+        await self.on_event(chat_id, end | {"duration_ms": int(delay * 1000 * len(reply))})
 
 
 def _spec_tasks(cwd: Path, step_id: str) -> list[str]:

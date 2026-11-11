@@ -236,3 +236,77 @@ test('permission card: d denies, a allows, A allows for the chat; a plain chat i
   await expect(cards.last()).toContainText('Refused: A chat with no project never runs commands')
   await expect(page.locator('.ai').last()).toContainText('Not run:')
 })
+
+// Step 608: tool lines, the cost line, j k, Stop. FakeChat runs `Bash ls` in every answer; "stall …" takes 40 times longer.
+test('a tool line opens with ↵ or a click; the cost line; j k pick turns', async ({ page }) => {
+  await page.goto('/#/chat')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('say hi')
+  await box.press('Enter')
+  await answered(page)
+
+  const line = page.locator('.tl')
+  await expect(line).toHaveText(/Bash ls/)
+  await expect(line).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByLabel('Input')).toBeHidden()
+  await expect(line.locator('.tn')).toHaveCSS('text-overflow', 'ellipsis')
+  await line.click()
+  await expect(page.getByLabel('Input')).toHaveText('command: ls')
+  await expect(page.getByLabel('Result')).toHaveText('README.md')
+  await line.click()
+  await expect(page.getByLabel('Input')).toBeHidden()
+
+  await expect(page.locator('.cost')).toHaveText(/^sonnet · [\d.]+ s · 4\.1k in \/ 380 out · \$0\.02$/)
+
+  // NORMAL mode: j picks the turn, ↵ opens its tool lines, ↵ again closes them, k stays on the first turn.
+  await box.fill('second')
+  await box.press('Enter')
+  await answered(page)
+  await box.press('Escape')
+  const turns = page.locator('.turn')
+  await expect(turns.locator('.tool')).toHaveCount(2)
+  await page.keyboard.press('j')
+  await expect(turns.nth(0)).toHaveClass(/foc/)
+  await page.keyboard.press('j')
+  await expect(turns.nth(1)).toHaveClass(/foc/)
+  await expect(turns.nth(0)).not.toHaveClass(/foc/)
+  await page.keyboard.press('Enter')
+  await expect(page.getByLabel('Input')).toHaveCount(1)
+  await expect(turns.nth(1).getByLabel('Input')).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(page.getByLabel('Input')).toHaveCount(0)
+  await page.keyboard.press('k')
+  await page.keyboard.press('k')
+  await expect(turns.nth(0)).toHaveClass(/foc/)
+})
+
+test('Stop and Esc Esc end a turn mid-way, the text stays marked stopped, the chat goes on', async ({ page }) => {
+  await page.goto('/#/chat')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  const stop = page.getByRole('button', { name: /^Stop/ })
+  await expect(stop).toBeHidden()
+
+  await box.fill('stall essay')
+  await box.press('Enter')
+  await expect(page.locator('.ai').first()).toContainText('This is') // the first piece came
+  await stop.click()
+  await expect(page.getByRole('status').filter({ hasText: /^stopped$/ })).toHaveCount(1)
+  await expect(page.locator('.ai').first()).toContainText('This is') // text kept
+  await expect(page.locator('.ai').first()).not.toContainText('has one file.')
+  await expect(stop).toBeHidden()
+  await expect(page.locator('.cost')).toHaveCount(0) // no turn_end came
+
+  await box.fill('stall again')
+  await box.press('Enter')
+  await expect(page.locator('.ai').nth(1)).toContainText('This is')
+  await box.press('Escape') // the first Esc leaves the box, the second one stops
+  await expect(stop).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('status').filter({ hasText: /^stopped$/ })).toHaveCount(2)
+
+  await box.fill('after')
+  await box.press('Enter')
+  await answered(page)
+  await expect(page.locator('.ai').last()).toContainText('has one file.')
+  await expect(page.locator('.cost')).toHaveCount(1)
+})
