@@ -1,4 +1,4 @@
-"""Chats the page opened: meta and turns in memory (609 rebuilds them from the vault)."""
+"""Chats the page opened: meta and turns in memory, the meta also in the vault (`chatlog`)."""
 
 import asyncio
 import time
@@ -6,10 +6,11 @@ import uuid
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from hubd import permits
+from hubd import chatlog, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.runners.chat import ChatEvent, ChatRunner
@@ -33,6 +34,13 @@ class Chat:
     cwd: Path
     # Told with `--append-system-prompt` on every open, so a resumed chat knows it too.
     context: Context | None = None
+    sprint: int | None = None  # with a project: what `context` was built from
+    step: str | None = None
+    title: str = ""  # empty until the first send names it
+    created: datetime = field(default_factory=datetime.now)
+    stamp: datetime = field(default_factory=datetime.now)  # last message sent, as the vault has it
+    saved: bool = False  # in the vault: set by the first send
+    open: bool = True  # in the sidebar
     used: float = field(default_factory=time.monotonic)  # last message or event
     # One turn = the message sent and the events it got (as `chat` events, text deltas joined).
     # `done`: it ended.
@@ -46,6 +54,18 @@ class Chat:
         return self.context.text if self.context else None
 
     @property
+    def kind(self) -> str:
+        return (
+            "step"
+            if self.step
+            else "sprint"
+            if self.sprint
+            else "project"
+            if self.project
+            else "none"
+        )
+
+    @property
     def scratch(self) -> bool:
         return self.project is None
 
@@ -55,10 +75,13 @@ class Chat:
 
 
 class Chats:
-    def __init__(self, runner: Callable[[ChatEvent], ChatRunner], emit: Callable[[dict], None]):
+    def __init__(
+        self, runner: Callable[[ChatEvent], ChatRunner], emit: Callable[[dict], None], vault: Path
+    ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
         self.emit = emit
+        self.vault = vault
         self.chats: dict[str, Chat] = {}
         self.ask_wait = permits.ASK_WAIT
 
@@ -77,10 +100,17 @@ class Chats:
             raise Full(f"{MAX_LIVE} chats are open already ({names}): stop one first")
 
     async def open(
-        self, project: str | None, cwd: Path, model: str, effort: str, context: Context | None
+        self,
+        project: str | None,
+        cwd: Path,
+        model: str,
+        effort: str,
+        context: Context | None,
+        sprint: int | None = None,
+        step: str | None = None,
     ) -> Chat:
         self._room()
-        chat = Chat(str(uuid.uuid4()), project, model, effort, cwd, context)
+        chat = Chat(str(uuid.uuid4()), project, model, effort, cwd, context, sprint, step)
         self.chats[chat.id] = chat
         await self.runner.open(chat.id, cwd, model, effort, chat.system, chat.scratch)
         return chat
@@ -93,8 +123,37 @@ class Chats:
             await self.runner.open(
                 chat.id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
             )
+        chat.title = chat.title or chatlog.title_of(text)
+        chat.open, chat.stamp = True, datetime.now()
+        self._save(chat)
         chat.turns.append({"text": text, "events": [], "done": False})
         await self.runner.send(chat_id, text)
+
+    def _save(self, chat: Chat) -> None:
+        """The chat's line in the vault (written on the first send, then kept up to date)."""
+        entry = chatlog.ChatEntry(
+            chat.id, chat.title, chat.model, chat.effort, chat.kind, chat.created, chat.stamp,
+            chat.sprint, chat.step, chat.open,
+        )  # fmt: skip
+        chatlog.save(chatlog.path_of(self.vault, chat.project), entry)
+        chat.saved = True
+        self.emit({"type": "chats"})
+
+    def listing(self) -> list[dict]:
+        """The saved chats, last used first: the sidebar's open ones and the Chats screen's."""
+        saved = sorted((c for c in self.chats.values() if c.saved), key=lambda c: c.stamp)
+        return [
+            {
+                "id": c.id,
+                "project": c.project,
+                "title": c.title,
+                "model": c.model,
+                "effort": c.effort,
+                "used": int(c.stamp.timestamp() * 1000),
+                "open": c.open,
+            }
+            for c in reversed(saved)
+        ]
 
     async def update(self, chat_id: str, model: str | None, effort: str | None) -> Chat:
         """New model or effort: a live process is closed and resumed with the new flag."""
@@ -102,6 +161,8 @@ class Chats:
         if chat.busy:  # closing now would cut the answer
             raise Full("Claude is answering: change model or effort when it is done")
         chat.model, chat.effort = model or chat.model, effort or chat.effort
+        if chat.saved:
+            self._save(chat)
         if self.live(chat_id):
             await self.runner.stop(chat_id)
             await self.runner.open(
@@ -208,6 +269,8 @@ class Chats:
             "effort": chat.effort,
             "cwd": str(chat.cwd),
             "context": chat.context.json() if chat.context else None,
+            "title": chat.title,
+            "open": chat.open,
             "live": self.live(chat.id),
             "busy": chat.busy,
             "turns": chat.turns,

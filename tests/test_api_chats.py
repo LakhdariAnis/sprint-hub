@@ -9,6 +9,7 @@ import httpx2
 from fastapi.testclient import TestClient
 from test_sse import serve
 
+from hubd import chatlog
 from hubd.api import create_app
 from hubd.chats import IDLE
 from hubd.daemon import Hub
@@ -325,3 +326,40 @@ def test_scratch_chat_never_runs_commands(hub: Hub) -> None:
     assert [e["target"] for e in refused] == ["cat ~/.bashrc"]
     assert not any(e["kind"] == "permission" for e in events)
     assert "never runs commands" in reply(events, chat_id)
+
+
+def test_first_send_saves_the_chat_in_the_vault(vault: Path, hub: Hub) -> None:
+    c, events = client(hub)
+    path = chatlog.path_of(vault, None)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        assert not path.exists() and c.get("/chats").json() == []  # not saved until you send
+        first = "What is the plan for the week, with the hours for each project listed out?"
+        c.post(f"/chats/{chat_id}/message", json={"text": first})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        c.post(f"/chats/{chat_id}/message", json={"text": "and tomorrow?"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 2)
+        listed = c.get("/chats").json()
+    [entry] = chatlog.load(path)
+    assert (entry.id, entry.model, entry.effort, entry.kind) == (chat_id, "haiku", "low", "none")
+    assert (
+        entry.title == first[:39] + "…" and len(entry.title) == 40
+    )  # the first message, not the second
+    assert entry.used >= entry.created and entry.open
+    assert [(x["id"], x["title"], x["open"]) for x in listed] == [(chat_id, entry.title, True)]
+
+
+def test_project_chat_goes_to_its_project_file(vault: Path, hub: Hub) -> None:
+    project = next(iter(hub.index.projects))
+    c, events = client(hub)
+    with c:
+        repo = hub.repo(project)
+        if repo is None or not repo.is_dir():
+            repo = vault / "repo"
+            repo.mkdir(exist_ok=True)
+            hub.repo = lambda _: repo  # type: ignore[method-assign]
+        chat_id = c.post("/chats", json=NEW | {"project": project}).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "hello"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+    [entry] = chatlog.load(vault / "projects" / project / "chats.md")
+    assert (entry.id, entry.kind, entry.title) == (chat_id, "project", "hello")

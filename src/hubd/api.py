@@ -93,7 +93,7 @@ def create_app(
     # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
     current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
     hour = [reminder_hour]
-    chats = Chats(chat, hub.emit) if hub else None
+    chats = Chats(chat, hub.emit, hub.vault) if hub else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -295,7 +295,9 @@ def create_app(
         elif (cwd := hub.repo(body.project)) is None or not cwd.is_dir():
             return JSONResponse({"detail": f"project {body.project} has no repo"}, status_code=422)
         context = await hub.context(body.project, body.sprint, body.step) if body.project else None
-        chat = await chats.open(body.project, cwd, body.model, body.effort, context)
+        chat = await chats.open(
+            body.project, cwd, body.model, body.effort, context, body.sprint, body.step
+        )
         return {"id": chat.id, "context": context.json() if context else None}
 
     @app.get("/projects/{project}/context")
@@ -304,6 +306,10 @@ def create_app(
     ) -> dict:
         """What a new chat with these pills would be told: label, size, notes (the chip)."""
         return (await hub.context(project, sprint, step)).json()
+
+    @app.get("/chats")
+    def list_chats() -> list[dict]:
+        return chats.listing()
 
     @app.get("/chats/{chat_id}")
     def get_chat(chat_id: str) -> dict:
