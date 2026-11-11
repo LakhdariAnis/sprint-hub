@@ -3,7 +3,7 @@
 import asyncio
 import subprocess
 from collections.abc import Callable, Iterator
-from contextlib import aclosing, contextmanager
+from contextlib import aclosing, contextmanager, suppress
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +11,7 @@ from uuid import uuid4
 from watchfiles import awatch
 
 from hubd import importer, init, weeks
+from hubd.context import Context, build
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
 from hubd.notify import Notifier
@@ -622,6 +623,19 @@ class Hub:
             return ""
         base = self.index.projects[project].base
         return await asyncio.to_thread(_git, repo, "diff", "--stat", f"{base}...{branch}")
+
+    async def context(self, project: str, sprint: int | None, step_id: str | None) -> Context:
+        """What a chat about the project (and its sprint or step) is told; the repo must exist."""
+        repo = self.repo(project)
+        if project not in self.index.projects or repo is None:
+            raise NotFound(f"no project {project} with a repo")
+        spec = diff = None
+        if step_id:
+            spec = spec_text(self.entry(project, step_id))
+            with suppress(InvalidTransition):  # a branch gone or never made: a note says so
+                diff = await self.diffstat(project, step_id)
+        name = self.index.projects[project].name
+        return await asyncio.to_thread(build, repo, name, sprint, step_id, spec, diff)
 
 
 def _git(repo: Path, *args: str) -> str:

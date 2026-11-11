@@ -198,3 +198,36 @@ def test_patch_refused_mid_turn_or_bad(hub: Hub) -> None:
         assert c.patch(f"/chats/{chat_id}", json={"model": "gpt"}).status_code == 422
         assert c.patch("/chats/nope", json={"model": "opus"}).status_code == 404
         until(lambda: any(e["kind"] == "turn_end" for e in events))
+
+
+def test_step_chat_is_told_its_context_on_every_open(hub: Hub) -> None:
+    (hub.repo("demo") / "README.md").write_text("# Demo\n\nThe demo pitch.\n")
+    c, events = client(hub)
+    with c:
+        runner = c.app.state.chats.runner
+        body = NEW | {"project": "demo", "step": "102"}
+        chat_id = c.post("/chats", json=body).json()["id"]
+        system = runner.systems[0]
+        assert "The demo pitch." in system and "## Step 102" in system
+        assert "sprint/progress/102.md" in system
+        context = c.get(f"/chats/{chat_id}").json()["context"]
+        assert context["label"] == "spec + checklist + README" and context["size"] > 0
+        assert "no sprint/PROGRESS.md" in context["notes"]
+        c.post(f"/chats/{chat_id}/stop")
+        c.post(f"/chats/{chat_id}/message", json={"text": "hi"})  # resumes the process
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        c.patch(f"/chats/{chat_id}", json={"model": "opus"})
+        assert runner.systems == [system] * 3
+
+
+def test_context_preview_and_plain_chats(hub: Hub) -> None:
+    c, _ = client(hub)
+    with c:
+        preview = c.get("/projects/demo/context", params={"sprint": 1}).json()
+        assert preview["label"] == "" and preview["size"] > 0
+        assert preview["notes"] == ["no sprint/README.md", "no README.md"]  # notes, not errors
+        assert c.get("/projects/nope/context").status_code == 404
+        assert c.get("/projects/demo/context", params={"step": "999"}).status_code == 404
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        assert c.app.state.chats.runner.systems == [None]
+        assert c.get(f"/chats/{chat_id}").json()["context"] is None

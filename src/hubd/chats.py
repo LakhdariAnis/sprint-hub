@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.runners.chat import ChatEvent, ChatRunner
 
@@ -28,10 +29,16 @@ class Chat:
     model: str
     effort: str
     cwd: Path
+    # Told with `--append-system-prompt` on every open, so a resumed chat knows it too.
+    context: Context | None = None
     used: float = field(default_factory=time.monotonic)  # last message or event
     # One turn = the message sent and the events it got (as `chat` events, text deltas joined).
     # `done`: it ended.
     turns: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def system(self) -> str | None:
+        return self.context.text if self.context else None
 
     @property
     def busy(self) -> bool:
@@ -58,11 +65,13 @@ class Chats:
             names = ", ".join(live)
             raise Full(f"{MAX_LIVE} chats are open already ({names}): stop one first")
 
-    async def open(self, project: str | None, cwd: Path, model: str, effort: str) -> Chat:
+    async def open(
+        self, project: str | None, cwd: Path, model: str, effort: str, context: Context | None
+    ) -> Chat:
         self._room()
-        chat = Chat(str(uuid.uuid4()), project, model, effort, cwd)
+        chat = Chat(str(uuid.uuid4()), project, model, effort, cwd, context)
         self.chats[chat.id] = chat
-        await self.runner.open(chat.id, cwd, model, effort)
+        await self.runner.open(chat.id, cwd, model, effort, chat.system)
         return chat
 
     async def send(self, chat_id: str, text: str) -> None:
@@ -70,7 +79,7 @@ class Chats:
         chat.used = time.monotonic()
         if not self.live(chat_id):
             self._room(chat_id)
-            await self.runner.open(chat.id, chat.cwd, chat.model, chat.effort)  # resumes it
+            await self.runner.open(chat.id, chat.cwd, chat.model, chat.effort, chat.system)
         chat.turns.append({"text": text, "events": [], "done": False})
         await self.runner.send(chat_id, text)
 
@@ -82,7 +91,7 @@ class Chats:
         chat.model, chat.effort = model or chat.model, effort or chat.effort
         if self.live(chat_id):
             await self.runner.stop(chat_id)
-            await self.runner.open(chat_id, chat.cwd, chat.model, chat.effort)  # resumes it
+            await self.runner.open(chat_id, chat.cwd, chat.model, chat.effort, chat.system)
         return chat
 
     async def stop(self, chat_id: str) -> None:
@@ -137,6 +146,7 @@ class Chats:
             "model": chat.model,
             "effort": chat.effort,
             "cwd": str(chat.cwd),
+            "context": chat.context.json() if chat.context else None,
             "live": self.live(chat.id),
             "busy": chat.busy,
             "turns": chat.turns,

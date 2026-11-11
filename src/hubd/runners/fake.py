@@ -68,9 +68,13 @@ class FakeChat:
         self.turns: dict[str, asyncio.Task[None]] = {}  # the turn under way, per open chat
         self.chats: set[str] = set()
         self.opened: list[tuple[str, str, str | None]] = []  # (chat id, model, effort) per open
+        self.systems: list[str | None] = []  # `system` per open
 
-    async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
+    async def open(
+        self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None
+    ) -> None:
         self.opened.append((chat_id, model, effort))
+        self.systems.append(system)
         self.chats.add(chat_id)
 
     async def send(self, chat_id: str, text: str) -> None:

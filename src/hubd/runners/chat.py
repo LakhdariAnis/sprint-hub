@@ -26,6 +26,7 @@ EFFORT = "--effort"  # low, medium, high, xhigh, max
 PERMISSION_MODE = "--permission-mode"  # default: reads only (help lists it as its alias `manual`)
 # none: whatever would prompt is denied instead of waiting for a host. 607 answers prompts.
 PERMISSION_PROMPTS = "--permission-prompts"
+APPEND_SYSTEM = "--append-system-prompt"  # the project, sprint or step context (606)
 
 STDERR_LINES = 50  # kept for the error event of a bad exit
 STOP_WAIT = 5.0  # seconds claude gets to end on stdin EOF before it is terminated
@@ -44,8 +45,13 @@ class ChatRunner(Protocol):
 
     chats: Collection[str]  # ids of the chats with a live process
 
-    async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
-        """Start the chat in `cwd`, or resume it when `chat_id` was opened before."""
+    async def open(
+        self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None
+    ) -> None:
+        """Start the chat in `cwd`, or resume it when `chat_id` was opened before.
+
+        `system` is appended to Claude's system prompt; a resume needs it again.
+        """
         ...
 
     async def send(self, chat_id: str, text: str) -> None: ...
@@ -193,21 +199,27 @@ class ClaudeChat:
         # old id fails as an `error` event. Upgrade when 609 records the chats it opened.
         return any(self.projects.glob(f"*/{chat_id}.jsonl"))
 
-    def args(self, chat_id: str, model: str, effort: str | None) -> list[str]:
+    def args(
+        self, chat_id: str, model: str, effort: str | None, system: str | None = None
+    ) -> list[str]:
         args = [PRINT, INPUT_FORMAT, "stream-json", OUTPUT_FORMAT, "stream-json", VERBOSE, PARTIAL]
         args += [PERMISSION_MODE, "default", PERMISSION_PROMPTS, "none", MODEL, model]
         if effort:
             args += [EFFORT, effort]
+        if system:
+            args += [APPEND_SYSTEM, system]
         return args + [RESUME if self.exists(chat_id) else SESSION_ID, chat_id]
 
-    async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
+    async def open(
+        self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None
+    ) -> None:
         chat_id = str(uuid.UUID(chat_id))  # ValueError: not a session id
         if chat_id in self.chats:
             return
         try:
             process = await asyncio.create_subprocess_exec(
                 self.claude,
-                *self.args(chat_id, model, effort),
+                *self.args(chat_id, model, effort, system),
                 cwd=cwd,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,

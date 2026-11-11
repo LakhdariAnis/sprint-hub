@@ -222,6 +222,8 @@ def test_known_chat_is_resumed(stub: Path) -> None:
     (stub.parent / "projects" / "-tmp-x" / f"{ID}.jsonl").touch()
     chat, _ = runner(stub)
     assert chat.args(ID, "opus", None)[-4:] == ["--model", "opus", "--resume", ID]
+    told = chat.args(ID, "opus", "low", "# context")[-6:]
+    assert told == ["--effort", "low", "--append-system-prompt", "# context", "--resume", ID]
 
 
 def test_bad_exit_is_an_error_with_stderr(stub: Path) -> None:
