@@ -87,6 +87,7 @@ class Parser:
 
     def __init__(self) -> None:
         self.unknown: set[str] = set()  # types logged once already
+        self.spent = 0.0  # `total_cost_usd` so far: it adds up over the process's turns
 
     def events(self, line: str) -> list[dict[str, Any]]:
         try:
@@ -142,9 +143,12 @@ class Parser:
 
     def _result(self, message: dict) -> list[dict[str, Any]]:
         usage = message.get("usage") or {}
+        total = message.get("total_cost_usd")
+        cost = None if total is None else round(total - self.spent, 8)
+        self.spent = total if total is not None else self.spent
         end = {
             "type": "turn_end",
-            "cost_usd": message.get("total_cost_usd"),
+            "cost_usd": cost,  # this turn's
             # Most of the prompt is cached: `input_tokens` alone is a handful.
             "input_tokens": sum(
                 usage.get(k) or 0
@@ -271,3 +275,46 @@ class ClaudeChat:
     async def _tail(stream: asyncio.StreamReader, lines: deque[str]) -> None:
         async for raw in stream:
             lines.append(raw.decode(errors="replace").rstrip())
+
+
+async def _try(cwd: Path, chat_id: str, model: str, effort: str | None) -> None:
+    """A chat in the terminal: one line = one message, an empty line or ^D ends it."""
+    turn = asyncio.Event()
+
+    async def show(_: str, event: dict[str, Any]) -> None:
+        kind = event["type"]
+        if kind == "text":
+            print(event["text"], end="", flush=True)
+        elif kind == "turn_end":
+            print(f"\n[turn_end {event}]")
+            turn.set()
+        else:
+            print(f"\n[{kind} {event}]", flush=True)
+            if kind == "error":
+                turn.set()
+
+    chat = ClaudeChat(show)
+    print(f"chat {chat_id} in {cwd}")
+    await chat.open(chat_id, cwd, model, effort)
+    try:
+        while text := await asyncio.to_thread(input, "> "):
+            turn.clear()
+            await chat.send(chat_id, text)
+            await turn.wait()
+    except EOFError:
+        pass
+    finally:
+        await chat.close(chat_id)
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description=_try.__doc__)
+    parser.add_argument("--try", dest="cwd", type=Path, required=True, metavar="DIR")
+    parser.add_argument("--id", default=str(uuid.uuid4()), help="resume this chat")
+    parser.add_argument("--model", default="sonnet")
+    parser.add_argument("--effort")
+    a = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
+    asyncio.run(_try(a.cwd, a.id, a.model, a.effort))

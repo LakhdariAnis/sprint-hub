@@ -95,6 +95,13 @@ def test_result_ends_the_turn() -> None:
     ]
 
 
+def test_turn_cost_is_its_share_of_the_running_total() -> None:
+    parser = Parser()
+    parser.events(RESULT)
+    (end,) = parser.events(RESULT.replace("0.00388972", "0.01"))
+    assert end["cost_usd"] == 0.00611028
+
+
 def test_error_result_says_why_and_still_ends_the_turn() -> None:
     line = RESULT.replace(
         '"subtype":"success","is_error":false',
