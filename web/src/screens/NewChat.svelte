@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { change, chats, loadChat, pills, send } from '../chat.svelte'
+  import { change, chats, chip, contextOf, loadChat, pills, send, type Context } from '../chat.svelte'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
@@ -51,6 +51,19 @@
 
   // What the chat on show runs with: its own once it has started, else the pills.
   const view = $derived((cid && chats[cid]?.model ? chats[cid] : pills) as { model: string; effort: string; project: string | null })
+  // The chip above the box: what hubd will tell Claude (the pills, before the first send), or what it told this chat.
+  let preview = $state<Context | string | null>(null)
+  $effect(() => {
+    const { project, sprint, step } = pills
+    if (cid || !project) return void (preview = null)
+    let live = true
+    contextOf(project, sprint, step).then(
+      (c) => live && (preview = c),
+      (e: Error) => live && (preview = e instanceof TypeError ? 'hubd is not running' : e.message),
+    )
+    return () => (live = false)
+  })
+  const context = $derived(cid && chats[cid]?.model ? (chats[cid].context ?? null) : preview)
   const projectName = (id: string | null) => (id ? (lists.projects?.find((p) => p.id === id)?.name ?? id) : 'none')
 
   // The / menu: `at` = command row, `opt` = option row, `col` = the column that has the keys. Esc sets `shut` until the next key typed.
@@ -87,10 +100,9 @@
     try {
       if ((name === 'model' || name === 'effort') && cid && chats[cid]?.model) await change(cid, { [name]: o.value })
       if (name === 'model' || name === 'effort') pills[name] = o.value
-      else if (name === 'project') {
-        if (cid) throw new Error('A chat keeps its project. Type /clear for a new chat.')
-        Object.assign(pills, { project: o.value || null, sprint: null, step: null })
-      } else pills[name] = o.value || null
+      else if (cid) throw new Error(`A chat keeps its ${name}: hubd told Claude when it started. Type /clear for a new chat.`)
+      else if (name === 'project') Object.assign(pills, { project: o.value || null, sprint: null, step: null })
+      else pills[name] = o.value || null
       text = ''
       typed()
     } catch (e) {
@@ -173,7 +185,7 @@
             <div class="dim">Just type. Or start from a project, a sprint or one step.</div>
             <div class="starters">
               {#each starters as [c, t, d]}
-                <div class="starter"><span class="c">{c}</span><span>{t}</span><span class="dim xs">{d}</span></div>
+                <button type="button" class="starter" onmousedown={(e) => e.preventDefault()} onclick={() => ask(c.slice(1))}><span class="c">{c}</span><span>{t}</span><span class="dim xs">{d}</span></button>
               {/each}
             </div>
           {/if}
@@ -206,10 +218,13 @@
                     <span class="cn">{#if i < 9}<span class="dim num">{i + 1}</span>{/if}{o.label}</span><span class="dim xs">{o.value === current(cmd.name) ? 'current' : (o.desc ?? '')}</span>
                   </button>
                 {:else}
-                  <div class="dim xs pad">{nothing ? (view.project ? 'Loading steps…' : 'Pick a project first') : 'Enter clears the chat'}</div>
+                  <div class="dim xs pad">{nothing ? (!view.project ? 'Pick a project first' : lists.steps[view.project] ? 'This project has no steps' : 'Loading steps…') : 'Enter clears the chat'}</div>
                 {/each}
               </div>
             </div>
+          {/if}
+          {#if context}
+            <div class="chip" role="status"><span class="dim">context</span> {typeof context === 'string' ? `not loaded: ${context}` : chip(context)}</div>
           {/if}
           <div class="box">
             <label class="sr" for="msg">Message</label>
@@ -218,8 +233,8 @@
           </div>
           <div class="pills">
             <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
-            {#if pills.sprint}<button type="button" class="pill" onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
-            {#if pills.step}<button type="button" class="pill" onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
+            {#if pills.sprint}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
+            {#if pills.step}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
             <button type="button" class="pill" onclick={() => ask('model')}><span class="dim">model</span> {view.model}</button>
             <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
           </div>
@@ -240,7 +255,8 @@
   .col { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
   .hi { font-size: 20px; font-weight: 600; margin-bottom: -6px; }
   .starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
-  .starter { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
+  .starter { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; font: inherit; color: inherit; background: none; text-align: left; cursor: pointer; }
+  .starter:hover, .starter:focus-visible { border-color: var(--ac); outline: none; }
   .starter .c { font: 700 13px var(--mono); color: var(--ac); }
   .me { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 10px; background: var(--sel); white-space: pre-wrap; overflow-wrap: anywhere; }
   .ai { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
@@ -253,6 +269,7 @@
   textarea { border: 0; background: none; resize: none; outline: none; width: 100%; padding: 0; font: inherit; font-size: 15px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 3em; max-height: 12em; overflow-y: auto; }
   .hint { align-self: flex-end; font-size: 11px; color: var(--fgd); }
   .rel { position: relative; }
+  .chip { align-self: flex-start; max-width: 100%; margin-bottom: 6px; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 6px; overflow-wrap: anywhere; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 999px; background: none; color: inherit; cursor: pointer; }
   .pill:hover:not(:disabled), .pill:focus-visible { border-color: var(--ac); outline: none; }

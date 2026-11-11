@@ -206,13 +206,15 @@ def test_step_chat_is_told_its_context_on_every_open(hub: Hub) -> None:
     with c:
         runner = c.app.state.chats.runner
         body = NEW | {"project": "demo", "step": "102"}
-        chat_id = c.post("/chats", json=body).json()["id"]
+        opened = c.post("/chats", json=body).json()
+        chat_id = opened["id"]
         system = runner.systems[0]
         assert "The demo pitch." in system and "## Step 102" in system
         assert "sprint/progress/102.md" in system
         context = c.get(f"/chats/{chat_id}").json()["context"]
         assert context["label"] == "spec + checklist + README" and context["size"] > 0
         assert "no sprint/PROGRESS.md" in context["notes"]
+        assert opened["context"] == context
         c.post(f"/chats/{chat_id}/stop")
         c.post(f"/chats/{chat_id}/message", json={"text": "hi"})  # resumes the process
         until(lambda: [e["kind"] for e in events].count("turn_end") == 1)

@@ -1,10 +1,12 @@
 // Chats of this session, by id (hubd keeps them in memory; 609 makes them last). A turn is the message sent and the answer to it.
 export type Turn = { me: string; ai: string; done: boolean; error?: string }
 
-export type Meta = { model: string; effort: string; project: string | null }
+// What hubd told Claude about the project, sprint or step (606): the chip above the box.
+export type Context = { label: string; size: number; notes: string[] }
+export type Meta = { model: string; effort: string; project: string | null; context: Context | null }
 export const chats = $state<Record<string, { turns: Turn[] } & Partial<Meta>>>({})
 
-// What the next new chat opens with (the pills). Kept when the page starts another chat (/clear, n). `sprint` and `step` only show here: 606 loads their context.
+// What the next new chat opens with (the pills). Kept when the page starts another chat (/clear, n). With a project, `sprint` and `step` add their context.
 export const pills = $state({ project: null as string | null, model: 'sonnet', effort: 'medium', sprint: null as string | null, step: null as string | null })
 
 // What hubd sends on `/events` for a chat (`chat` events) and in GET /chats/<id> turns, less the fields 608 uses.
@@ -31,11 +33,12 @@ const reason = async (r: Response) => {
 export async function loadChat(id: string) {
   const r = await fetch(`/chats/${id}`)
   if (!r.ok) throw r.status === 404 ? new Error('This chat is gone: hubd was restarted.') : await reason(r)
-  const { turns, model, effort, project } = (await r.json()) as Meta & { turns: { text: string; events: Ev[]; done: boolean }[] }
+  const { turns, model, effort, project, context } = (await r.json()) as Meta & { turns: { text: string; events: Ev[]; done: boolean }[] }
   chats[id] = {
     model,
     effort,
     project,
+    context,
     turns: turns.map((t) => {
       const turn: Turn = { me: t.text, ai: '', done: false }
       t.events.forEach((e) => take(turn, e))
@@ -45,7 +48,7 @@ export async function loadChat(id: string) {
   }
 }
 
-async function post(path: string, body: object, method = 'POST'): Promise<{ id?: string }> {
+async function post(path: string, body: object, method = 'POST'): Promise<{ id?: string; context?: Context | null }> {
   const r = await fetch(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
   if (!r.ok) throw await reason(r)
   return r.json()
@@ -55,9 +58,10 @@ async function post(path: string, body: object, method = 'POST'): Promise<{ id?:
 export async function send(id: string | undefined, text: string): Promise<string> {
   try {
     if (!id) {
-      const { project, model, effort } = pills
-      id = (await post('/chats', { project, model, effort })).id!
-      chats[id] = { turns: [], project, model, effort }
+      const { project, model, effort, sprint, step } = pills
+      const opened = await post('/chats', { project, model, effort, ...(project && { sprint, step }) })
+      id = opened.id!
+      chats[id] = { turns: [], project, model, effort, context: opened.context ?? null }
     }
     const turns = (chats[id] ??= { turns: [] }).turns
     turns.push({ me: text, ai: '', done: false })
@@ -71,6 +75,20 @@ export async function send(id: string | undefined, text: string): Promise<string
   } catch (e) {
     throw e instanceof TypeError ? new Error('hubd is not running. Start it with `uv run hubd`, then send again.') : e
   }
+}
+
+// What a new chat with these pills would be told, before it opens.
+export async function contextOf(project: string, sprint: string | null, step: string | null): Promise<Context> {
+  const q = new URLSearchParams({ ...(sprint && { sprint }), ...(step && { step }) })
+  const r = await fetch(`/projects/${encodeURIComponent(project)}/context?${q}`)
+  if (!r.ok) throw await reason(r)
+  return r.json()
+}
+
+// The chip's text: "README + sprints (12 kB) · no PROGRESS.md".
+export function chip(c: Context) {
+  const kb = c.size < 10_000 ? (c.size / 1000).toFixed(1) : Math.round(c.size / 1000)
+  return `${c.label || 'nothing found'} (${kb} kB)${c.notes.length ? ' · ' + c.notes.join(' · ') : ''}`
 }
 
 // New model or effort for a chat that has started: hubd resumes it with the flag. A failure throws its reason.

@@ -292,7 +292,7 @@ def create_app(
             return JSONResponse({"detail": f"project {body.project} has no repo"}, status_code=422)
         context = await hub.context(body.project, body.sprint, body.step) if body.project else None
         chat = await chats.open(body.project, cwd, body.model, body.effort, context)
-        return {"id": chat.id}
+        return {"id": chat.id, "context": context.json() if context else None}
 
     @app.get("/projects/{project}/context")
     async def chat_context(
