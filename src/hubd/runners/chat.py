@@ -5,7 +5,7 @@ import json
 import logging
 import uuid
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -41,6 +41,8 @@ SHORT = 80  # characters kept of a tool input or result
 
 class ChatRunner(Protocol):
     """Every call returns at once; what Claude says comes later, through `ChatEvent`."""
+
+    chats: Collection[str]  # ids of the chats with a live process
 
     async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
         """Start the chat in `cwd`, or resume it when `chat_id` was opened before."""

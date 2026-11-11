@@ -1,24 +1,27 @@
 import asyncio
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import date
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, BeforeValidator, Field, ValidationError
+from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, ValidationError
 
 from hubd import doctor, reminders, service
+from hubd.chats import Chats
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import NotifySend
+from hubd.runners.chat import ChatEvent, ChatRunner
 from hubd.runners.claude import ClaudeCodeRunner
+from hubd.runners.fake import FakeChat
 from hubd.settings import (
     Current,
     Settings,
@@ -53,14 +56,28 @@ class RunEnded(BaseModel):
     step: str
 
 
+class NewChat(BaseModel):
+    project: str | None = None  # none: a plain chat in `chats/scratch/` of the vault
+    model: Literal["opus", "sonnet", "haiku"]
+    effort: Literal["low", "medium", "high", "xhigh", "max"]  # `claude --effort`
+
+
+class Message(BaseModel):
+    text: Annotated[str, StringConstraints(pattern=r"\S")]  # not empty, not only spaces
+
+
 def create_app(
     hub: Hub | None = None,
     demo: bool = False,
     theme: ThemeSource | None = None,
     reminder_hour: int | None = None,
     current: Current | None = None,
+    chat: Callable[[ChatEvent], ChatRunner] = FakeChat,
 ) -> FastAPI:
-    """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo)."""
+    """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo).
+
+    `chat` makes the chat runner: FakeChat unless `hubd serve` passes ClaudeChat.
+    """
     theme = theme or FakeTheme()
     # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
     current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
@@ -109,6 +126,7 @@ def create_app(
 
     if hub is None:
         return _with_web(app)
+    chats = Chats(chat, hub.emit)
 
     @app.get("/projects")
     def projects() -> list[dict]:
@@ -249,6 +267,31 @@ def create_app(
     @app.post("/steps/{project}/{step_id}/tasks/{n}/tick")
     async def tick(project: str, step_id: str, n: int) -> dict:
         return step_json(await hub.tick(project, step_id, n))
+
+    @app.post("/chats", response_model=None)
+    async def new_chat(body: NewChat) -> JSONResponse | dict:
+        if body.project is None:
+            cwd = hub.vault / "chats" / "scratch"
+            cwd.mkdir(parents=True, exist_ok=True)
+        elif body.project not in hub.index.projects:
+            return JSONResponse({"detail": f"no project {body.project}"}, status_code=422)
+        elif (cwd := hub.repo(body.project)) is None or not cwd.is_dir():
+            return JSONResponse({"detail": f"project {body.project} has no repo"}, status_code=422)
+        return {"id": (await chats.open(body.project, cwd, body.model, body.effort)).id}
+
+    @app.get("/chats/{chat_id}")
+    def get_chat(chat_id: str) -> dict:
+        return chats.json(chats.get(chat_id))
+
+    @app.post("/chats/{chat_id}/message")
+    async def message(chat_id: str, body: Message) -> dict:
+        await chats.send(chat_id, body.text)
+        return {"ok": True}
+
+    @app.post("/chats/{chat_id}/stop")
+    async def stop_chat(chat_id: str) -> dict:
+        await chats.stop(chat_id)
+        return {"ok": True}
 
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
