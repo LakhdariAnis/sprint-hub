@@ -66,6 +66,11 @@ class NewChat(BaseModel):
 
 
 class ChatChange(BaseModel):
+    title: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+        | None
+    ) = None
+    open: bool | None = None  # false: out of the sidebar (`x`); the vault keeps the chat
     model: Literal["opus", "sonnet", "haiku"] | None = None
     effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
 
@@ -321,7 +326,10 @@ def create_app(
 
     @app.patch("/chats/{chat_id}")
     async def change_chat(chat_id: str, body: ChatChange) -> dict:
-        return chats.json(await chats.update(chat_id, body.model, body.effort))
+        chat = await chats.edit(chat_id, body.title, body.open)
+        if body.model or body.effort:
+            chat = await chats.update(chat_id, body.model, body.effort)
+        return chats.json(chat)
 
     @app.post("/chats/{chat_id}/message")
     async def message(chat_id: str, body: Message) -> dict:

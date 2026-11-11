@@ -13,6 +13,7 @@ from typing import Any
 from hubd import chatlog, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
+from hubd.model import one_line
 from hubd.runners.chat import ChatEvent, ChatRunner
 from hubd.transcript import Transcript, no_transcript
 
@@ -204,6 +205,19 @@ class Chats:
             await self.runner.open(
                 chat_id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
             )
+        return chat
+
+    async def edit(self, chat_id: str, title: str | None, open: bool | None) -> Chat:
+        """Rename the chat (kept in the vault only), or close it: out of the sidebar, entry kept."""
+        chat = await self.load(chat_id)
+        if title is not None:
+            chat.title = one_line(title)
+        if open is False and self.live(chat_id):  # a closed chat holds no process
+            await self.stop(chat_id)
+        if open is not None:
+            chat.open = open
+        if chat.saved:
+            self._save(chat)
         return chat
 
     async def stop(self, chat_id: str) -> None:

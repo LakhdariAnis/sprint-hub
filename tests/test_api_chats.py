@@ -437,3 +437,37 @@ def test_unknown_chat_is_404_after_a_restart_too(hub: Hub) -> None:
     c, _ = restarted(hub, EARLIER)
     with c:
         assert c.get("/chats/not-a-chat").status_code == 404
+
+
+def test_rename_is_kept_in_the_vault_and_survives_a_restart(vault: Path, hub: Hub) -> None:
+    chat_id = started(hub)
+    c, _ = restarted(hub, EARLIER)
+    with c:
+        assert (
+            c.patch(f"/chats/{chat_id}", json={"title": "  Plan\nthe week "}).json()["title"]
+            == "Plan the week"
+        )
+        assert c.patch(f"/chats/{chat_id}", json={"title": "  "}).status_code == 422
+        assert c.patch("/chats/nope", json={"title": "x"}).status_code == 404
+    [entry] = chatlog.load(chatlog.path_of(vault, None))
+    assert entry.title == "Plan the week" and entry.model == "haiku"
+    c, _ = restarted(hub, EARLIER)
+    with c:
+        assert [x["title"] for x in c.get("/chats").json()] == ["Plan the week"]
+
+
+def test_close_ends_the_process_keeps_the_entry_and_a_message_reopens(
+    vault: Path, hub: Hub
+) -> None:
+    chat_id = started(hub)
+    c, events = restarted(hub, EARLIER)
+    with c:
+        c.post(f"/chats/{chat_id}/message", json={"text": "again"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        assert c.get(f"/chats/{chat_id}").json()["live"]
+        closed = c.patch(f"/chats/{chat_id}", json={"open": False}).json()
+        assert not closed["open"] and not closed["live"]
+        assert [x["open"] for x in c.get("/chats").json()] == [False]
+        assert chatlog.load(chatlog.path_of(vault, None))[0].open is False
+        c.post(f"/chats/{chat_id}/message", json={"text": "back"})
+        assert c.get(f"/chats/{chat_id}").json()["open"]
