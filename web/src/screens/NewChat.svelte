@@ -2,6 +2,7 @@
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
   import { answer, answerOf, asksOf, change, chats, chip, contextOf, loadChat, pills, send, type Ask, type Context } from '../chat.svelte'
+  import { costLine } from '../cost'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
@@ -251,6 +252,8 @@
               {/each}
               {#if !t.blocks.length && !t.done}<div class="think">thinking…</div>{/if}
               {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
+              {#if t.stopped}<div class="stopped" role="status">stopped</div>{/if}
+              {#if t.end && costLine(t.end)}<div class="cost dim xs">{costLine(t.end)}</div>{/if}
             </div>
           {/each}
           {#if failed}<div class="err" role="alert">{failed}</div>{/if}
@@ -319,6 +322,8 @@
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
   .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .cost { overflow-wrap: anywhere; }
+  .stopped { align-self: flex-start; padding: 0 8px; border: 1px solid var(--sel); border-radius: 999px; font-size: 11px; color: var(--fgd); }
   .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
   .tl { display: flex; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: var(--fgd); font: inherit; text-align: left; cursor: pointer; }
   .tl:hover, .tl:focus-visible { color: inherit; outline: none; }
