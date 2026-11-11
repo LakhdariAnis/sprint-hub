@@ -34,6 +34,7 @@ from hubd.states import InvalidTransition
 from hubd.theme import FakeTheme, OmarchyTheme, ThemeSource
 from hubd.theme import read as read_theme
 from hubd.theme import watch as watch_theme
+from hubd.transcript import Transcript, no_transcript, read_claude
 from hubd.vault import vault_path
 
 HOST = "127.0.0.1"  # localhost only: the API has no auth
@@ -84,22 +85,25 @@ def create_app(
     reminder_hour: int | None = None,
     current: Current | None = None,
     chat: Callable[[ChatEvent], ChatRunner] = FakeChat,
+    transcript: Transcript = no_transcript,
 ) -> FastAPI:
     """`reminder_hour` set: send deadline reminders (only `hubd serve`, never tests or demo).
 
-    `chat` makes the chat runner: FakeChat unless `hubd serve` passes ClaudeChat.
+    `chat` makes the chat runner: FakeChat unless `hubd serve` passes ClaudeChat. `transcript`
+    reads a restarted chat's turns back: `hubd serve` passes `read_claude`.
     """
     theme = theme or FakeTheme()
     # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
     current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
     hour = [reminder_hour]
-    chats = Chats(chat, hub.emit, hub.vault) if hub else None
+    chats = Chats(chat, hub.emit, hub.vault, hub.context, transcript) if hub else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         if hub is None:
             yield
             return
+        chats.restore({p: hub.repo(p) for p in hub.index.projects})
         stop = asyncio.Event()
         tasks = [asyncio.create_task(hub.watch(stop)), asyncio.create_task(chats.loop(stop))]
         if isinstance(theme, OmarchyTheme):  # FakeTheme (demo, tests) never changes
@@ -312,8 +316,8 @@ def create_app(
         return chats.listing()
 
     @app.get("/chats/{chat_id}")
-    def get_chat(chat_id: str) -> dict:
-        return chats.json(chats.get(chat_id))
+    async def get_chat(chat_id: str) -> dict:
+        return chats.json(await chats.load(chat_id))
 
     @app.patch("/chats/{chat_id}")
     async def change_chat(chat_id: str, body: ChatChange) -> dict:
@@ -377,4 +381,5 @@ def serve_app() -> FastAPI:
         reminder_hour=current.settings.reminder_hour,
         current=current,
         chat=ClaudeChat,
+        transcript=read_claude,
     )

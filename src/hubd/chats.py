@@ -3,7 +3,7 @@
 import asyncio
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +14,7 @@ from hubd import chatlog, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.runners.chat import ChatEvent, ChatRunner
+from hubd.transcript import Transcript, no_transcript
 
 MAX_LIVE = 3  # claude processes at once
 IDLE = 15 * 60  # seconds without a message or an event before the process is closed
@@ -41,6 +42,9 @@ class Chat:
     stamp: datetime = field(default_factory=datetime.now)  # last message sent, as the vault has it
     saved: bool = False  # in the vault: set by the first send
     open: bool = True  # in the sidebar
+    # Loaded from the vault at hubd start: its turns and context are rebuilt when it is first used.
+    restored: bool = False
+    hidden: bool = False  # the session file gave no turns: the page says "earlier turns not shown"
     used: float = field(default_factory=time.monotonic)  # last message or event
     # One turn = the message sent and the events it got (as `chat` events, text deltas joined).
     # `done`: it ended.
@@ -76,12 +80,19 @@ class Chat:
 
 class Chats:
     def __init__(
-        self, runner: Callable[[ChatEvent], ChatRunner], emit: Callable[[dict], None], vault: Path
+        self,
+        runner: Callable[[ChatEvent], ChatRunner],
+        emit: Callable[[dict], None],
+        vault: Path,
+        context: Callable[[str, int | None, str | None], Awaitable[Context]],
+        transcript: Transcript = no_transcript,
     ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
         self.emit = emit
         self.vault = vault
+        self.build = context  # what a project chat is told, built again when it resumes
+        self.transcript = transcript
         self.chats: dict[str, Chat] = {}
         self.ask_wait = permits.ASK_WAIT
 
@@ -89,6 +100,31 @@ class Chats:
         if chat_id not in self.chats:
             raise NotFound(f"no chat {chat_id}")
         return self.chats[chat_id]
+
+    def restore(self, repos: Mapping[str, Path | None]) -> None:
+        """Read the saved chats of the vault: `repos` is each project's repo. No process starts."""
+        scratch = self.vault / "chats" / "scratch"
+        for project, cwd in [(None, scratch), *repos.items()]:
+            if cwd is None:  # without its repo a project chat cannot resume
+                continue
+            for e in chatlog.load(chatlog.path_of(self.vault, project)):
+                self.chats[e.id] = Chat(
+                    e.id, project, e.model, e.effort, cwd, None, e.sprint, e.step, e.title,
+                    e.created, e.used, True, e.open, True,
+                )  # fmt: skip
+
+    async def load(self, chat_id: str) -> Chat:
+        """The chat, with the turns and context of a restored one read first (once)."""
+        chat = self.get(chat_id)
+        if chat.restored:
+            chat.restored = False
+            turns = await asyncio.to_thread(self.transcript, chat.id)
+            chat.hidden = turns is None
+            chat.turns = turns or []
+            if chat.project:  # an earlier open told Claude this; a resume needs it again
+                with suppress(NotFound, OSError):
+                    chat.context = await self.build(chat.project, chat.sprint, chat.step)
+        return chat
 
     def live(self, chat_id: str) -> bool:
         return chat_id in self.runner.chats
@@ -116,7 +152,7 @@ class Chats:
         return chat
 
     async def send(self, chat_id: str, text: str) -> None:
-        chat = self.get(chat_id)
+        chat = await self.load(chat_id)
         chat.used = time.monotonic()
         if not self.live(chat_id):
             self._room(chat_id)
@@ -157,7 +193,7 @@ class Chats:
 
     async def update(self, chat_id: str, model: str | None, effort: str | None) -> Chat:
         """New model or effort: a live process is closed and resumed with the new flag."""
-        chat = self.get(chat_id)
+        chat = await self.load(chat_id)
         if chat.busy:  # closing now would cut the answer
             raise Full("Claude is answering: change model or effort when it is done")
         chat.model, chat.effort = model or chat.model, effort or chat.effort
@@ -273,5 +309,6 @@ class Chats:
             "open": chat.open,
             "live": self.live(chat.id),
             "busy": chat.busy,
+            "earlier_hidden": chat.hidden,
             "turns": chat.turns,
         }

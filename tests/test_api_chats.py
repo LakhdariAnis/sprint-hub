@@ -363,3 +363,77 @@ def test_project_chat_goes_to_its_project_file(vault: Path, hub: Hub) -> None:
         until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
     [entry] = chatlog.load(vault / "projects" / project / "chats.md")
     assert (entry.id, entry.kind, entry.title) == (chat_id, "project", "hello")
+
+
+def restarted(hub: Hub, turns: list | None) -> tuple[TestClient, list[dict]]:
+    """hubd started again on the same vault; `turns` is what the session file reads as."""
+    events: list[dict] = []
+    emit = hub.emit
+    hub.emit = lambda e: (events.append(e) if e["type"] == "chat" else None, emit(e))
+    app = create_app(hub, chat=lambda on: FakeChat(on, delay=0), transcript=lambda _: turns)
+    return TestClient(app), events
+
+
+def started(hub: Hub, project: str | None = None, text: str = "hello") -> str:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW | ({"project": project} if project else {})).json()[
+            "id"
+        ]
+        c.post(f"/chats/{chat_id}/message", json={"text": text})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+    return chat_id
+
+
+EARLIER = [{"text": "hello", "events": [{"kind": "text", "text": "Hi!"}], "done": True}]
+
+
+def test_saved_chat_survives_a_restart_and_gets_its_turns_back(hub: Hub) -> None:
+    chat_id = started(hub)
+    c, events = restarted(hub, EARLIER)
+    with c:
+        assert [(x["id"], x["title"]) for x in c.get("/chats").json()] == [(chat_id, "hello")]
+        chat = c.get(f"/chats/{chat_id}").json()
+        assert chat["turns"] == EARLIER and not chat["earlier_hidden"] and not chat["live"]
+        assert (chat["model"], chat["effort"]) == ("haiku", "low")
+        c.post(f"/chats/{chat_id}/message", json={"text": "what did I ask first?"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        turns = c.get(f"/chats/{chat_id}").json()["turns"]
+        runner = c.app.state.chats.runner  # type: ignore[attr-defined]
+    assert [t["text"] for t in turns] == ["hello", "what did I ask first?"]  # earlier ones kept
+    assert runner.opened == [(chat_id, "haiku", "low")]  # resumed with the saved model
+
+
+def test_unreadable_session_file_says_so_and_the_chat_still_resumes(hub: Hub) -> None:
+    chat_id = started(hub)
+    c, events = restarted(hub, None)
+    with c:
+        chat = c.get(f"/chats/{chat_id}").json()
+        assert chat["turns"] == [] and chat["earlier_hidden"]
+        assert c.post(f"/chats/{chat_id}/message", json={"text": "again"}).status_code == 200
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        assert c.get(f"/chats/{chat_id}").json()["turns"][0]["text"] == "again"
+
+
+def test_step_chat_is_told_its_context_again_after_a_restart(hub: Hub) -> None:
+    (hub.repo("demo") / "README.md").write_text("# Demo\n\nThe demo pitch.\n")
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW | {"project": "demo", "step": "102"}).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "hello"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        before = c.get(f"/chats/{chat_id}").json()["context"]
+    c, events = restarted(hub, EARLIER)
+    with c:
+        chat = c.get(f"/chats/{chat_id}").json()
+        assert chat["project"] == "demo" and chat["context"] == before  # the chip is back
+        c.post(f"/chats/{chat_id}/message", json={"text": "more"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        system = c.app.state.chats.runner.systems[-1]  # type: ignore[attr-defined]
+    assert "The demo pitch." in system and "## Step 102" in system
+
+
+def test_unknown_chat_is_404_after_a_restart_too(hub: Hub) -> None:
+    c, _ = restarted(hub, EARLIER)
+    with c:
+        assert c.get("/chats/not-a-chat").status_code == 404
