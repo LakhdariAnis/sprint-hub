@@ -20,6 +20,7 @@ export const stepHash = (p: string, i: string) => `#/steps/${enc(p)}/${enc(i)}`
 const reviewHash = (p: string, i: string) => `#/review/${enc(p)}/${enc(i)}`
 
 const SCREENS: [string, string, string][] = [
+  ['New chat', '#/chat', 'n'],
   ['Today', '#/today', 'g t'],
   ['Projects', '#/projects', 'g p'],
   ['Review', '#/review', 'g r'],

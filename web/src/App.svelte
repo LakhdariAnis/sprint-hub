@@ -3,6 +3,7 @@
   import './keys.svelte'
   import { hub } from './hub.svelte'
   import { nav } from './nav.svelte'
+  import NewChat from './screens/NewChat.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
   import Questions from './screens/Questions.svelte'
@@ -35,6 +36,7 @@
       <!-- A plain line, no motion: the next screen is still loading. -->
       {#if nav.slow}<div class="slow"></div>{/if}
       {#if !r}<!-- first load: nothing to keep on show -->
+      {:else if r.name === 'chat'}<NewChat id={r.id} />
       {:else if r.name === 'today'}<Today />
       {:else if r.name === 'questions'}<Questions />
       {:else if r.name === 'settings'}<Settings />

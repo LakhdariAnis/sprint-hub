@@ -23,7 +23,7 @@
 
 <nav class="sb" class:rail={keys.rail} aria-label="Tabs">
   <div class="brand"><span class="wm">{#if !keys.rail}sprint{/if}<i>hub</i></span><span class="lbl ver">{hub.version}</span></div>
-  <button class="newc" type="button" title="New chat comes in a later sprint"><b>+</b><span class="lbl">New chat</span><span class="k">^N</span></button>
+  <a class="newc" class:on={r.name === 'chat'} href="#/chat" aria-label="New chat" title="New chat (n)"><b>+</b><span class="lbl">New chat</span><span class="k">n</span></a>
   <div class="sl">
   <div class="sg">TABS</div>
   {#each tabs as t}
@@ -71,10 +71,11 @@
   .wm i { font-style: normal; background: var(--ac); color: var(--bg); border-radius: 5px; padding: 0 6px; line-height: 26px; }
   .ver { font: 11px var(--mono); color: var(--fgm); margin-left: auto; }
   .newc {
-    height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 7px;
-    border: 1px dashed var(--mu); background: none; margin: 0 0 4px; cursor: default; text-align: left;
+    height: 36px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 7px;
+    background: var(--ac); color: var(--bg); margin: 0 0 4px; text-decoration: none; font-weight: 500;
   }
-  .newc b { color: var(--ac); }
+  .newc b, .newc .k { color: inherit; }
+  .newc.on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--ac) 40%, transparent); }
   .sg { font: 11px var(--mono); letter-spacing: 0.1em; color: var(--fgm); padding: 12px 8px 6px; }
   .tb {
     height: 36px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 8px; border-radius: 6px;

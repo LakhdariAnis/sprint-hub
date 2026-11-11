@@ -12,6 +12,8 @@ export function toggleRail() {
 }
 
 export const openPalette = () => (keys.palette = true)
+// `n`: a screen with its own `n` (the Step screen's fresh chat) wins; elsewhere it opens New chat.
+export const newChat = () => (location.hash = '#/chat')
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
@@ -101,7 +103,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? current[k])
+    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? current[k] ?? (k === 'n' ? newChat : undefined))
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

@@ -18,7 +18,7 @@
   const canReview = $derived(cur ? cur.state === 'done' : r.name === 'review' && hub.review > 0)
   const when = (on: boolean, h: [string, string][]) => (on ? h : [])
   const hints = $derived<Record<string, [string, string][]>>({
-    today: [['p n m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
+    today: [['p o m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
     project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['Esc', 'back']],
     step: [...when(canStart, [['s', cur?.state === 'changes' ? 'continue chat' : 'start']]), ...when(cur?.state === 'changes' && cur.by !== 'me', [['n', 'new chat']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['Esc', 'back']],

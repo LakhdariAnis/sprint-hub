@@ -1,4 +1,5 @@
 export type Route =
+  | { name: 'chat'; id?: string }
   | { name: 'today' }
   | { name: 'projects' }
   | { name: 'project'; project: string }
@@ -9,6 +10,7 @@ export type Route =
 
 export function parse(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent)
+  if (!a || a === 'chat') return { name: 'chat', id: b || undefined }
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
   if (a === 'questions') return { name: 'questions' }

@@ -16,7 +16,7 @@
     ['b', 'hide / show the sidebar labels'],
     ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
     ['s', 'start the step (Step screen)'],
-    ['n', 'new chat for a step in changes, with your comment in its prompt, when the old chat cannot be resumed (Step)'],
+    ['n', 'New chat; on a Step in changes: a fresh run with your comment in its prompt, when the old chat cannot be resumed'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
