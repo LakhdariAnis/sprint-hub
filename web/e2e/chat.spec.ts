@@ -1,5 +1,17 @@
 import { expect, test, type Page } from '@playwright/test'
 
+// hubd keeps 3 chat processes at most: each test stops the chats it opened.
+let opened: Promise<string>[] = []
+test.beforeEach(({ page }) => {
+  opened = []
+  page.on('response', (r) => {
+    if (r.request().method() === 'POST' && new URL(r.url()).pathname === '/chats' && r.ok()) opened.push(r.json().then((b) => b.id))
+  })
+})
+test.afterEach(async ({ request }) => {
+  for (const id of await Promise.all(opened)) await request.post(`/chats/${id}/stop`)
+})
+
 // Step 604: the app opens on New chat; hubd --demo answers with FakeChat.
 test('opens on New chat, a message gets an answer', async ({ page }) => {
   await page.goto('/')
@@ -171,4 +183,56 @@ test('c on a Step opens New chat with that step set; c on a Project with the pro
   await expect(page.locator('.pill', { hasText: 'project' })).toContainText('notes')
   await expect(page.locator('.pill', { hasText: 'step' })).toBeHidden()
   await expect(page.locator('.chip')).toContainText('sprints')
+})
+
+// Step 607: Claude asks before a command; FakeChat asks on "run …". A chat with no project is refused without a card.
+test('permission card: d denies, a allows, A allows for the chat; a plain chat is refused', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 1000 }) // half of a 1920 screen
+  await page.goto('/#/chat')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await page.locator('.pill', { hasText: 'project' }).click()
+  await page.getByRole('listbox', { name: 'Options of /project' }).getByRole('option', { name: /demo/ }).click()
+  const cards = page.getByRole('group', { name: 'Permission: Bash' })
+  const ask = async (text: string) => {
+    await box.fill(text)
+    await box.press('Enter')
+  }
+
+  await ask('run rm -rf build')
+  const card = cards.last()
+  await expect(card).toContainText('rm -rf build')
+  for (const name of ['Allow', 'Deny', 'Allow for this chat']) {
+    const b = card.getByRole('button', { name, exact: true })
+    await expect(b).toBeInViewport({ ratio: 1 }) // reads in full at half screen
+  }
+  await expect(box).toBeFocused()
+  await page.keyboard.press('d') // the box is empty: the key answers the card
+  await expect(card).toContainText('Denied')
+  await expect(page.locator('.ai').last()).toContainText('Not run: Anis denied')
+  await expect(box).toBeFocused()
+
+  await ask('run ls')
+  await expect(cards).toHaveCount(2)
+  await box.press('Escape')
+  await page.keyboard.press('a')
+  await expect(cards.last()).toContainText('Allowed')
+  await expect(page.locator('.ai').last()).toContainText('has one file.')
+
+  await ask('run ls -a')
+  await expect(cards).toHaveCount(3)
+  await page.keyboard.press('Shift+A')
+  await expect(cards.last()).toContainText('Allowed for this chat')
+  await answered(page)
+  await ask('run pwd')
+  await answered(page)
+  await expect(page.locator('.me')).toHaveCount(4)
+  await expect(cards).toHaveCount(3) // no card for pwd
+
+  await page.goto('/#/chat')
+  await page.locator('.pill', { hasText: 'project' }).click()
+  await page.getByRole('listbox', { name: 'Options of /project' }).getByRole('option').first().click()
+  await expect(page.locator('.pill', { hasText: 'project' })).toContainText('none')
+  await ask('run cat ~/.bashrc')
+  await expect(cards.last()).toContainText('Refused: A chat with no project never runs commands')
+  await expect(page.locator('.ai').last()).toContainText('Not run:')
 })

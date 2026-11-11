@@ -1,5 +1,7 @@
 // Chats of this session, by id (hubd keeps them in memory; 609 makes them last). A turn is the message sent and the answer to it.
-export type Turn = { me: string; ai: string; done: boolean; error?: string }
+export type Turn = { me: string; ai: string; done: boolean; error?: string; asks: Ask[] }
+// A permission card (607): Claude wants to run `tool` on `target`. `answer` once Anis (or the 10 min wait) decided; `refused`: hubd said no without asking. `wide`: "Allow for this chat" can cover it.
+export type Ask = { request?: string; tool: string; target: string; diff: string | null; wide?: boolean; answer?: string; refused?: string }
 
 // What hubd told Claude about the project, sprint or step (606): the chip above the box.
 export type Context = { label: string; size: number; notes: string[] }
@@ -10,13 +12,26 @@ export const chats = $state<Record<string, { turns: Turn[] } & Partial<Meta>>>({
 export const pills = $state({ project: null as string | null, model: 'sonnet', effort: 'medium', sprint: null as string | null, step: null as string | null })
 
 // What hubd sends on `/events` for a chat (`chat` events) and in GET /chats/<id> turns, less the fields 608 uses.
-type Ev = { kind: string; text?: string; message?: string }
+type Ev = { kind: string; text?: string; message?: string; answer?: string } & Partial<Ask>
 
 // Events of a message sent mid-turn wait for the turn before it, as in hubd.
 function take(turn: Turn, e: Ev) {
   if (e.kind === 'text') turn.ai += e.text ?? ''
   else if (e.kind === 'turn_end' || e.kind === 'stopped') turn.done = true
   else if (e.kind === 'error') Object.assign(turn, { error: e.message || 'Claude failed', done: true })
+  else if (e.kind === 'permission') turn.asks.push({ request: e.request, tool: e.tool!, target: e.target!, diff: e.diff ?? null, wide: e.wide })
+  else if (e.kind === 'permission_refused') turn.asks.push({ tool: e.tool!, target: e.target!, diff: e.diff ?? null, refused: e.message })
+  else if (e.kind === 'permission_answer') {
+    const ask = turn.asks.find((a) => a.request === e.request)
+    if (ask) ask.answer = e.answer
+  }
+}
+
+// Anis's answer to a card: `allow`, `deny`, or `chat` (Allow for this chat). The card changes when hubd's `permission_answer` comes back.
+export async function answer(id: string, request: string, choice: 'allow' | 'deny' | 'chat') {
+  await post(`/chats/${id}/permission/${request}`, { answer: choice }).catch((e) => {
+    throw e instanceof TypeError ? new Error('hubd is not running. Start it with `uv run hubd`.') : e
+  })
 }
 
 export function onChat(e: Ev & { id: string }) {
@@ -40,7 +55,7 @@ export async function loadChat(id: string) {
     project,
     context,
     turns: turns.map((t) => {
-      const turn: Turn = { me: t.text, ai: '', done: false }
+      const turn: Turn = { me: t.text, ai: '', done: false, asks: [] }
       t.events.forEach((e) => take(turn, e))
       turn.done = t.done
       return turn
@@ -64,7 +79,7 @@ export async function send(id: string | undefined, text: string): Promise<string
       chats[id] = { turns: [], project, model, effort, context: opened.context ?? null }
     }
     const turns = (chats[id] ??= { turns: [] }).turns
-    turns.push({ me: text, ai: '', done: false })
+    turns.push({ me: text, ai: '', done: false, asks: [] })
     try {
       await post(`/chats/${id}/message`, { text })
     } catch (e) {

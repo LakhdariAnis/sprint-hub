@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { change, chats, chip, contextOf, loadChat, pills, send, type Context } from '../chat.svelte'
+  import { answer, change, chats, chip, contextOf, loadChat, pills, send, type Ask, type Context } from '../chat.svelte'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
@@ -20,7 +20,25 @@
 
   const turns = $derived(cid ? (chats[cid]?.turns ?? []) : [])
   const focusBox = () => box?.focus()
-  useKeys({ c: focusBox, i: focusBox })
+
+  // The card waiting for Anis, oldest first: a / d / A answer it.
+  const waiting = $derived(turns.flatMap((t) => (t.done ? [] : t.asks)).find((a) => a.request && !a.answer))
+  async function decide(choice: 'allow' | 'deny' | 'chat') {
+    const a = waiting
+    if (!a?.request || !cid || (choice === 'chat' && !a.wide)) return
+    failed = ''
+    await answer(cid, a.request, choice).then(focusBox, (e: Error) => (failed = e.message))
+  }
+  const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
+  useKeys({ c: focusBox, i: focusBox, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
+  const outcome: Record<string, string> = {
+    allow: 'Allowed',
+    chat: 'Allowed for this chat',
+    deny: 'Denied: Claude was told “Anis denied”',
+    timeout: 'No answer in 10 min, so it was denied',
+    stopped: 'The chat was stopped',
+  }
 
   // On load, and when the URL names another chat (n again, a link): the cursor goes to the box.
   $effect(() => {
@@ -144,6 +162,11 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (cmds.length && onmenu(e)) e.preventDefault()
+    // A card waits and the box is empty: a / d / A answer it from the box too.
+    else if (waiting && !text && choices[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      decide(choices[e.key])
+    }
     else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()
       submit()
@@ -154,7 +177,7 @@
   let stick = true
   const onscroll = () => log && (stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80)
   $effect(() => {
-    turns.map((t) => t.ai.length + t.me.length) // re-run on every delta
+    turns.map((t) => t.ai.length + t.me.length + t.asks.length) // re-run on every delta and card
     failed
     if (stick) tick().then(() => log && (log.scrollTop = log.scrollHeight))
   })
@@ -194,7 +217,24 @@
             {#each parts(t.ai) as p}
               {#if p.code}<pre>{p.text}</pre>{:else}<p class="ai">{p.text}</p>{/if}
             {/each}
-            {#if !t.ai && !t.done}<div class="think">thinking…</div>{/if}
+            {#each t.asks as a}
+              <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
+                <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
+                <code class="tgt">{a.target}</code>
+                {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
+                {#if a === waiting}
+                  <div class="btns">
+                    <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
+                    <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
+                    {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
+                  </div>
+                  <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
+                {:else}
+                  <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
+                {/if}
+              </div>
+            {/each}
+            {#if !t.ai && !t.done && !t.asks.length}<div class="think">thinking…</div>{/if}
             {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
           {/each}
           {#if failed}<div class="err" role="alert">{failed}</div>{/if}
@@ -262,6 +302,19 @@
   .ai { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
+  .ask { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
+  .ask.open { border-color: var(--ac); }
+  .tool { font: 700 13px var(--mono); }
+  .tgt { font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .diff { max-height: 16em; overflow: auto; }
+  .diff .add { color: var(--g); }
+  .diff .del { color: var(--r); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .b { font: inherit; font-size: 13px; padding: 4px 12px; border: 1px solid var(--sel); border-radius: 6px; background: none; color: inherit; cursor: pointer; }
+  .b:hover, .b:focus-visible { border-color: var(--ac); outline: none; }
+  .b.ok { border-color: var(--g); }
+  .b.no { border-color: var(--r); }
+  .k { font-family: var(--mono); color: var(--fgd); margin-right: 4px; }
   .err { padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); overflow-wrap: anywhere; }
   .cmp { flex: none; padding: 0 24px 16px; }
   .box { border: 1px solid var(--ac); border-radius: 10px; background: var(--dk); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
