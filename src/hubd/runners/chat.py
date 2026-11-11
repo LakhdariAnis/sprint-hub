@@ -1,12 +1,36 @@
 """A live Claude chat through the headless mode: `claude -p`, stream-json (ROADMAP rule 4)."""
 
+import asyncio
 import json
 import logging
+import uuid
+from collections import deque
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from hubd.runners.claude import MODEL, RESUME, SESSION_ID
+
 log = logging.getLogger(__name__)
+
+# Every flag below is in `claude --help` (2.1.299) and https://code.claude.com/docs/en/cli-reference
+# (checked 2026-11-11). Headless mode and stream-json: https://code.claude.com/docs/en/headless
+# (checked 2026-11-11). `--model`, `--session-id`, `--resume` come from `claude.py`.
+PRINT = "--print"  # non-interactive
+INPUT_FORMAT = "--input-format"  # stream-json: one JSON user message per stdin line
+OUTPUT_FORMAT = "--output-format"  # stream-json: one JSON message per stdout line
+VERBOSE = "--verbose"  # the docs pair it with stream-json output
+PARTIAL = "--include-partial-messages"  # text deltas as they arrive
+EFFORT = "--effort"  # low, medium, high, xhigh, max
+PERMISSION_MODE = "--permission-mode"  # default: reads only (help lists it as its alias `manual`)
+# none: whatever would prompt is denied instead of waiting for a host. 607 answers prompts.
+PERMISSION_PROMPTS = "--permission-prompts"
+
+STDERR_LINES = 50  # kept for the error event of a bad exit
+STOP_WAIT = 5.0  # seconds claude gets to end on stdin EOF before it is terminated
+LINE_LIMIT = 64 * 2**20  # a tool result can be one long stdout line; asyncio's default is 64 KiB
+PROJECTS = Path.home() / ".claude" / "projects"  # where Claude keeps its transcripts
 
 # Called for every hubd chat event: (chat_id, event). Event types: text, tool, tool_result,
 # turn_end, error. The page gets them as they are (603).
@@ -133,3 +157,117 @@ class Parser:
             return [end]
         why = "; ".join(message.get("errors") or []) or message.get("result") or message["subtype"]
         return [{"type": "error", "message": str(why)}, end]
+
+
+@dataclass
+class _Chat:
+    process: asyncio.subprocess.Process
+    parser: Parser = field(default_factory=Parser)
+    stderr: deque[str] = field(default_factory=lambda: deque(maxlen=STDERR_LINES))
+    stopping: bool = False
+    reader: asyncio.Task[None] | None = None
+
+
+class ClaudeChat:
+    """One `claude -p` process per open chat, stdin kept open: one stdin line per user message."""
+
+    def __init__(
+        self,
+        on_event: ChatEvent,
+        claude: str = "claude",
+        projects: Path = PROJECTS,
+    ):
+        self.on_event = on_event
+        self.claude = claude
+        self.projects = projects
+        self.chats: dict[str, _Chat] = {}
+
+    def exists(self, chat_id: str) -> bool:
+        # shortcut: Claude's transcript path is undocumented; if it moves, `--session-id` on an
+        # old id fails as an `error` event. Upgrade when 609 records the chats it opened.
+        return any(self.projects.glob(f"*/{chat_id}.jsonl"))
+
+    def args(self, chat_id: str, model: str, effort: str | None) -> list[str]:
+        args = [PRINT, INPUT_FORMAT, "stream-json", OUTPUT_FORMAT, "stream-json", VERBOSE, PARTIAL]
+        args += [PERMISSION_MODE, "default", PERMISSION_PROMPTS, "none", MODEL, model]
+        if effort:
+            args += [EFFORT, effort]
+        return args + [RESUME if self.exists(chat_id) else SESSION_ID, chat_id]
+
+    async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
+        chat_id = str(uuid.UUID(chat_id))  # ValueError: not a session id
+        if chat_id in self.chats:
+            return
+        try:
+            process = await asyncio.create_subprocess_exec(
+                self.claude,
+                *self.args(chat_id, model, effort),
+                cwd=cwd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                limit=LINE_LIMIT,
+            )
+        except OSError as exc:
+            await self.on_event(
+                chat_id, {"type": "error", "message": f"claude did not start: {exc}"}
+            )
+            return
+        chat = self.chats[chat_id] = _Chat(process)
+        chat.reader = asyncio.create_task(self._read(chat_id, chat))
+
+    async def send(self, chat_id: str, text: str) -> None:
+        chat = self.chats.get(chat_id)
+        if chat is None or chat.process.stdin is None:
+            await self.on_event(chat_id, {"type": "error", "message": "chat is not open"})
+            return
+        message = {
+            "type": "user",
+            "message": {"role": "user", "content": text},
+            "parent_tool_use_id": None,
+        }
+        try:
+            chat.process.stdin.write(json.dumps(message).encode() + b"\n")
+            await chat.process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # claude is gone: the reader reports its exit
+
+    async def stop(self, chat_id: str) -> None:
+        chat = self.chats.pop(chat_id, None)
+        if chat is None:
+            return
+        chat.stopping = True
+        process = chat.process
+        if process.stdin is not None:
+            process.stdin.close()  # EOF: claude ends after the turn it is in
+        try:
+            await asyncio.wait_for(process.wait(), STOP_WAIT)
+        except TimeoutError:
+            process.terminate()
+            await process.wait()
+        if chat.reader is not None:
+            await chat.reader
+
+    async def close(self, chat_id: str) -> None:
+        await self.stop(chat_id)  # nothing else is kept per chat yet; 609 keeps the list
+
+    async def _read(self, chat_id: str, chat: _Chat) -> None:
+        process = chat.process
+        assert process.stdout is not None and process.stderr is not None
+        stderr = asyncio.create_task(self._tail(process.stderr, chat.stderr))
+        async for raw in process.stdout:
+            for event in chat.parser.events(raw.decode(errors="replace")):
+                await self.on_event(chat_id, event)
+        await stderr
+        code = await process.wait()
+        if self.chats.get(chat_id) is chat:
+            del self.chats[chat_id]  # died on its own: `open` may start it again
+        if code != 0 and not chat.stopping:
+            tail = "\n".join(chat.stderr)
+            message = f"claude exited with code {code}" + (f":\n{tail}" if tail else "")
+            await self.on_event(chat_id, {"type": "error", "message": message})
+
+    @staticmethod
+    async def _tail(stream: asyncio.StreamReader, lines: deque[str]) -> None:
+        async for raw in stream:
+            lines.append(raw.decode(errors="replace").rstrip())

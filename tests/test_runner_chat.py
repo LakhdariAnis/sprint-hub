@@ -1,11 +1,15 @@
 """ChatRunner: the stream-json parser and the claude -p process, without Claude."""
 
+import asyncio
 import json
 import logging
+import sys
+from pathlib import Path
+from typing import Any
 
 import pytest
 
-from hubd.runners.chat import Parser
+from hubd.runners.chat import ClaudeChat, Parser
 
 S = '"session_id":"d5fdb32b-559f-4e47-8b49-a1c841579a7f"'
 
@@ -115,3 +119,136 @@ def test_unknown_type_is_logged_once(caplog: pytest.LogCaptureFixture) -> None:
     assert [r.getMessage() for r in caplog.records] == [
         "chat: skipped unknown stream-json type 'brand_new'"
     ]
+
+
+# A stand-in for `claude`: writes its argv, echoes each message as two deltas and a result.
+# "die" exits 3 after a stderr line; "hang" ignores stdin EOF.
+STUB = f"""#!{sys.executable}
+import json, signal, sys, time
+open(sys.argv[0] + ".args", "w").write(json.dumps(sys.argv[1:]))
+for line in sys.stdin:
+    text = json.loads(line)["message"]["content"]
+    if text == "die":
+        print("boom", file=sys.stderr, flush=True)
+        sys.exit(3)
+    if text == "hang":
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+        time.sleep(60)
+    for piece in ("you said ", text):
+        delta = {{"type": "text_delta", "text": piece}}
+        print(json.dumps({{"type": "stream_event", "parent_tool_use_id": None,
+            "event": {{"type": "content_block_delta", "delta": delta}}}}))
+    print("junk")
+    print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
+        "duration_ms": 5, "total_cost_usd": 0.01, "usage": {{"output_tokens": 2}}}}), flush=True)
+"""
+ID = "8f6a0c2e-3b1d-4c5e-9f7a-1b2c3d4e5f60"
+
+
+@pytest.fixture
+def stub(tmp_path: Path) -> Path:
+    path = tmp_path / "claude"
+    path.write_text(STUB)
+    path.chmod(0o755)
+    return path
+
+
+def runner(stub: Path) -> tuple[ClaudeChat, asyncio.Queue[tuple[str, dict[str, Any]]]]:
+    events: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+
+    async def on_event(chat_id: str, event: dict[str, Any]) -> None:
+        await events.put((chat_id, event))
+
+    return ClaudeChat(on_event, claude=str(stub), projects=stub.parent / "projects"), events
+
+
+async def until(events: asyncio.Queue, kind: str) -> list[dict[str, Any]]:
+    """Events up to and with the first of type `kind`."""
+    seen = []
+    while not seen or seen[-1]["type"] != kind:
+        chat_id, event = await asyncio.wait_for(events.get(), 5)
+        assert chat_id == ID
+        seen.append(event)
+    return seen
+
+
+def test_chat_streams_the_answer_and_stops_quietly(stub: Path) -> None:
+    async def main() -> None:
+        chat, events = runner(stub)
+        await chat.open(ID, stub.parent, "haiku", "low")
+        await chat.send(ID, "hi")
+        seen = await until(events, "turn_end")
+        assert [e.get("text") for e in seen[:2]] == ["you said ", "hi"]
+        assert seen[2]["cost_usd"] == 0.01
+        await chat.send(ID, "again")
+        assert (await until(events, "turn_end"))[1]["text"] == "again"
+        await chat.stop(ID)
+        assert events.empty() and ID not in chat.chats
+
+    asyncio.run(main())
+    args = json.loads(Path(f"{stub}.args").read_text())
+    assert args[:7] == [
+        "--print",
+        "--input-format",
+        "stream-json",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--include-partial-messages",
+    ]
+    assert args[7:] == [
+        "--permission-mode",
+        "default",
+        "--permission-prompts",
+        "none",
+        "--model",
+        "haiku",
+        "--effort",
+        "low",
+        "--session-id",
+        ID,
+    ]
+
+
+def test_known_chat_is_resumed(stub: Path) -> None:
+    (stub.parent / "projects" / "-tmp-x").mkdir(parents=True)
+    (stub.parent / "projects" / "-tmp-x" / f"{ID}.jsonl").touch()
+    chat, _ = runner(stub)
+    assert chat.args(ID, "opus", None)[-4:] == ["--model", "opus", "--resume", ID]
+
+
+def test_bad_exit_is_an_error_with_stderr(stub: Path) -> None:
+    async def main() -> None:
+        chat, events = runner(stub)
+        await chat.open(ID, stub.parent, "haiku", None)
+        await chat.send(ID, "die")
+        (error,) = await until(events, "error")
+        assert error["message"] == "claude exited with code 3:\nboom"
+        assert ID not in chat.chats
+        await chat.send(ID, "hi")
+        assert (await until(events, "error"))[0]["message"] == "chat is not open"
+
+    asyncio.run(main())
+
+
+def test_stop_terminates_a_claude_that_hangs(stub: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("hubd.runners.chat.STOP_WAIT", 0.2)
+
+    async def main() -> None:
+        chat, events = runner(stub)
+        await chat.open(ID, stub.parent, "haiku", None)
+        await chat.send(ID, "hang")
+        await chat.close(ID)
+        assert events.empty()
+
+    asyncio.run(main())
+
+
+def test_missing_claude_is_an_error(tmp_path: Path) -> None:
+    async def main() -> None:
+        chat, events = runner(tmp_path / "nope")
+        await chat.open(ID, tmp_path, "haiku", None)
+        (error,) = await until(events, "error")
+        assert error["message"].startswith("claude did not start")
+
+    asyncio.run(main())
