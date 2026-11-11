@@ -1,5 +1,13 @@
-// Chats of this session, by id (hubd keeps them in memory; 609 makes them last). A turn is the message sent and the answer to it.
-export type Turn = { me: string; ai: string; done: boolean; error?: string; asks: Ask[] }
+import type { End } from './cost'
+
+// Chats of this session, by id (hubd keeps them in memory; 609 makes them last). A turn is the message sent and the answer to it: text, tool lines and permission cards in the order Claude produced them.
+export type Turn = { me: string; blocks: Block[]; done: boolean; error?: string; stopped?: boolean; end?: End }
+export type Block = ({ kind: 'text'; text: string }) | ({ kind: 'tool' } & Tool) | ({ kind: 'ask' } & Ask)
+// A tool call (608): `line` is the collapsed line, `input` and `result` show when `open`. `result` is undefined until the call returns.
+export type Tool = { id?: string; name: string; line: string; input: string; result?: string; error?: boolean; open: boolean }
+export const answerOf = (t: Turn) => t.blocks.flatMap((b) => (b.kind === 'text' ? [b.text] : [])).join('')
+export const asksOf = (t: Turn) => t.blocks.filter((b): b is { kind: 'ask' } & Ask => b.kind === 'ask')
+export const toolsOf = (t: Turn) => t.blocks.filter((b): b is { kind: 'tool' } & Tool => b.kind === 'tool')
 // A permission card (607): Claude wants to run `tool` on `target`. `answer` once Anis (or the 10 min wait) decided; `refused`: hubd said no without asking. `wide`: "Allow for this chat" can cover it.
 export type Ask = { request?: string; tool: string; target: string; diff: string | null; wide?: boolean; answer?: string; refused?: string }
 
@@ -12,17 +20,27 @@ export const chats = $state<Record<string, { turns: Turn[] } & Partial<Meta>>>({
 export const pills = $state({ project: null as string | null, model: 'sonnet', effort: 'medium', sprint: null as string | null, step: null as string | null })
 
 // What hubd sends on `/events` for a chat (`chat` events) and in GET /chats/<id> turns, less the fields 608 uses.
-type Ev = { kind: string; text?: string; message?: string; answer?: string } & Partial<Ask>
+type Ev = { kind: string; text?: string; message?: string; answer?: string; tool_id?: string; name?: string; line?: string; input?: string; error?: boolean } & Partial<Ask> & End
 
 // Events of a message sent mid-turn wait for the turn before it, as in hubd.
 function take(turn: Turn, e: Ev) {
-  if (e.kind === 'text') turn.ai += e.text ?? ''
-  else if (e.kind === 'turn_end' || e.kind === 'stopped') turn.done = true
+  const last = turn.blocks.at(-1)
+  if (e.kind === 'text') {
+    if (last?.kind === 'text') last.text += e.text ?? ''
+    else turn.blocks.push({ kind: 'text', text: e.text ?? '' })
+  } else if (e.kind === 'tool') turn.blocks.push({ kind: 'tool', id: e.tool_id, name: e.name ?? 'tool', line: e.line ?? e.name ?? 'tool', input: e.input ?? '', open: false })
+  else if (e.kind === 'tool_result') {
+    const tool = toolsOf(turn).find((t) => t.id === e.tool_id)
+    if (tool) Object.assign(tool, { result: e.text ?? '', error: !!e.error })
+  } else if (e.kind === 'turn_end') {
+    turn.done = true
+    turn.end = { model: e.model, cost_usd: e.cost_usd, input_tokens: e.input_tokens, output_tokens: e.output_tokens, duration_ms: e.duration_ms }
+  } else if (e.kind === 'stopped') Object.assign(turn, { done: true, stopped: true })
   else if (e.kind === 'error') Object.assign(turn, { error: e.message || 'Claude failed', done: true })
-  else if (e.kind === 'permission') turn.asks.push({ request: e.request, tool: e.tool!, target: e.target!, diff: e.diff ?? null, wide: e.wide })
-  else if (e.kind === 'permission_refused') turn.asks.push({ tool: e.tool!, target: e.target!, diff: e.diff ?? null, refused: e.message })
+  else if (e.kind === 'permission') turn.blocks.push({ kind: 'ask', request: e.request, tool: e.tool!, target: e.target!, diff: e.diff ?? null, wide: e.wide })
+  else if (e.kind === 'permission_refused') turn.blocks.push({ kind: 'ask', tool: e.tool!, target: e.target!, diff: e.diff ?? null, refused: e.message })
   else if (e.kind === 'permission_answer') {
-    const ask = turn.asks.find((a) => a.request === e.request)
+    const ask = asksOf(turn).find((a) => a.request === e.request)
     if (ask) ask.answer = e.answer
   }
 }
@@ -35,8 +53,9 @@ export async function answer(id: string, request: string, choice: 'allow' | 'den
 }
 
 export function onChat(e: Ev & { id: string }) {
-  const turn = chats[e.id]?.turns.find((t) => !t.done)
-  if (turn) take(turn, e)
+  const turns = chats[e.id]?.turns.filter((t) => !t.done) ?? []
+  // A stop ends every turn waiting, as in hubd; any other event belongs to the oldest.
+  for (const turn of e.kind === 'stopped' ? turns : turns.slice(0, 1)) take(turn, e)
 }
 
 const reason = async (r: Response) => {
@@ -55,7 +74,7 @@ export async function loadChat(id: string) {
     project,
     context,
     turns: turns.map((t) => {
-      const turn: Turn = { me: t.text, ai: '', done: false, asks: [] }
+      const turn: Turn = { me: t.text, blocks: [], done: false }
       t.events.forEach((e) => take(turn, e))
       turn.done = t.done
       return turn
@@ -79,7 +98,7 @@ export async function send(id: string | undefined, text: string): Promise<string
       chats[id] = { turns: [], project, model, effort, context: opened.context ?? null }
     }
     const turns = (chats[id] ??= { turns: [] }).turns
-    turns.push({ me: text, ai: '', done: false, asks: [] })
+    turns.push({ me: text, blocks: [], done: false })
     try {
       await post(`/chats/${id}/message`, { text })
     } catch (e) {

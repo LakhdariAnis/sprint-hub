@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { answer, change, chats, chip, contextOf, loadChat, pills, send, type Ask, type Context } from '../chat.svelte'
+  import { answer, answerOf, asksOf, change, chats, chip, contextOf, loadChat, pills, send, type Ask, type Context } from '../chat.svelte'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
@@ -22,7 +22,7 @@
   const focusBox = () => box?.focus()
 
   // The card waiting for Anis, oldest first: a / d / A answer it.
-  const waiting = $derived(turns.flatMap((t) => (t.done ? [] : t.asks)).find((a) => a.request && !a.answer))
+  const waiting = $derived(turns.flatMap((t) => (t.done ? [] : asksOf(t))).find((a) => a.request && !a.answer))
   async function decide(choice: 'allow' | 'deny' | 'chat') {
     const a = waiting
     if (!a?.request || !cid || (choice === 'chat' && !a.wide)) return
@@ -177,7 +177,7 @@
   let stick = true
   const onscroll = () => log && (stick = log.scrollHeight - log.scrollTop - log.clientHeight < 80)
   $effect(() => {
-    turns.map((t) => t.ai.length + t.me.length + t.asks.length) // re-run on every delta and card
+    turns.map((t) => t.me.length + t.blocks.length + answerOf(t).length + (t.end ? 1 : 0)) // re-run on every delta, tool line and card
     failed
     if (stick) tick().then(() => log && (log.scrollTop = log.scrollHeight))
   })
@@ -213,29 +213,45 @@
             </div>
           {/if}
           {#each turns as t}
-            <div class="me">{t.me}</div>
-            {#each parts(t.ai) as p}
-              {#if p.code}<pre>{p.text}</pre>{:else}<p class="ai">{p.text}</p>{/if}
-            {/each}
-            {#each t.asks as a}
-              <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
-                <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
-                <code class="tgt">{a.target}</code>
-                {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
-                {#if a === waiting}
-                  <div class="btns">
-                    <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
-                    <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
-                    {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
+            <div class="turn">
+              <div class="me">{t.me}</div>
+              {#each t.blocks as b}
+                {#if b.kind === 'text'}
+                  {#each parts(b.text) as p}
+                    {#if p.code}<pre>{p.text}</pre>{:else}<p class="ai">{p.text}</p>{/if}
+                  {/each}
+                {:else if b.kind === 'tool'}
+                  <div class="tool" class:open={b.open}>
+                    <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
+                      <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>
+                    </button>
+                    {#if b.open}
+                      <pre class="tin" aria-label="Input">{b.input}</pre>
+                      {#if b.result === undefined}<div class="dim xs">{t.done ? 'No result' : 'Running…'}</div>{:else}<pre class="tres" class:bad={b.error} aria-label="Result">{b.result || '(empty)'}</pre>{/if}
+                    {/if}
                   </div>
-                  <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
                 {:else}
-                  <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
+                  {@const a = b}
+                  <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
+                    <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
+                    <code class="tgt">{a.target}</code>
+                    {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
+                    {#if a === waiting}
+                      <div class="btns">
+                        <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
+                        <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
+                        {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
+                      </div>
+                      <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
+                    {:else}
+                      <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
+                    {/if}
+                  </div>
                 {/if}
-              </div>
-            {/each}
-            {#if !t.ai && !t.done && !t.asks.length}<div class="think">thinking…</div>{/if}
-            {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
+              {/each}
+              {#if !t.blocks.length && !t.done}<div class="think">thinking…</div>{/if}
+              {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
+            </div>
           {/each}
           {#if failed}<div class="err" role="alert">{failed}</div>{/if}
         </div>
@@ -302,6 +318,13 @@
   .ai { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
+  .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
+  .tl { display: flex; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: var(--fgd); font: inherit; text-align: left; cursor: pointer; }
+  .tl:hover, .tl:focus-visible { color: inherit; outline: none; }
+  .tn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tin, .tres { max-height: 20em; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .tres.bad { border-color: var(--r); }
   .ask { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ask.open { border-color: var(--ac); }
   .tool { font: 700 13px var(--mono); }
