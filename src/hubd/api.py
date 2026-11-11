@@ -19,7 +19,7 @@ from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import NotifySend
-from hubd.runners.chat import ChatEvent, ChatRunner
+from hubd.runners.chat import ChatEvent, ChatRunner, ClaudeChat
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.runners.fake import FakeChat
 from hubd.settings import (
@@ -324,7 +324,7 @@ def _relative(path: Path, root: Path) -> Path:
 
 
 def serve_app() -> FastAPI:
-    """`hubd serve`: the real vault, Claude runner, notify-send and Omarchy theme."""
+    """`hubd serve`: the real vault, Claude runner and chat, notify-send and Omarchy theme."""
     vault = vault_path()
     current = load_current(
         vault / "hub.toml"
@@ -337,5 +337,9 @@ def serve_app() -> FastAPI:
         projects=PROJECTS,
     )
     return create_app(
-        hub, theme=OmarchyTheme(), reminder_hour=current.settings.reminder_hour, current=current
+        hub,
+        theme=OmarchyTheme(),
+        reminder_hour=current.settings.reminder_hour,
+        current=current,
+        chat=ClaudeChat,
     )
