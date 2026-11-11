@@ -51,7 +51,13 @@ def test_open_and_two_messages(vault: Path, hub: Hub) -> None:
     assert all(e["id"] == chat_id for e in events)
     assert events[0] == {"type": "chat", "id": chat_id, "kind": "text", "text": REPLY[0]}
     tool = chat["turns"][0]["events"][1]
-    assert tool == {"kind": "tool", "tool_id": "fake_tool", "name": "Bash", "input": "ls"}
+    assert tool == {
+        "kind": "tool",
+        "tool_id": "fake_tool",
+        "name": "Bash",
+        "line": "Bash ls",
+        "input": "command: ls",
+    }
 
 
 def test_project_chat_runs_in_its_repo(vault: Path, hub: Hub) -> None:

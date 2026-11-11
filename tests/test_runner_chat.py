@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from hubd.runners import permit
-from hubd.runners.chat import ClaudeChat, Parser
+from hubd.runners.chat import ClaudeChat, Parser, tool_line
 
 S = '"session_id":"d5fdb32b-559f-4e47-8b49-a1c841579a7f"'
 
@@ -66,7 +66,13 @@ def test_tool_call_and_its_result() -> None:
     parser = Parser()
     assert parser.events(TOOL_DELTA) == []
     assert parser.events(TOOL) == [
-        {"type": "tool", "id": "toolu_01", "name": "Bash", "input": "ls"}
+        {
+            "type": "tool",
+            "id": "toolu_01",
+            "name": "Bash",
+            "line": "Bash ls",
+            "input": "command: ls\ndescription: List files in current directory",
+        }
     ]
     assert parser.events(TOOL_RESULT) == [
         {
@@ -78,10 +84,68 @@ def test_tool_call_and_its_result() -> None:
     ]
 
 
-def test_long_tool_input_is_cut() -> None:
+CWD = Path("/work/repo")
+
+
+@pytest.mark.parametrize(
+    "name,given,line",
+    [
+        ("Read", {"file_path": "/work/repo/src/hubd/api.py"}, "Read src/hubd/api.py"),
+        ("Read", {"file_path": "/etc/hosts"}, "Read /etc/hosts"),  # outside the folder: as given
+        (
+            "Edit",
+            {
+                "file_path": "/work/repo/web/src/App.svelte",
+                "old_string": "a",
+                "new_string": "1\n2\n3\n4",
+            },
+            "Edit web/src/App.svelte +4 \u22121",
+        ),
+        (
+            "MultiEdit",
+            {
+                "file_path": "/work/repo/a.py",
+                "edits": [
+                    {"old_string": "x\ny", "new_string": "z"},
+                    {"old_string": "", "new_string": "q\nr"},
+                ],
+            },
+            "MultiEdit a.py +3 \u22122",
+        ),
+        ("Write", {"file_path": "/work/repo/n.md", "content": "a\nb\nc\n"}, "Write n.md +3"),
+        ("Bash", {"command": "uv run pytest", "description": "Run tests"}, "Bash uv run pytest"),
+        ("Glob", {"pattern": "**/*.py"}, "Glob **/*.py"),
+        ("Grep", {"pattern": "def main", "path": "src"}, "Grep def main in src"),
+        ("Grep", {"pattern": "def main"}, "Grep def main"),
+        ("WebFetch", {"url": "https://x.dev/a", "prompt": "p"}, "WebFetch https://x.dev/a"),
+        ("WebSearch", {"query": "svelte 5 runes"}, "WebSearch svelte 5 runes"),
+        ("Agent", {"prompt": "long", "description": "Find callers"}, "Agent Find callers"),
+        ("Strange", {"n": 3, "text": "first string"}, "Strange first string"),  # first string
+        ("Strange", {"n": 3}, "Strange"),
+        ("Strange", None, "Strange"),
+    ],
+)
+def test_tool_line_per_kind(name: str, given: object, line: str) -> None:
+    assert tool_line(name, given, CWD) == line
+
+
+def test_long_tool_line_is_cut_and_the_input_keeps_the_rest() -> None:
     line = TOOL.replace('"command":"ls"', '"command":"' + "x" * 200 + '"')
     (tool,) = Parser().events(line)
-    assert len(tool["input"]) == 80 and tool["input"].endswith("…")
+    assert len(tool["line"]) == len("Bash ") + 80 and tool["line"].endswith("…")
+    assert "x" * 200 in tool["input"]
+
+
+def test_tool_input_and_result_are_cut_at_40_lines() -> None:
+    body = "\n".join(f"line {n}" for n in range(100))
+    line = TOOL.replace('"command":"ls"', '"command":' + json.dumps(body))
+    (tool,) = Parser().events(line)
+    shown = tool["input"].splitlines()
+    assert len(shown) == 41 and shown[-1] == "\u2026 61 more lines"  # "command: " + 100 lines
+    result = TOOL_RESULT.replace("(Bash completed with no output)", body.replace("\n", "\\n"))
+    (done,) = Parser().events(result)
+    assert done["text"].splitlines()[:2] == ["line 0", "line 1"]
+    assert len(done["text"].splitlines()) == 41
 
 
 def test_result_ends_the_turn() -> None:

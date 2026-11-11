@@ -30,7 +30,7 @@ def test_sample_maps_to_text_a_tool_call_and_its_result_then_the_turn_end(sample
     assert set(kinds[2:-1]) == {"text"}
     assert kinds[-1] == "turn_end" and kinds.count("turn_end") == 1
     tool, result, *_, end = events
-    assert tool["name"] == "Bash" and tool["input"].startswith("ls")
+    assert tool["name"] == "Bash" and tool["line"].startswith("Bash ls")
     assert result["id"] == tool["id"] and not result["error"] and "notes.txt" in result["text"]
     assert "".join(e["text"] for e in events if e["type"] == "text").strip()
     assert end["cost_usd"] > 0 and end["output_tokens"] > 0 and end["input_tokens"] > 0

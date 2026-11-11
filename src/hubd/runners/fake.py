@@ -55,7 +55,13 @@ class FakeRunner:
 
 
 REPLY = ["This is ", "a fake ", "answer. ", "The folder ", "has one file."]
-TOOL = {"type": "tool", "id": "fake_tool", "name": "Bash", "input": "ls"}
+TOOL = {
+    "type": "tool",
+    "id": "fake_tool",
+    "name": "Bash",
+    "line": "Bash ls",
+    "input": "command: ls",
+}
 TOOL_RESULT = {"type": "tool_result", "id": "fake_tool", "error": False, "text": "README.md"}
 
 

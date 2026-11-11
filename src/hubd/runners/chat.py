@@ -95,19 +95,74 @@ def _short(value: Any) -> str:
     return text if len(text) <= SHORT else text[: SHORT - 1] + "…"
 
 
+# The input field that says what a tool call is about; any other tool shows its first string.
+MAIN = {
+    "Bash": "command",
+    "PowerShell": "command",
+    "Read": "file_path",
+    "Write": "file_path",
+    "Edit": "file_path",
+    "MultiEdit": "file_path",
+    "NotebookEdit": "notebook_path",
+    "Glob": "pattern",
+    "Grep": "pattern",
+    "WebFetch": "url",
+    "WebSearch": "query",
+    "Task": "description",
+    "Agent": "description",
+}
+SHOWN_LINES = 40  # lines of a tool input or result the page gets
+SHOWN_WIDTH = 2000  # a minified file is one huge line
+
+
+def _lines(text: str) -> int:
+    return len(text.splitlines())
+
+
+def _cut(text: str) -> str:
+    """At most SHOWN_LINES lines of SHOWN_WIDTH characters."""
+    lines = [x if len(x) <= SHOWN_WIDTH else x[: SHOWN_WIDTH - 1] + "…" for x in text.splitlines()]
+    more = len(lines) - SHOWN_LINES
+    return "\n".join(lines[:SHOWN_LINES] + ([f"… {more} more lines"] if more > 0 else []))
+
+
+def tool_line(name: str, given: Any, cwd: Path | None = None) -> str:
+    """The one line a tool call gets in the chat: `Read src/hubd/api.py`, `Edit a.ts +4 −1`."""
+    if not isinstance(given, dict):
+        return name
+    main = given.get(MAIN.get(name, ""))
+    if not isinstance(main, str):
+        main = next((v for v in given.values() if isinstance(v, str)), "")
+    if main.startswith("/") and cwd is not None and Path(main).is_relative_to(cwd):
+        main = str(Path(main).relative_to(cwd))
+    parts = [name, _short(main)] if main else [name]
+    if name in ("Edit", "MultiEdit"):
+        edits = given.get("edits") if isinstance(given.get("edits"), list) else [given]
+        new = sum(_lines(e.get("new_string") or "") for e in edits if isinstance(e, dict))
+        old = sum(_lines(e.get("old_string") or "") for e in edits if isinstance(e, dict))
+        parts.append(f"+{new} \u2212{old}")
+    elif name == "Write" and isinstance(given.get("content"), str):
+        parts.append(f"+{_lines(given['content'])}")
+    elif name == "Grep" and isinstance(given.get("path"), str):
+        parts += ["in", _short(given["path"])]
+    return " ".join(parts)
+
+
 def _tool_input(given: Any) -> str:
-    """The first string field (command, file_path, pattern…), else the whole input."""
-    if isinstance(given, dict):
-        for value in given.values():
-            if isinstance(value, str):
-                return _short(value)
-    return _short(given)
+    """The whole input for the opened line: `key: value` per field, cut."""
+    if not isinstance(given, dict):
+        return _cut(str(given or ""))
+    shown = []
+    for key, value in given.items():
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        shown.append(f"{key}: {text}")
+    return _cut("\n".join(shown))
 
 
 def _result_text(content: Any) -> str:
     if isinstance(content, list):
-        content = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
-    return _short(content or "")
+        content = "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
+    return _cut(content or "")
 
 
 class Parser:
@@ -117,7 +172,8 @@ class Parser:
     # yet. https://code.claude.com/docs/en/agent-sdk/typescript (checked 2026-11-11)
     QUIET = {"system", "rate_limit_event", "prompt_suggestion"}
 
-    def __init__(self) -> None:
+    def __init__(self, cwd: Path | None = None) -> None:
+        self.cwd = cwd  # paths inside it are shown relative
         self.unknown: set[str] = set()  # types logged once already
         self.spent = 0.0  # `total_cost_usd` so far: it adds up over the process's turns
 
@@ -152,6 +208,7 @@ class Parser:
                 "type": "tool",
                 "id": block.get("id"),
                 "name": block["name"],
+                "line": tool_line(block["name"], block.get("input"), self.cwd),
                 "input": _tool_input(block.get("input")),
             }
             for block in message["message"]["content"]
@@ -200,7 +257,7 @@ class _Chat:
     process: asyncio.subprocess.Process
     permits: asyncio.Server  # the chat's unix socket: `hubd.runners.permit` asks through it
     folder: Path  # holds the socket
-    parser: Parser = field(default_factory=Parser)
+    parser: Parser = field(default_factory=Parser)  # `open` passes the chat's folder
     stderr: deque[str] = field(default_factory=lambda: deque(maxlen=STDERR_LINES))
     stopping: bool = False
     reader: asyncio.Task[None] | None = None
@@ -287,7 +344,7 @@ class ClaudeChat:
                 chat_id, {"type": "error", "message": f"claude did not start: {exc}"}
             )
             return
-        chat = self.chats[chat_id] = _Chat(process, server, folder)
+        chat = self.chats[chat_id] = _Chat(process, server, folder, Parser(cwd))
         chat.reader = asyncio.create_task(self._read(chat_id, chat))
 
     async def _permit(
