@@ -125,3 +125,50 @@ test('a change hubd refuses shows its reason and keeps the pill', async ({ page 
   await expect(page.getByRole('alert').filter({ hasText: 'Claude is answering' })).toBeVisible()
   await expect(page.locator('.pill', { hasText: 'effort' })).toContainText('medium')
 })
+
+// Step 606: a chat knows its project, sprint or step; hubd says what it loaded in the chip.
+test('/project from a starter card, then the chip shows what is loaded; it stays after the send', async ({ page }) => {
+  await page.goto('/#/chat')
+  const chip = page.locator('.chip')
+  await expect(chip).toBeHidden() // a plain chat is told nothing
+  await page.locator('.starter', { hasText: '/project' }).click()
+  await page.getByRole('listbox', { name: 'Options of /project' }).getByRole('option', { name: /demo/ }).click()
+  await expect(chip).toHaveText(/^context sprints \(\d+\.\d kB\) · no README\.md$/)
+
+  await page.locator('.starter', { hasText: '/sprint' }).click()
+  await page.getByRole('listbox', { name: 'Options of /sprint' }).getByRole('option', { name: /sprint 1/ }).click()
+  await expect(page.locator('.pill', { hasText: 'sprint' })).toContainText('1')
+  await expect(chip).toContainText('sprint 1 + ')
+
+  // Earlier tests hold the demo's 3 live chats: answer the open and the message here (pytest covers hubd's side).
+  const id = '00000000-0000-4000-8000-000000000606'
+  const told = { label: 'sprint 1 + steps + sprints', size: 2100, notes: [] }
+  await page.route('**/chats', (route) => route.fulfill({ json: { id, context: told } }))
+  await page.route(`**/chats/${id}/message`, (route) => route.fulfill({ json: {} }))
+  const opened = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/chats'))
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('what is the sprint goal?')
+  await box.press('Enter')
+  expect((await opened).postDataJSON()).toMatchObject({ project: 'demo', sprint: '1', step: null })
+  await expect(page).toHaveURL(/#\/chat\/[0-9a-f-]+$/)
+  await expect(chip).toHaveText('context sprint 1 + steps + sprints (2.1 kB)') // what hubd told this chat
+  await expect(page.locator('.pill', { hasText: 'sprint' })).toBeDisabled()
+})
+
+test('c on a Step opens New chat with that step set; c on a Project with the project', async ({ page }) => {
+  await page.goto('/#/steps/demo/104')
+  await expect(page.getByText('Checklist')).toBeVisible()
+  await page.keyboard.press('c')
+  await expect(page).toHaveURL(/#\/chat$/)
+  await expect(page.locator('.pill', { hasText: 'step' })).toContainText('104')
+  await expect(page.locator('.pill', { hasText: 'project' })).toContainText('demo')
+  await expect(page.locator('.chip')).toContainText(/spec \+ checklist \+ .*diffstat/)
+
+  await page.goto('/#/projects/notes')
+  await expect(page.getByRole('heading', { name: /notes/ })).toBeVisible()
+  await page.keyboard.press('c')
+  await expect(page).toHaveURL(/#\/chat$/)
+  await expect(page.locator('.pill', { hasText: 'project' })).toContainText('notes')
+  await expect(page.locator('.pill', { hasText: 'step' })).toBeHidden()
+  await expect(page.locator('.chip')).toContainText('sprints')
+})

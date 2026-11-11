@@ -8,6 +8,7 @@
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
+  import { chatAbout } from '../chat.svelte'
   import { useKeys } from '../keys.svelte'
   import { untrack } from 'svelte'
   import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, type Step } from '../steps'
@@ -57,6 +58,7 @@
     ArrowRight: right,
     Enter: () => (col === 's' ? right() : cur && open(cur)),
     Escape: () => (location.hash = '#/projects'),
+    c: () => chatAbout(project),
   })
   // The list has no spec text, so the preview loads the selected step once; the store keeps it.
   // Its neighbours too, so j/k land on a loaded goal instead of a "…" frame.

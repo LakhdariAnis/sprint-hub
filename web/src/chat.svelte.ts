@@ -77,6 +77,12 @@ export async function send(id: string | undefined, text: string): Promise<string
   }
 }
 
+// `c` on a Step or Project screen: New chat with that project (and step) set.
+export function chatAbout(project: string, step: string | null = null) {
+  Object.assign(pills, { project, sprint: null, step })
+  location.hash = '#/chat'
+}
+
 // What a new chat with these pills would be told, before it opens.
 export async function contextOf(project: string, sprint: string | null, step: string | null): Promise<Context> {
   const q = new URLSearchParams({ ...(sprint && { sprint }), ...(step && { step }) })

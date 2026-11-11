@@ -2,6 +2,7 @@
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
   import { hub } from '../hub.svelte'
+  import { chatAbout } from '../chat.svelte'
   import { newChat, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
   import { ago, finishStep, goal, startStep, tickTask } from '../steps'
@@ -59,7 +60,7 @@
   const walk = (d: number) => manual && s && (pick = Math.max(0, Math.min(s.tasks.length - 1, sel + d)))
 
   // Close the tab (the sidebar's OPEN entry) and fall back to Today.
-  let focus = $state<'c' | 't'>('c')
+  let focus = $state<'p' | 't'>('p') // p: checklist (from sprint/progress), t: chat or spec
   const chat = $derived(hub.demo && hub.demo.chat.step === key(project, id) ? hub.demo.chat : null)
   // Open questions first, answered ones after (stable sort keeps file order).
   const qs = $derived([...(s?.questions ?? [])].sort((a, b) => +a.answered - +b.answered))
@@ -76,7 +77,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -158,8 +159,8 @@
       {#if s.review?.comment}<div class="last cm"><span>YOUR LAST COMMENT</span> {s.review.comment}</div>{/if}
     </section>
 
-    <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !qs.length}>
-      <div class="ph"><span class="hk">c</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
+    <section class="pn ck" class:f={focus === 'p'} class:short={!s.tasks.length && !qs.length}>
+      <div class="ph"><span class="hk">p</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
       {#if s.tasks.length}
         <div class="big">
           <b>{done}<span class="of"> / {s.tasks.length}</span></b>

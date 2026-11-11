@@ -21,6 +21,8 @@
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
+    ['c', 'chat about this: New chat with the project, or the step, already set (Project, Step)'],
+    ['p  t', 'Step: focus the Checklist / the Chat or Spec pane'],
     ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['c  i', 'New chat: put the cursor in the message box; Enter sends, Shift+Enter is a new line, Esc leaves the box'],
