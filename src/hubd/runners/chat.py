@@ -37,13 +37,22 @@ PROJECTS = Path.home() / ".claude" / "projects"  # where Claude keeps its transc
 # turn_end, error. The page gets them as they are (603).
 ChatEvent = Callable[[str, dict[str, Any]], Awaitable[None]]
 
+# Asked for each call Claude's permission mode would prompt for: (chat_id, tool, input) -> the
+# prompt tool's answer, {"behavior": "allow"} or {"behavior": "deny", "message": …} (607).
+Ask = Callable[[str, str, dict[str, Any]], Awaitable[dict[str, str]]]
+
 SHORT = 80  # characters kept of a tool input or result
+
+
+async def no_one(chat_id: str, tool: str, tool_input: dict[str, Any]) -> dict[str, str]:
+    return {"behavior": "deny", "message": "Nobody can answer permission prompts here."}
 
 
 class ChatRunner(Protocol):
     """Every call returns at once; what Claude says comes later, through `ChatEvent`."""
 
     chats: Collection[str]  # ids of the chats with a live process
+    ask: Ask  # `Chats` sets it: Anis answers in the page
 
     async def open(
         self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None

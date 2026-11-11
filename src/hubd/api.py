@@ -69,6 +69,10 @@ class ChatChange(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
 
 
+class PermissionAnswer(BaseModel):
+    answer: Literal["allow", "deny", "chat"]  # chat: Allow for this chat
+
+
 class Message(BaseModel):
     text: Annotated[str, StringConstraints(pattern=r"\S")]  # not empty, not only spaces
 
@@ -312,6 +316,11 @@ def create_app(
     @app.post("/chats/{chat_id}/message")
     async def message(chat_id: str, body: Message) -> dict:
         await chats.send(chat_id, body.text)
+        return {"ok": True}
+
+    @app.post("/chats/{chat_id}/permission/{request}")
+    async def answer_permission(chat_id: str, request: str, body: PermissionAnswer) -> dict:
+        chats.answer(chat_id, request, body.answer)
         return {"ok": True}
 
     @app.post("/chats/{chat_id}/stop")

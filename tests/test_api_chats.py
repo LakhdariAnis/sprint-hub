@@ -233,3 +233,89 @@ def test_context_preview_and_plain_chats(hub: Hub) -> None:
         chat_id = c.post("/chats", json=NEW).json()["id"]
         assert c.app.state.chats.runner.systems == [None]
         assert c.get(f"/chats/{chat_id}").json()["context"] is None
+
+
+def asked(c: TestClient, events: list[dict], text: str, project: str | None = "demo") -> tuple:
+    """Open a chat, send `text`, wait for its permission card: (chat id, card)."""
+    chat_id = c.post("/chats", json=NEW | ({"project": project} if project else {})).json()["id"]
+    c.post(f"/chats/{chat_id}/message", json={"text": text})
+    until(lambda: any(e["kind"] == "permission" and e["id"] == chat_id for e in events))
+    return chat_id, [e for e in events if e["kind"] == "permission" and e["id"] == chat_id][-1]
+
+
+def reply(events: list[dict], chat_id: str) -> str:
+    return "".join(e["text"] for e in events if e["id"] == chat_id and e["kind"] == "text")
+
+
+def answers(events: list[dict]) -> list[str]:
+    return [e["answer"] for e in events if e["kind"] == "permission_answer"]
+
+
+def test_permission_allow(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id, card = asked(c, events, "run ls")
+        assert card | {"request": "r"} == {
+            "type": "chat",
+            "id": chat_id,
+            "kind": "permission",
+            "request": "r",
+            "tool": "Bash",
+            "target": "ls",
+            "diff": None,
+            "wide": True,
+        }
+        url = f"/chats/{chat_id}/permission/{card['request']}"
+        assert c.post(url, json={"answer": "allow"}).json() == {"ok": True}
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        assert c.post(url, json={"answer": "allow"}).status_code == 404  # answered already
+        kinds = [e["kind"] for e in c.get(f"/chats/{chat_id}").json()["turns"][0]["events"]]
+    assert answers(events) == ["allow"] and reply(events, chat_id) == "".join(REPLY)
+    assert kinds[:3] == ["permission", "permission_answer", "text"]  # kept with the turn
+
+
+def test_permission_deny_tells_claude_why(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id, card = asked(c, events, "run rm -rf build")
+        c.post(f"/chats/{chat_id}/permission/{card['request']}", json={"answer": "deny"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        assert c.post(f"/chats/{chat_id}/permission/x", json={"answer": "yes"}).status_code == 422
+    assert answers(events) == ["deny"]
+    assert reply(events, chat_id).startswith("Not run: Anis denied this call.")
+    assert not any(e["kind"] == "tool" for e in events)
+
+
+def test_permission_timeout_denies_with_a_note(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        c.app.state.chats.ask_wait = 0.05
+        chat_id, _ = asked(c, events, "run ls")
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+    assert answers(events) == ["timeout"]
+    assert "No answer from Anis in 0 min" in reply(events, chat_id)
+
+
+def test_allow_for_this_chat_skips_the_next_card(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id, card = asked(c, events, "run ls")
+        c.post(f"/chats/{chat_id}/permission/{card['request']}", json={"answer": "chat"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        c.post(f"/chats/{chat_id}/message", json={"text": "run pwd"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 2)
+        other, _ = asked(c, events, "run pwd")  # another chat still asks
+    assert [e["kind"] for e in events].count("permission") == 2
+    assert answers(events) == ["chat"] and other != chat_id
+
+
+def test_scratch_chat_never_runs_commands(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "run cat ~/.bashrc"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+    refused = [e for e in events if e["kind"] == "permission_refused"]
+    assert [e["target"] for e in refused] == ["cat ~/.bashrc"]
+    assert not any(e["kind"] == "permission" for e in events)
+    assert "never runs commands" in reply(events, chat_id)

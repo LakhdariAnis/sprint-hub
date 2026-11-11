@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from hubd import permits
 from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.runners.chat import ChatEvent, ChatRunner
@@ -16,6 +17,8 @@ from hubd.runners.chat import ChatEvent, ChatRunner
 MAX_LIVE = 3  # claude processes at once
 IDLE = 15 * 60  # seconds without a message or an event before the process is closed
 EVERY = 60  # seconds between idle checks
+ASK_WAIT = 10 * 60  # seconds a permission card waits for Anis, then the call is denied
+ALLOW = {"behavior": "allow"}
 
 
 class Full(Exception):
@@ -35,6 +38,9 @@ class Chat:
     # One turn = the message sent and the events it got (as `chat` events, text deltas joined).
     # `done`: it ended.
     turns: list[dict[str, Any]] = field(default_factory=list)
+    allowed: set[str] = field(default_factory=set)  # tools Anis allowed for this chat
+    # Cards waiting for Anis: request id -> (answer, can "Allow for this chat" cover it).
+    asking: dict[str, tuple[asyncio.Future[str], bool]] = field(default_factory=dict)
 
     @property
     def system(self) -> str | None:
@@ -48,8 +54,10 @@ class Chat:
 class Chats:
     def __init__(self, runner: Callable[[ChatEvent], ChatRunner], emit: Callable[[dict], None]):
         self.runner = runner(self.on_event)
+        self.runner.ask = self.ask
         self.emit = emit
         self.chats: dict[str, Chat] = {}
+        self.ask_wait = ASK_WAIT
 
     def get(self, chat_id: str) -> Chat:
         if chat_id not in self.chats:
@@ -100,6 +108,48 @@ class Chats:
         await self.runner.stop(chat_id)
         if chat.busy:  # the turn got no `turn_end`
             await self.on_event(chat_id, {"type": "stopped"})
+
+    async def ask(self, chat_id: str, tool: str, tool_input: dict[str, Any]) -> dict[str, str]:
+        """Claude wants to run `tool`: a card in the chat, and Anis's answer for Claude."""
+        if (chat := self.chats.get(chat_id)) is None:
+            return {"behavior": "deny", "message": "This chat is closed."}
+        card = {"tool": tool, **permits.card(tool, tool_input)}
+        if why := permits.refuse(tool, tool_input, chat.cwd, chat.project is None):
+            await self.on_event(chat_id, {"type": "permission_refused", **card, "message": why})
+            return {"behavior": "deny", "message": why}
+        wide = permits.chat_wide(tool, tool_input, chat.cwd)
+        if wide and tool in chat.allowed:
+            return ALLOW
+        request = uuid.uuid4().hex[:12]
+        future = asyncio.get_running_loop().create_future()
+        chat.asking[request] = (future, wide)
+        await self.on_event(
+            chat_id, {"type": "permission", "request": request, **card, "wide": wide}
+        )
+        try:
+            answer = await asyncio.wait_for(future, self.ask_wait)
+        except TimeoutError:
+            answer = "timeout"
+        finally:
+            chat.asking.pop(request, None)
+        if answer == "chat":
+            chat.allowed.add(tool)
+        minutes = round(self.ask_wait / 60)
+        message = {
+            "deny": "Anis denied this call. Do not retry it; ask him or go on without it.",
+            "timeout": f"No answer from Anis in {minutes} min, so it was denied. Do not retry it.",
+        }.get(answer)
+        await self.on_event(
+            chat_id, {"type": "permission_answer", "request": request, "answer": answer}
+        )
+        return {"behavior": "deny", "message": message} if message else ALLOW
+
+    def answer(self, chat_id: str, request: str, answer: str) -> None:
+        """Anis pressed Allow (`allow`), Deny (`deny`) or Allow for this chat (`chat`)."""
+        future, wide = self.get(chat_id).asking.get(request, (None, False))
+        if future is None or future.done():
+            raise NotFound(f"no permission card {request} waits in chat {chat_id}")
+        future.set_result("allow" if answer == "chat" and not wide else answer)
 
     async def on_event(self, chat_id: str, event: dict[str, Any]) -> None:
         kind, rest = event["type"], {k: v for k, v in event.items() if k != "type"}
