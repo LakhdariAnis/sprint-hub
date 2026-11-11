@@ -17,6 +17,7 @@ COMMANDS = ("Bash", "PowerShell")  # tools that run code: never in a scratch cha
 # https://code.claude.com/docs/en/agent-sdk/permissions#path-patterns-in-rules (checked 2026-11-11)
 FILES = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 DIFF_LINES = 12  # lines of a card's diff
+ASK_WAIT = 10 * 60  # seconds a card waits for Anis, then the call is denied
 
 
 def flags(scratch: bool) -> list[str]:

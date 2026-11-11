@@ -3,6 +3,10 @@
 import asyncio
 import json
 import logging
+import os
+import shutil
+import sys
+import tempfile
 import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable, Collection
@@ -10,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from hubd import permits
+from hubd.runners import permit
 from hubd.runners.claude import MODEL, RESUME, SESSION_ID
 
 log = logging.getLogger(__name__)
@@ -23,9 +29,11 @@ OUTPUT_FORMAT = "--output-format"  # stream-json: one JSON message per stdout li
 VERBOSE = "--verbose"  # the docs pair it with stream-json output
 PARTIAL = "--include-partial-messages"  # text deltas as they arrive
 EFFORT = "--effort"  # low, medium, high, xhigh, max
-PERMISSION_MODE = "--permission-mode"  # default: reads only (help lists it as its alias `manual`)
-# none: whatever would prompt is denied instead of waiting for a host. 607 answers prompts.
+# `--permission-mode` and `--disallowedTools` come from `hubd.permits`.
+# host: prompts go to the `--permission-prompt-tool` (607); none: they are denied at once.
 PERMISSION_PROMPTS = "--permission-prompts"
+PROMPT_TOOL = "--permission-prompt-tool"  # an MCP tool answers them: `hubd.runners.permit`
+MCP_CONFIG = "--mcp-config"  # a JSON string: the permit server, next to the user's own
 APPEND_SYSTEM = "--append-system-prompt"  # the project, sprint or step context (606)
 
 STDERR_LINES = 50  # kept for the error event of a bad exit
@@ -55,11 +63,18 @@ class ChatRunner(Protocol):
     ask: Ask  # `Chats` sets it: Anis answers in the page
 
     async def open(
-        self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None
+        self,
+        chat_id: str,
+        cwd: Path,
+        model: str,
+        effort: str | None,
+        system: str | None = None,
+        scratch: bool = False,
     ) -> None:
         """Start the chat in `cwd`, or resume it when `chat_id` was opened before.
 
-        `system` is appended to Claude's system prompt; a resume needs it again.
+        `system` is appended to Claude's system prompt; a resume needs it again. `scratch`: a
+        chat with no project, which gets no command tools (`hubd.permits`).
         """
         ...
 
@@ -183,6 +198,8 @@ class Parser:
 @dataclass
 class _Chat:
     process: asyncio.subprocess.Process
+    permits: asyncio.Server  # the chat's unix socket: `hubd.runners.permit` asks through it
+    folder: Path  # holds the socket
     parser: Parser = field(default_factory=Parser)
     stderr: deque[str] = field(default_factory=lambda: deque(maxlen=STDERR_LINES))
     stopping: bool = False
@@ -202,6 +219,7 @@ class ClaudeChat:
         self.claude = claude
         self.projects = projects
         self.chats: dict[str, _Chat] = {}
+        self.ask: Ask = no_one
 
     def exists(self, chat_id: str) -> bool:
         # shortcut: Claude's transcript path is undocumented; if it moves, `--session-id` on an
@@ -209,10 +227,24 @@ class ClaudeChat:
         return any(self.projects.glob(f"*/{chat_id}.jsonl"))
 
     def args(
-        self, chat_id: str, model: str, effort: str | None, system: str | None = None
+        self,
+        chat_id: str,
+        model: str,
+        effort: str | None,
+        system: str | None = None,
+        socket: Path | None = None,
+        scratch: bool = False,
     ) -> list[str]:
+        """`socket` None: nobody answers permission prompts, they are denied."""
         args = [PRINT, INPUT_FORMAT, "stream-json", OUTPUT_FORMAT, "stream-json", VERBOSE, PARTIAL]
-        args += [PERMISSION_MODE, "default", PERMISSION_PROMPTS, "none", MODEL, model]
+        args += permits.flags(scratch)
+        if socket is None:
+            args += [PERMISSION_PROMPTS, "none"]
+        else:
+            server = {"command": sys.executable, "args": ["-m", permit.__name__, str(socket)]}
+            config = json.dumps({"mcpServers": {permit.SERVER: server}})
+            args += [PERMISSION_PROMPTS, "host", MCP_CONFIG, config, PROMPT_TOOL, permit.NAME]
+        args += [MODEL, model]
         if effort:
             args += [EFFORT, effort]
         if system:
@@ -220,28 +252,66 @@ class ClaudeChat:
         return args + [RESUME if self.exists(chat_id) else SESSION_ID, chat_id]
 
     async def open(
-        self, chat_id: str, cwd: Path, model: str, effort: str | None, system: str | None = None
+        self,
+        chat_id: str,
+        cwd: Path,
+        model: str,
+        effort: str | None,
+        system: str | None = None,
+        scratch: bool = False,
     ) -> None:
         chat_id = str(uuid.UUID(chat_id))  # ValueError: not a session id
         if chat_id in self.chats:
             return
+        folder = Path(tempfile.mkdtemp(prefix="hubd-chat-"))  # 0700: only Anis reaches it
+        socket = folder / "permit.sock"
+        server = await asyncio.start_unix_server(
+            lambda r, w: self._permit(chat_id, r, w), socket, limit=LINE_LIMIT
+        )
+        # Claude gives up on an MCP tool after MCP_TOOL_TIMEOUT ms: hubd must deny first.
+        env = os.environ | {"MCP_TOOL_TIMEOUT": str((permits.ASK_WAIT + 60) * 1000)}
         try:
             process = await asyncio.create_subprocess_exec(
                 self.claude,
-                *self.args(chat_id, model, effort, system),
+                *self.args(chat_id, model, effort, system, socket, scratch),
                 cwd=cwd,
+                env=env,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 limit=LINE_LIMIT,
             )
         except OSError as exc:
+            await self._shut(server, folder)
             await self.on_event(
                 chat_id, {"type": "error", "message": f"claude did not start: {exc}"}
             )
             return
-        chat = self.chats[chat_id] = _Chat(process)
+        chat = self.chats[chat_id] = _Chat(process, server, folder)
         chat.reader = asyncio.create_task(self._read(chat_id, chat))
+
+    async def _permit(
+        self, chat_id: str, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
+        """One permission prompt from `hubd.runners.permit`; Anis's answer goes back."""
+        try:
+            arguments = json.loads(await reader.readline())
+            given = arguments.get("input")
+            given = given if isinstance(given, dict) else {}
+            answer = await self.ask(chat_id, str(arguments.get("tool_name")), given)
+        except (ValueError, AttributeError) as exc:
+            answer = {"behavior": "deny", "message": f"bad permission prompt: {exc}"}
+        try:
+            writer.write(json.dumps(answer).encode() + b"\n")
+            await writer.drain()
+            writer.close()
+        except ConnectionError:
+            pass  # claude is gone
+
+    @staticmethod
+    async def _shut(server: asyncio.Server, folder: Path) -> None:
+        server.close()
+        shutil.rmtree(folder, ignore_errors=True)
 
     async def send(self, chat_id: str, text: str) -> None:
         chat = self.chats.get(chat_id)
@@ -287,6 +357,7 @@ class ClaudeChat:
                 await self.on_event(chat_id, event)
         await stderr
         code = await process.wait()
+        await self._shut(chat.permits, chat.folder)
         if self.chats.get(chat_id) is chat:
             del self.chats[chat_id]  # died on its own: `open` may start it again
         if code != 0 and not chat.stopping:
@@ -316,7 +387,12 @@ async def _try(cwd: Path, chat_id: str, model: str, effort: str | None) -> None:
             if kind == "error":
                 turn.set()
 
+    async def ask(_: str, tool: str, given: dict[str, Any]) -> dict[str, str]:
+        yes = await asyncio.to_thread(input, f"\n[allow {tool} {_short(given)}? y/N] ")
+        return {"behavior": "allow"} if yes == "y" else {"behavior": "deny", "message": "no"}
+
     chat = ClaudeChat(show)
+    chat.ask = ask
     print(f"chat {chat_id} in {cwd}")
     await chat.open(chat_id, cwd, model, effort)
     try:

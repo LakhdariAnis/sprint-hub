@@ -17,7 +17,6 @@ from hubd.runners.chat import ChatEvent, ChatRunner
 MAX_LIVE = 3  # claude processes at once
 IDLE = 15 * 60  # seconds without a message or an event before the process is closed
 EVERY = 60  # seconds between idle checks
-ASK_WAIT = 10 * 60  # seconds a permission card waits for Anis, then the call is denied
 ALLOW = {"behavior": "allow"}
 
 
@@ -47,6 +46,10 @@ class Chat:
         return self.context.text if self.context else None
 
     @property
+    def scratch(self) -> bool:
+        return self.project is None
+
+    @property
     def busy(self) -> bool:
         return any(not t["done"] for t in self.turns)
 
@@ -57,7 +60,7 @@ class Chats:
         self.runner.ask = self.ask
         self.emit = emit
         self.chats: dict[str, Chat] = {}
-        self.ask_wait = ASK_WAIT
+        self.ask_wait = permits.ASK_WAIT
 
     def get(self, chat_id: str) -> Chat:
         if chat_id not in self.chats:
@@ -79,7 +82,7 @@ class Chats:
         self._room()
         chat = Chat(str(uuid.uuid4()), project, model, effort, cwd, context)
         self.chats[chat.id] = chat
-        await self.runner.open(chat.id, cwd, model, effort, chat.system)
+        await self.runner.open(chat.id, cwd, model, effort, chat.system, chat.scratch)
         return chat
 
     async def send(self, chat_id: str, text: str) -> None:
@@ -87,7 +90,9 @@ class Chats:
         chat.used = time.monotonic()
         if not self.live(chat_id):
             self._room(chat_id)
-            await self.runner.open(chat.id, chat.cwd, chat.model, chat.effort, chat.system)
+            await self.runner.open(
+                chat.id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
+            )
         chat.turns.append({"text": text, "events": [], "done": False})
         await self.runner.send(chat_id, text)
 
@@ -99,12 +104,17 @@ class Chats:
         chat.model, chat.effort = model or chat.model, effort or chat.effort
         if self.live(chat_id):
             await self.runner.stop(chat_id)
-            await self.runner.open(chat_id, chat.cwd, chat.model, chat.effort, chat.system)
+            await self.runner.open(
+                chat_id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
+            )
         return chat
 
     async def stop(self, chat_id: str) -> None:
         """End the process, mid-turn or not. The next message resumes the chat."""
         chat = self.get(chat_id)
+        for future, _ in chat.asking.values():  # Claude gets a deny before it goes
+            if not future.done():
+                future.set_result("stopped")
         await self.runner.stop(chat_id)
         if chat.busy:  # the turn got no `turn_end`
             await self.on_event(chat_id, {"type": "stopped"})
@@ -114,7 +124,7 @@ class Chats:
         if (chat := self.chats.get(chat_id)) is None:
             return {"behavior": "deny", "message": "This chat is closed."}
         card = {"tool": tool, **permits.card(tool, tool_input)}
-        if why := permits.refuse(tool, tool_input, chat.cwd, chat.project is None):
+        if why := permits.refuse(tool, tool_input, chat.cwd, chat.scratch):
             await self.on_event(chat_id, {"type": "permission_refused", **card, "message": why})
             return {"behavior": "deny", "message": why}
         wide = permits.chat_wide(tool, tool_input, chat.cwd)
@@ -138,6 +148,7 @@ class Chats:
         message = {
             "deny": "Anis denied this call. Do not retry it; ask him or go on without it.",
             "timeout": f"No answer from Anis in {minutes} min, so it was denied. Do not retry it.",
+            "stopped": "Anis stopped the chat.",
         }.get(answer)
         await self.on_event(
             chat_id, {"type": "permission_answer", "request": request, "answer": answer}

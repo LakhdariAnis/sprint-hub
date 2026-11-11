@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from hubd.runners import permit
 from hubd.runners.chat import ClaudeChat, Parser
 
 S = '"session_id":"d5fdb32b-559f-4e47-8b49-a1c841579a7f"'
@@ -129,12 +130,25 @@ def test_unknown_type_is_logged_once(caplog: pytest.LogCaptureFixture) -> None:
 
 
 # A stand-in for `claude`: writes its argv, echoes each message as two deltas and a result.
-# "die" exits 3 after a stderr line; "hang" ignores stdin EOF.
+# "die" exits 3 after a stderr line; "hang" ignores stdin EOF; "ask <tool>" calls the permission
+# prompt tool from `--mcp-config` as Claude does and says its answer.
 STUB = f"""#!{sys.executable}
-import json, signal, sys, time
-open(sys.argv[0] + ".args", "w").write(json.dumps(sys.argv[1:]))
+import json, signal, subprocess, sys, time
+args = sys.argv[1:]
+open(sys.argv[0] + ".args", "w").write(json.dumps(args))
 for line in sys.stdin:
     text = json.loads(line)["message"]["content"]
+    if text.startswith("ask "):
+        server = json.loads(args[args.index("--mcp-config") + 1])["mcpServers"]["sprint_hub"]
+        call = {{"tool_name": text[4:], "input": {{"command": "ls"}}, "tool_use_id": "t1"}}
+        calls = [{{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {{}}}},
+            {{"jsonrpc": "2.0", "method": "notifications/initialized"}},
+            {{"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+              "params": {{"name": "permit", "arguments": call}}}}]
+        rpc = "".join(json.dumps(c) + "\\n" for c in calls)
+        out = subprocess.run([server["command"], *server["args"]], input=rpc, text=True,
+            capture_output=True).stdout.splitlines()
+        text = json.loads(out[-1])["result"]["content"][0]["text"]
     if text == "die":
         print("boom", file=sys.stderr, flush=True)
         sys.exit(3)
@@ -203,11 +217,24 @@ def test_chat_streams_the_answer_and_stops_quietly(stub: Path) -> None:
         "--verbose",
         "--include-partial-messages",
     ]
-    assert args[7:] == [
+    config = json.loads(args[12])
+    socket = config["mcpServers"]["sprint_hub"]["args"][-1]
+    assert args[7:12] == [
         "--permission-mode",
         "default",
         "--permission-prompts",
-        "none",
+        "host",
+        "--mcp-config",
+    ]
+    assert config == {
+        "mcpServers": {
+            "sprint_hub": {"command": sys.executable, "args": ["-m", "hubd.runners.permit", socket]}
+        }
+    }
+    assert not Path(socket).parent.exists()  # removed when claude ended
+    assert args[13:] == [
+        "--permission-prompt-tool",
+        "mcp__sprint_hub__permit",
         "--model",
         "haiku",
         "--effort",
@@ -261,3 +288,32 @@ def test_missing_claude_is_an_error(tmp_path: Path) -> None:
         assert error["message"].startswith("claude did not start")
 
     asyncio.run(main())
+
+
+def test_permission_prompt_reaches_ask_and_its_answer_goes_back(stub: Path) -> None:
+    asked: list[tuple[str, str, dict]] = []
+
+    async def ask(chat_id: str, tool: str, given: dict) -> dict[str, str]:
+        asked.append((chat_id, tool, given))
+        return {"behavior": "deny", "message": "Anis denied"}
+
+    async def main() -> None:
+        chat, events = runner(stub)
+        chat.ask = ask
+        await chat.open(ID, stub.parent, "haiku", None, scratch=True)
+        await chat.send(ID, "ask Bash")
+        seen = await until(events, "turn_end")
+        assert json.loads(seen[1]["text"]) == {"behavior": "deny", "message": "Anis denied"}
+        await chat.stop(ID)
+
+    asyncio.run(main())
+    assert asked == [(ID, "Bash", {"command": "ls"})]
+    args = json.loads(Path(f"{stub}.args").read_text())
+    assert args[7:11] == ["--permission-mode", "default", "--disallowedTools", "Bash,PowerShell"]
+
+
+def test_permit_server_denies_when_hubd_is_gone(tmp_path: Path) -> None:
+
+    answer = json.loads(permit.ask_hubd(str(tmp_path / "none.sock"), {"tool_name": "Bash"}))
+    assert answer["behavior"] == "deny" and "hubd did not answer" in answer["message"]
+    assert permit.result("x", {"method": "tools/list"})["tools"][0]["name"] == "permit"
