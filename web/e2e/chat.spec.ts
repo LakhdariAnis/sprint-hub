@@ -310,3 +310,71 @@ test('Stop and Esc Esc end a turn mid-way, the text stays marked stopped, the ch
   await expect(page.locator('.ai').last()).toContainText('has one file.')
   await expect(page.locator('.cost')).toHaveCount(1)
 })
+
+// Step 609: chats stay in the sidebar's OPEN next to the steps, can be renamed and closed. hubd's restart is covered in pytest (the demo cannot restart).
+test('two chats under OPEN: 6 and 7 open them, R renames one, x closes one and the vault keeps it', async ({ page, request }) => {
+  const tag = Math.random().toString(36).slice(2, 7)
+  const box = page.getByRole('textbox', { name: 'Message' })
+  const row = (name: string | RegExp) => page.getByRole('navigation', { name: 'Tabs' }).getByRole('link', { name })
+  const send = async (text: string) => {
+    await box.fill(text)
+    await box.press('Enter')
+    await expect(page).toHaveURL(/#\/chat\/[0-9a-f-]+$/)
+    await expect(page.locator('.ai').first()).not.toBeEmpty()
+  }
+
+  await page.goto('/#/chat')
+  await expect(row('New chat, unsaved')).toContainText('new') // not saved until you send
+  await send(`alpha ${tag}`)
+  const first = page.url()
+  await expect(row(`Chat: alpha ${tag}`)).toBeVisible()
+  await expect(row('New chat, unsaved')).toBeHidden()
+
+  await box.press('Escape')
+  await page.keyboard.press('n')
+  await expect(page).toHaveURL(/#\/chat$/)
+  await send(`beta ${tag}`)
+  const second = page.url()
+  const [alpha, beta] = [row(`Chat: alpha ${tag}`), row(`Chat: beta ${tag}`)]
+  await expect(beta).toBeVisible()
+  const digit = async (r: typeof alpha) => (await r.locator('.k').innerText()).trim()
+  expect(Number(await digit(beta))).toBeLessThan(Number(await digit(alpha))) // newest first
+
+  // The digit of a row opens its chat.
+  await box.press('Escape')
+  await page.keyboard.press(await digit(alpha))
+  await expect(page).toHaveURL(first)
+  await expect(page.locator('.me', { hasText: `alpha ${tag}` })).toBeVisible()
+  await box.press('Escape') // a chat on show takes the cursor
+  await page.keyboard.press(await digit(beta))
+  await expect(page).toHaveURL(second)
+
+  // R renames it: the sidebar, the header and the vault's list show the new name.
+  await box.press('Escape')
+  await page.keyboard.press('Shift+R')
+  const name = page.getByRole('textbox', { name: 'Chat name' })
+  await expect(name).toBeFocused()
+  await name.fill(`Renamed ${tag}`)
+  await name.press('Enter')
+  await expect(row(`Chat: Renamed ${tag}`)).toBeVisible()
+  await expect(row(`Chat: beta ${tag}`)).toBeHidden()
+  await expect(page.getByRole('heading', { name: `Renamed ${tag}` })).toBeVisible()
+  const id = second.split('/').pop()!
+  const listed = async () => ((await (await request.get('/chats')).json()) as { id: string; title: string; open: boolean }[]).find((c) => c.id === id)
+  expect((await listed())?.title).toBe(`Renamed ${tag}`)
+
+  // Esc in the name box keeps the old name.
+  await box.press('Escape')
+  await page.keyboard.press('Shift+R')
+  await name.fill('nope')
+  await name.press('Escape')
+  await expect(page.getByRole('heading', { name: `Renamed ${tag}` })).toBeVisible()
+
+  // x closes it: out of OPEN, still in the vault, back on New chat.
+  await box.press('Escape')
+  await page.keyboard.press('x')
+  await expect(page).toHaveURL(/#\/chat$/)
+  await expect(row(`Chat: Renamed ${tag}`)).toBeHidden()
+  await expect(alpha).toBeVisible()
+  expect(await listed()).toMatchObject({ title: `Renamed ${tag}`, open: false })
+})
