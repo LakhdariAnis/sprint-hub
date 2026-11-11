@@ -50,11 +50,13 @@ test('plain keys switch tabs, open steps and the sidebar rail', async ({ page })
   await expect(open).toBeVisible()
   await page.keyboard.press('1')
   await expect(page).toHaveURL(/#\/projects$/)
-  await page.keyboard.press('6')
+  // OPEN lists chats of other specs too, newest first: the step's own digit is in its row.
+  const digit = (await open.locator('.k').innerText()).trim()
+  await page.keyboard.press(digit)
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
   await page.keyboard.press('b')
   await expect(page.locator('nav.sb.rail')).toBeVisible()
-  await expect(open).toContainText('6')
+  await expect(open).toContainText(digit)
 })
 
 test('Enter opens the selected row after a sidebar click', async ({ page }) => {

@@ -13,7 +13,7 @@ export type Ask = { request?: string; tool: string; target: string; diff: string
 
 // What hubd told Claude about the project, sprint or step (606): the chip above the box.
 export type Context = { label: string; size: number; notes: string[] }
-export type Meta = { model: string; effort: string; project: string | null; context: Context | null }
+export type Meta = { model: string; effort: string; project: string | null; context: Context | null; title?: string; earlier_hidden?: boolean }
 export const chats = $state<Record<string, { turns: Turn[] } & Partial<Meta>>>({})
 
 // What the next new chat opens with (the pills). Kept when the page starts another chat (/clear, n). With a project, `sprint` and `step` add their context.
@@ -67,12 +67,14 @@ const reason = async (r: Response) => {
 export async function loadChat(id: string) {
   const r = await fetch(`/chats/${id}`)
   if (!r.ok) throw r.status === 404 ? new Error('This chat is gone: hubd was restarted.') : await reason(r)
-  const { turns, model, effort, project, context } = (await r.json()) as Meta & { turns: { text: string; events: Ev[]; done: boolean }[] }
+  const { turns, model, effort, project, context, title, earlier_hidden } = (await r.json()) as Meta & { turns: { text: string; events: Ev[]; done: boolean }[] }
   chats[id] = {
     model,
     effort,
     project,
     context,
+    title,
+    earlier_hidden,
     turns: turns.map((t) => {
       const turn: Turn = { me: t.text, blocks: [], done: false }
       t.events.forEach((e) => take(turn, e))
@@ -144,4 +146,22 @@ export async function change(id: string, patch: Partial<Pick<Meta, 'model' | 'ef
     throw e instanceof TypeError ? new Error('hubd is not running. Start it with `uv run hubd`.') : e
   })
   Object.assign(chats[id], patch)
+}
+
+// The chats hubd keeps in the vault (609), last used first. `open`: in the sidebar; `x` sets it off and the entry stays. `used` is in ms, like Date.now().
+export type Saved = { id: string; project: string | null; title: string; model: string; effort: string; used: number; open: boolean }
+export const saved = $state<{ list: Saved[] | null }>({ list: null })
+
+export async function loadSaved() {
+  const r = await fetch('/chats')
+  if (r.ok) saved.list = await r.json()
+}
+
+// `title`: the new name (kept in the vault, never in Claude's files); `open: false`: out of the sidebar. The list comes back on hubd's `chats` event.
+export async function edit(id: string, patch: { title?: string; open?: boolean }) {
+  await post(`/chats/${id}`, patch, 'PATCH').catch((e) => {
+    throw e instanceof TypeError ? new Error('hubd is not running. Start it with `uv run hubd`.') : e
+  })
+  if (patch.title !== undefined && chats[id]) chats[id].title = patch.title.trim().replace(/\s+/g, ' ')
+  await loadSaved()
 }

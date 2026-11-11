@@ -1,4 +1,4 @@
-import { chats, loadChat, onChat } from './chat.svelte'
+import { chats, loadChat, loadSaved, onChat } from './chat.svelte'
 import { demo } from './demo'
 import { loadProjects, type FileError } from './projects'
 import { loadStep, loadSteps, type OpenQuestion, type Step } from './steps'
@@ -95,11 +95,13 @@ function connect() {
     Promise.all([load(), relist()]).then(() => delete steps[key(project, step)])
   })
   events.addEventListener('chat', (e) => onChat(JSON.parse(e.data)))
+  events.addEventListener('chats', () => loadSaved().catch(() => {}))
   events.addEventListener('theme', (e) => applyTheme(JSON.parse(e.data)))
   // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
   events.onopen = () => {
     load()
     loadTheme()
+    loadSaved().catch(() => {})
     for (const id of Object.keys(chats)) loadChat(id).catch(() => {})
     for (const s of Object.values(steps)) loadStep(s.project, s.step).then((d) => put(s.project, d), () => {})
   }

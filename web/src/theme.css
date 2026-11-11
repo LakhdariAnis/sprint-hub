@@ -75,6 +75,8 @@ kbd {
 .x-g { --x: var(--g); }
 .x-r { --x: var(--r); }
 .x-y { --x: var(--y); }
+.x-m { --x: var(--m); }
+.x-ac { --x: var(--ac); }
 /* One colour per step state, used by every screen. */
 .s-todo { --x: var(--fg2); }
 /* Todo is a ring, not a fill: the state has not started. */

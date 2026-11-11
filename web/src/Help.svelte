@@ -12,7 +12,7 @@
     ['g q', 'go to Questions'],
     ['g s', 'go to Settings'],
     ['1 … 5', 'Projects, Today, Review, Questions, Settings (also Ctrl+1 … 5 in the app window)'],
-    ['6 … 9', 'the steps under OPEN in the sidebar'],
+    ['6 … 9', 'the steps and chats under OPEN in the sidebar, newest first'],
     ['b', 'hide / show the sidebar labels'],
     ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
     ['s', 'start the step (Step screen)'],
@@ -26,6 +26,7 @@
     ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['c  i', 'New chat: put the cursor in the message box; Enter sends, Shift+Enter is a new line, Esc leaves the box'],
+    ['x', 'New chat: close the chat (out of OPEN, kept in the vault)'],
     ['a  d  A', 'New chat: answer the permission card: Allow, Deny, Allow for this chat (Esc leaves the box first)'],
     ['?', 'show / hide this help'],
   ]

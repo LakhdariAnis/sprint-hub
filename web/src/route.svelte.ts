@@ -19,11 +19,15 @@ export function parse(hash: string): Route {
   return a === 'today' ? { name: 'today' } : { name: 'projects' }
 }
 
-export const router = $state({ route: parse(location.hash), open: [] as string[] })
+export const router = $state({ route: parse(location.hash), open: [] as string[], at: {} as Record<string, number> })
 
-// Steps opened this session, as `project/id`, oldest first: the sidebar's OPEN section.
+// Steps opened this session, as `project/id`, oldest first: the sidebar's OPEN section (open.svelte.ts orders it). `at`: when each was opened.
 function track(r: Route) {
-  if (r.name === 'step' && !router.open.includes(`${r.project}/${r.id}`)) router.open.push(`${r.project}/${r.id}`)
+  const k = r.name === 'step' ? `${r.project}/${r.id}` : ''
+  if (k && !router.open.includes(k)) {
+    router.open.push(k)
+    router.at[k] = Date.now()
+  }
 }
 track(router.route)
 addEventListener('hashchange', () => track((router.route = parse(location.hash))))

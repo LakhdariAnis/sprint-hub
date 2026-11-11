@@ -1,11 +1,13 @@
 <script lang="ts">
   import { hub } from './hub.svelte'
   import { keys, toggleRail } from './keys.svelte'
+  import { saved } from './chat.svelte'
   import { nav } from './nav.svelte'
+  import { hashOf, rows } from './open.svelte'
   import { router } from './route.svelte'
   import { steps } from './store.svelte'
 
-  // Icons from the canvas. Chats comes in a later sprint. `key`: the digit that opens the tab.
+  // Icons from the canvas. The Chats screen comes in a later sprint. `key`: the digit that opens the tab.
   const tabs = [
     { id: 'projects', key: 1, label: 'Projects', icon: '<path d="M2 5.5h6l1.8 2H18v9H2z"/>' },
     { id: 'today', key: 2, label: 'Today', icon: '<rect x="3" y="4" width="14" height="13" rx="2"/><path d="M3 8h14M7 2.5v3M13 2.5v3"/>' },
@@ -18,7 +20,10 @@
   const r = $derived(nav.route ?? router.route)
   // A project screen belongs to the Projects tab; a step screen to its OPEN entry.
   const active = $derived(r.name === 'project' ? 'projects' : r.name)
-  const here = $derived(r.name === 'step' ? `${r.project}/${r.id}` : '')
+  const here = $derived(r.name === 'step' ? `${r.project}/${r.id}` : r.name === 'chat' ? (r.id ?? '') : '')
+  const open = $derived(rows())
+  // The chat on show has no vault entry yet (not sent): its row says `new`.
+  const unsaved = $derived(r.name === 'chat' && (!r.id || (saved.list !== null && !saved.list.some((c) => c.id === r.id))))
 </script>
 
 <nav class="sb" class:rail={keys.rail} aria-label="Tabs">
@@ -40,15 +45,24 @@
       </a>
     {/if}
   {/each}
-  {#if router.open.length}
+  {#if open.length || unsaved}
     <div class="sg">OPEN</div>
-    {#each router.open as k, i}
-      {@const [project, id] = [k.slice(0, k.lastIndexOf('/')), k.slice(k.lastIndexOf('/') + 1)]}
-      <a class="tb" class:on={here === k} href="#/steps/{encodeURIComponent(project)}/{encodeURIComponent(id)}" aria-label="{project} {id}">
-        <span class="dot s-{steps[k]?.state}"></span><b class="mono">{id}</b><span class="lbl">{steps[k]?.title ?? project}</span>
-        {#if i < 4}<span class="k">{i + 6}</span>{/if}
-      </a>
+    {#each open as row, i}
+      {#if row.kind === 'step'}
+        <a class="tb" class:on={here === row.key} href={hashOf(row)} aria-label="{row.project} {row.id}">
+          <span class="dot s-{steps[row.key]?.state}"></span><b class="mono">{row.id}</b><span class="lbl">{steps[row.key]?.title ?? row.project}</span>
+          {#if i < 4}<span class="k">{i + 6}</span>{/if}
+        </a>
+      {:else}
+        <a class="tb" class:on={here === row.id} href={hashOf(row)} aria-label="Chat: {row.title}" title={row.title}>
+          <span class="dot x-m"></span><span class="lbl">{row.title}</span>
+          {#if i < 4}<span class="k">{i + 6}</span>{/if}
+        </a>
+      {/if}
     {/each}
+    {#if unsaved}
+      <a class="tb on" href="#/chat" aria-label="New chat, unsaved" aria-current="page"><span class="dot x-ac"></span><span class="lbl">New chat</span><span class="k">new</span></a>
+    {/if}
   {/if}
   </div>
   <div class="sbf">

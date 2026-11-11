@@ -27,7 +27,7 @@ test('opens on New chat, a message gets an answer', async ({ page }) => {
   await box.press('Enter')
 
   await expect(page).toHaveURL(/#\/chat\/[0-9a-f-]+$/)
-  await expect(page.getByText('say hi\ntwice')).toBeVisible()
+  await expect(page.getByRole('main').getByText('say hi\ntwice')).toBeVisible()
   await expect(page.getByText('What are we working on?')).toBeHidden()
   await expect(page.locator('.ai').first()).not.toBeEmpty()
   await expect(page.getByText('thinking…')).toBeHidden()
@@ -112,7 +112,7 @@ test('model changes after the first message, the chat goes on; project pill; /cl
   await box.fill('second')
   await box.press('Enter')
   await expect(page.getByText('second', { exact: true })).toBeVisible()
-  await expect(page.getByText('first', { exact: true })).toBeVisible() // same chat
+  await expect(page.getByRole('main').getByText('first', { exact: true })).toBeVisible() // same chat
 
   await box.fill('/clear')
   await box.press('Enter')

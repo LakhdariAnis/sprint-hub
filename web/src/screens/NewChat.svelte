@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { answer, answerOf, asksOf, toolsOf, change, chats, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
+  import { answer, answerOf, asksOf, toolsOf, change, chats, edit, saved, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
   import { costLine } from '../cost'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
@@ -50,6 +50,12 @@
     const open = tools.some((t) => !t.open)
     for (const t of tools) t.open = open
   }
+  // `x`: out of the sidebar's OPEN (the chat stays in the vault; a new message brings it back). Only a chat that was sent.
+  async function close() {
+    if (!cid || !saved.list?.some((c) => c.id === cid)) return
+    failed = ''
+    await edit(cid, { open: false }).then(() => (location.hash = '#/chat'), (e: Error) => (failed = e.message))
+  }
   let lastEsc = 0
   function esc() {
     const now = Date.now()
@@ -59,7 +65,7 @@
     } else lastEsc = now
   }
   const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
-  useKeys({ c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  useKeys({ x: close, c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
   const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
   const outcome: Record<string, string> = {
     allow: 'Allowed',

@@ -1,5 +1,5 @@
 import { onMount } from 'svelte'
-import { router } from './route.svelte'
+import { hashOf, rows } from './open.svelte'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
@@ -49,15 +49,13 @@ const go: Handlers = {
   r: () => (location.hash = '#/review'),
   q: () => (location.hash = '#/questions'),
 }
-// Plain digits, `b` and `e`: 1–5 tabs, 6–9 the OPEN steps, b the icon rail, e the broken-files list. Ctrl+1–5 (app window only, see below) = the tabs too.
-const openStep = (n: number) => {
-  const k = router.open[n]
-  if (!k) return
-  const i = k.lastIndexOf('/')
-  location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
+// Plain digits, `b` and `e`: 1–5 tabs, 6–9 the OPEN steps and chats, b the icon rail, e the broken-files list. Ctrl+1–5 (app window only, see below) = the tabs too.
+const openRow = (n: number) => {
+  const row = rows()[n]
+  if (row) location.hash = hashOf(row)
 }
 const plain: Handlers = { '/': openPalette, '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s, b: toggleRail, e: () => (keys.errors = true) }
-for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
+for (const n of [6, 7, 8, 9]) plain[n] = () => openRow(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s }
 const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
