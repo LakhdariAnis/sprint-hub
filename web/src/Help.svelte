@@ -23,6 +23,7 @@
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
     ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
+    ['c  i', 'New chat: put the cursor in the message box; Enter sends, Shift+Enter is a new line, Esc leaves the box'],
     ['?', 'show / hide this help'],
   ]
 </script>

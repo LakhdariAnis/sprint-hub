@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 // The core loop on the demo vault: Today → start notes/301 → FakeRunner ticks it to done → approve.
 test('start a step, wait for done, approve it', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveURL(/#\/projects$|\/$/)
+  await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible() // the app opens on New chat
   await page.goto('/#/today')
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Anis$/ })).toBeVisible()
 
@@ -456,7 +456,7 @@ for (const [w, h] of [[743, 730], [960, 1080]]) {
   })
 }
 
-const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions', 'settings']
+const SCREENS = ['chat', 'today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions', 'settings']
 for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
   for (const rail of [false, true]) {
     test(`every screen at ${w}x${h}${rail ? ' rail' : ''}: no overlap, no row cut, no page scroll`, async ({ page }) => {
