@@ -26,4 +26,5 @@ test('options: models in order, projects with none first, steps and sprints of t
   assert.deepEqual(options('sprint', ctx).map((o) => o.value), ['', '6'])
   assert.deepEqual(options('step', ctx).map((o) => o.value), ['', '605', '606', '1'])
   assert.deepEqual(options('clear', ctx), [])
+  assert.deepEqual(options('step', { projects: [], steps: [] }), []) // no project: nothing to list
 })

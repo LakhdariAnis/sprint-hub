@@ -38,6 +38,7 @@ export function options(name: string, ctx: Ctx): Opt[] {
   if (name === 'model') return MODELS
   if (name === 'effort') return EFFORTS
   if (name === 'project') return [{ value: '', label: 'none', desc: 'plain chat' }, ...ctx.projects.map((p) => ({ value: p.id, label: p.name }))]
+  if ((name === 'sprint' || name === 'step') && !ctx.steps.length) return []
   if (name === 'sprint') {
     const ns = [...new Set(ctx.steps.map((s) => s.sprint).filter((n): n is number => n !== null))].sort((a, b) => a - b)
     return [{ value: '', label: 'none' }, ...ns.map((n) => ({ value: String(n), label: `sprint ${n}` }))]
