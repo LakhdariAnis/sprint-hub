@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, ValidationError
 
 from hubd import doctor, reminders, service
-from hubd.chats import Chats
+from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
@@ -82,6 +82,7 @@ def create_app(
     # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
     current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
     hour = [reminder_hour]
+    chats = Chats(chat, hub.emit) if hub else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -89,7 +90,7 @@ def create_app(
             yield
             return
         stop = asyncio.Event()
-        tasks = [asyncio.create_task(hub.watch(stop))]
+        tasks = [asyncio.create_task(hub.watch(stop)), asyncio.create_task(chats.loop(stop))]
         if isinstance(theme, OmarchyTheme):  # FakeTheme (demo, tests) never changes
             tasks.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
         if reminder_hour is not None:
@@ -98,8 +99,10 @@ def create_app(
         yield
         stop.set()
         await asyncio.gather(*tasks)
+        await chats.close_all()
 
     app = FastAPI(title="hubd", lifespan=lifespan)
+    app.state.chats = chats  # tests reach the idle check through it
 
     @app.exception_handler(InvalidTransition)
     async def conflict(_: Request, exc: InvalidTransition) -> JSONResponse:
@@ -108,6 +111,10 @@ def create_app(
     @app.exception_handler(MergeConflict)
     async def merge_conflict(_: Request, exc: MergeConflict) -> JSONResponse:
         return JSONResponse({"detail": exc.reason, "files": exc.files}, status_code=409)
+
+    @app.exception_handler(Full)
+    async def full(_: Request, exc: Full) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=409)
 
     @app.exception_handler(NotFound)
     async def not_found(_: Request, exc: NotFound) -> JSONResponse:
@@ -126,7 +133,6 @@ def create_app(
 
     if hub is None:
         return _with_web(app)
-    chats = Chats(chat, hub.emit)
 
     @app.get("/projects")
     def projects() -> list[dict]:

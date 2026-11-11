@@ -10,7 +10,9 @@ from fastapi.testclient import TestClient
 from test_sse import serve
 
 from hubd.api import create_app
+from hubd.chats import IDLE
 from hubd.daemon import Hub
+from hubd.runners.chat import ChatEvent
 from hubd.runners.fake import REPLY, FakeChat
 
 NEW = {"model": "haiku", "effort": "low"}
@@ -107,3 +109,58 @@ def test_chat_events_stream_on_events(hub: Hub) -> None:
                     if event["kind"] == "turn_end":
                         break
     assert kinds[0] == "text" and kinds[-1] == "turn_end" and "tool" in kinds
+
+
+def test_cap_of_three_live_chats(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        ids = [c.post("/chats", json=NEW).json()["id"] for _ in range(3)]
+        for chat_id in ids:
+            c.post(f"/chats/{chat_id}/message", json={"text": "hi"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 3)
+        response = c.post("/chats", json=NEW)
+        assert response.status_code == 409
+        assert response.json()["detail"].startswith("3 chats are open already (")
+        assert response.json()["detail"].endswith("): stop one first")
+        c.post(f"/chats/{ids[0]}/stop")
+        fourth = c.post("/chats", json=NEW)
+        assert fourth.status_code == 200
+        # The stopped chat can't come back while 3 others are live.
+        again = c.post(f"/chats/{ids[0]}/message", json={"text": "back"})
+        assert again.status_code == 409
+        assert c.get(f"/chats/{ids[0]}").json()["turns"][-1]["text"] == "hi"  # nothing kept
+
+
+def test_idle_close_then_resume(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chats = c.app.state.chats
+        busy = c.post("/chats", json=NEW).json()["id"]
+        quiet = c.post("/chats", json=NEW).json()["id"]
+        c.post(f"/chats/{quiet}/message", json={"text": "hi"})
+        until(lambda: "turn_end" in [e["kind"] for e in events])
+        c.portal.call(chats.close_idle, time.monotonic(), 60)  # not idle yet
+        assert c.get(f"/chats/{quiet}").json()["live"]
+        chats.chats[busy].turns.append({"text": "slow", "events": [], "done": False})
+        c.portal.call(chats.close_idle, time.monotonic() + IDLE)
+        assert events[-1] == {"type": "chat", "id": quiet, "kind": "closed"}
+        assert not c.get(f"/chats/{quiet}").json()["live"]
+        assert c.get(f"/chats/{busy}").json()["live"]  # a turn under way is not idle
+        c.post(f"/chats/{quiet}/message", json={"text": "again"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 2)
+        chat = c.get(f"/chats/{quiet}").json()
+    assert chat["live"] and [t["text"] for t in chat["turns"]] == ["hi", "again"]
+
+
+def test_shutdown_closes_every_process(hub: Hub) -> None:
+    runners: list[FakeChat] = []
+
+    def make(on: ChatEvent) -> FakeChat:
+        runners.append(FakeChat(on, delay=0.2))
+        return runners[-1]
+
+    with TestClient(create_app(hub, chat=make)) as c:
+        ids = [c.post("/chats", json=NEW).json()["id"] for _ in range(2)]
+        c.post(f"/chats/{ids[0]}/message", json={"text": "a long one"})
+        assert runners[0].chats == set(ids)
+    assert runners[0].chats == set() and runners[0].turns == {}
