@@ -111,6 +111,13 @@ export async function send(id: string | undefined, text: string): Promise<string
   }
 }
 
+// Stop button, Esc Esc: hubd ends the claude process. The turn keeps its text and is marked stopped when hubd's `stopped` event comes; the next message resumes the chat.
+export async function stop(id: string) {
+  await post(`/chats/${id}/stop`, {}).catch((e) => {
+    throw e instanceof TypeError ? new Error('hubd is not running. Start it with `uv run hubd`.') : e
+  })
+}
+
 // `c` on a Step or Project screen: New chat with that project (and step) set.
 export function chatAbout(project: string, step: string | null = null) {
   Object.assign(pills, { project, sprint: null, step })

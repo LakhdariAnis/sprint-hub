@@ -80,8 +80,11 @@ class ChatRunner(Protocol):
 
     async def send(self, chat_id: str, text: str) -> None: ...
 
-    async def stop(self, chat_id: str) -> None:
-        """End the claude process. `open` with the same id resumes the chat."""
+    async def stop(self, chat_id: str, now: bool = False) -> None:
+        """End the claude process. `open` with the same id resumes the chat.
+
+        `now`: do not let a turn under way finish (the Stop button).
+        """
         ...
 
     async def close(self, chat_id: str) -> None:
@@ -393,7 +396,7 @@ class ClaudeChat:
         except (BrokenPipeError, ConnectionResetError):
             pass  # claude is gone: the reader reports its exit
 
-    async def stop(self, chat_id: str) -> None:
+    async def stop(self, chat_id: str, now: bool = False) -> None:
         chat = self.chats.pop(chat_id, None)
         if chat is None:
             return
@@ -402,7 +405,7 @@ class ClaudeChat:
         if process.stdin is not None:
             process.stdin.close()  # EOF: claude ends after the turn it is in
         try:
-            await asyncio.wait_for(process.wait(), STOP_WAIT)
+            await asyncio.wait_for(process.wait(), 0 if now else STOP_WAIT)
         except TimeoutError:
             process.terminate()
             await process.wait()

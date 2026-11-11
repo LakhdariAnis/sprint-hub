@@ -354,6 +354,22 @@ def test_stop_terminates_a_claude_that_hangs(stub: Path, monkeypatch: pytest.Mon
     asyncio.run(main())
 
 
+def test_stop_now_does_not_wait_for_the_turn(stub: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("hubd.runners.chat.STOP_WAIT", 30)
+
+    async def main() -> None:
+        chat, events = runner(stub)
+        await chat.open(ID, stub.parent, "haiku", None)
+        await chat.send(ID, "hang")
+        await asyncio.sleep(0.3)  # claude is inside the turn
+        started = asyncio.get_running_loop().time()
+        await chat.stop(ID, now=True)
+        assert asyncio.get_running_loop().time() - started < 5
+        assert events.empty()  # a stop is not an error
+
+    asyncio.run(main())
+
+
 def test_missing_claude_is_an_error(tmp_path: Path) -> None:
     async def main() -> None:
         chat, events = runner(tmp_path / "nope")

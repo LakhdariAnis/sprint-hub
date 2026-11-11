@@ -115,7 +115,7 @@ class Chats:
         for future, _ in chat.asking.values():  # Claude gets a deny before it goes
             if not future.done():
                 future.set_result("stopped")
-        await self.runner.stop(chat_id)
+        await self.runner.stop(chat_id, now=True)
         if chat.busy:  # the turn got no `turn_end`
             await self.on_event(chat_id, {"type": "stopped"})
 

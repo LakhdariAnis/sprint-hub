@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
-  import { answer, answerOf, asksOf, change, chats, chip, contextOf, loadChat, pills, send, type Ask, type Context } from '../chat.svelte'
+  import { answer, answerOf, asksOf, change, chats, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
   import { costLine } from '../cost'
   import { useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
@@ -30,8 +30,23 @@
     failed = ''
     await answer(cid, a.request, choice).then(focusBox, (e: Error) => (failed = e.message))
   }
+  // A turn is running: Stop, or Esc Esc.
+  const busy = $derived(turns.some((t) => !t.done))
+  async function halt(refocus = false) {
+    if (!cid || !busy) return
+    failed = ''
+    await stop(cid).then(() => refocus && focusBox(), (e: Error) => (failed = e.message))
+  }
+  let lastEsc = 0
+  function esc() {
+    const now = Date.now()
+    if (now - lastEsc < 1000) {
+      lastEsc = 0
+      halt()
+    } else lastEsc = now
+  }
   const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
-  useKeys({ c: focusBox, i: focusBox, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  useKeys({ c: focusBox, i: focusBox, Escape: esc, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
   const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
   const outcome: Record<string, string> = {
     allow: 'Allowed',
@@ -162,6 +177,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') esc()
     if (cmds.length && onmenu(e)) e.preventDefault()
     // A card waits and the box is empty: a / d / A answer it from the box too.
     else if (waiting && !text && choices[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -288,7 +304,10 @@
           <div class="box">
             <label class="sr" for="msg">Message</label>
             <textarea id="msg" rows="2" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
-            <div class="hint"><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</div>
+            <div class="hint">
+              {#if busy}<button type="button" class="stop" onclick={() => halt(true)}>Stop <span class="kb">Esc Esc</span></button>{/if}
+              <span><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</span>
+            </div>
           </div>
           <div class="pills">
             <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
@@ -348,7 +367,9 @@
   .box { border: 1px solid var(--ac); border-radius: 10px; background: var(--dk); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
   /* Chromium grows the box with its text (field-sizing); max-height is 8 lines, then it scrolls. */
   textarea { border: 0; background: none; resize: none; outline: none; width: 100%; padding: 0; font: inherit; font-size: 15px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 3em; max-height: 12em; overflow-y: auto; }
-  .hint { align-self: flex-end; font-size: 11px; color: var(--fgd); }
+  .hint { align-self: flex-end; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 14px; font-size: 11px; color: var(--fgd); }
+  .stop { font: inherit; padding: 2px 10px; border: 1px solid var(--r); border-radius: 6px; background: none; color: inherit; cursor: pointer; }
+  .stop:hover, .stop:focus-visible { background: var(--sel); outline: none; }
   .rel { position: relative; }
   .chip { align-self: flex-start; max-width: 100%; margin-bottom: 6px; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 6px; overflow-wrap: anywhere; }
   .pills { display: flex; flex-wrap: wrap; gap: 8px; }

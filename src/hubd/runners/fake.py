@@ -103,7 +103,7 @@ class FakeChat:
         previous = self.turns.get(chat_id)
         self.turns[chat_id] = asyncio.create_task(self._turn(chat_id, text, previous))
 
-    async def stop(self, chat_id: str) -> None:
+    async def stop(self, chat_id: str, now: bool = False) -> None:
         self.chats.discard(chat_id)
         if task := self.turns.pop(chat_id, None):
             task.cancel()
