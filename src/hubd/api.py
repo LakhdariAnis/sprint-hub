@@ -62,6 +62,11 @@ class NewChat(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh", "max"]  # `claude --effort`
 
 
+class ChatChange(BaseModel):
+    model: Literal["opus", "sonnet", "haiku"] | None = None
+    effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+
+
 class Message(BaseModel):
     text: Annotated[str, StringConstraints(pattern=r"\S")]  # not empty, not only spaces
 
@@ -288,6 +293,10 @@ def create_app(
     @app.get("/chats/{chat_id}")
     def get_chat(chat_id: str) -> dict:
         return chats.json(chats.get(chat_id))
+
+    @app.patch("/chats/{chat_id}")
+    async def change_chat(chat_id: str, body: ChatChange) -> dict:
+        return chats.json(await chats.update(chat_id, body.model, body.effort))
 
     @app.post("/chats/{chat_id}/message")
     async def message(chat_id: str, body: Message) -> dict:

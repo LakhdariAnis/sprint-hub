@@ -67,8 +67,10 @@ class FakeChat:
         self.delay = delay
         self.turns: dict[str, asyncio.Task[None]] = {}  # the turn under way, per open chat
         self.chats: set[str] = set()
+        self.opened: list[tuple[str, str, str | None]] = []  # (chat id, model, effort) per open
 
     async def open(self, chat_id: str, cwd: Path, model: str, effort: str | None) -> None:
+        self.opened.append((chat_id, model, effort))
         self.chats.add(chat_id)
 
     async def send(self, chat_id: str, text: str) -> None:

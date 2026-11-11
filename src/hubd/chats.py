@@ -18,7 +18,7 @@ EVERY = 60  # seconds between idle checks
 
 
 class Full(Exception):
-    """A 4th live chat process: the page asks to stop one (409)."""
+    """A 4th live chat process, or a change while Claude answers: the page shows why (409)."""
 
 
 @dataclass
@@ -73,6 +73,17 @@ class Chats:
             await self.runner.open(chat.id, chat.cwd, chat.model, chat.effort)  # resumes it
         chat.turns.append({"text": text, "events": [], "done": False})
         await self.runner.send(chat_id, text)
+
+    async def update(self, chat_id: str, model: str | None, effort: str | None) -> Chat:
+        """New model or effort: a live process is closed and resumed with the new flag."""
+        chat = self.get(chat_id)
+        if chat.busy:  # closing now would cut the answer
+            raise Full("Claude is answering: change model or effort when it is done")
+        chat.model, chat.effort = model or chat.model, effort or chat.effort
+        if self.live(chat_id):
+            await self.runner.stop(chat_id)
+            await self.runner.open(chat_id, chat.cwd, chat.model, chat.effort)  # resumes it
+        return chat
 
     async def stop(self, chat_id: str) -> None:
         """End the process, mid-turn or not. The next message resumes the chat."""

@@ -164,3 +164,37 @@ def test_shutdown_closes_every_process(hub: Hub) -> None:
         c.post(f"/chats/{ids[0]}/message", json={"text": "a long one"})
         assert runners[0].chats == set(ids)
     assert runners[0].chats == set() and runners[0].turns == {}
+
+
+def test_patch_resumes_with_the_new_model(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        runner = c.app.state.chats.runner
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "first"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+        response = c.patch(f"/chats/{chat_id}", json={"model": "opus"})
+        assert response.status_code == 200
+        assert (response.json()["model"], response.json()["effort"]) == ("opus", "low")
+        assert runner.opened == [(chat_id, "haiku", "low"), (chat_id, "opus", "low")]
+        c.patch(f"/chats/{chat_id}", json={"effort": "high"})
+        assert runner.opened[-1] == (chat_id, "opus", "high")
+        c.post(f"/chats/{chat_id}/message", json={"text": "second"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 2)
+        assert [t["text"] for t in c.get(f"/chats/{chat_id}").json()["turns"]] == [
+            "first",
+            "second",
+        ]
+
+
+def test_patch_refused_mid_turn_or_bad(hub: Hub) -> None:
+    c, events = client(hub, delay=0.2)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "slow"})
+        response = c.patch(f"/chats/{chat_id}", json={"model": "opus"})
+        assert response.status_code == 409 and "answering" in response.json()["detail"]
+        assert c.get(f"/chats/{chat_id}").json()["model"] == "haiku"
+        assert c.patch(f"/chats/{chat_id}", json={"model": "gpt"}).status_code == 422
+        assert c.patch("/chats/nope", json={"model": "opus"}).status_code == 404
+        until(lambda: any(e["kind"] == "turn_end" for e in events))
