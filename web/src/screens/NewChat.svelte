@@ -56,6 +56,25 @@
     failed = ''
     await edit(cid, { open: false }).then(() => (location.hash = '#/chat'), (e: Error) => (failed = e.message))
   }
+  // The saved chat's name (the vault's, `R` changes it); a chat that was not sent has none.
+  const title = $derived(saved.list?.find((c) => c.id === cid)?.title ?? '')
+  let renaming = $state(false)
+  let draft = $state('')
+  let nameBox = $state<HTMLInputElement>()
+  function rename() {
+    if (!title) return
+    draft = title
+    renaming = true
+    tick().then(() => (nameBox?.focus(), nameBox?.select()))
+  }
+  async function saveName() {
+    const t = draft.trim()
+    renaming = false
+    focusBox()
+    if (!t || t === title || !cid) return
+    failed = ''
+    await edit(cid, { title: t }).catch((e: Error) => (failed = e.message))
+  }
   let lastEsc = 0
   function esc() {
     const now = Date.now()
@@ -65,7 +84,7 @@
     } else lastEsc = now
   }
   const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
-  useKeys({ x: close, c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  useKeys({ x: close, R: rename, c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
   const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
   const outcome: Record<string, string> = {
     allow: 'Allowed',
@@ -231,16 +250,19 @@
 
 <div class="page">
   <Header>
-    {#snippet crumb()}<a href="#/chat">Chats</a> › New{/snippet}
-    {#snippet aside()}{#if !turns.length}Not saved until you send{/if}{/snippet}
-    New chat
+    {#snippet crumb()}<a href="#/chat">Chats</a> › {title ? 'Chat' : 'New'}{/snippet}
+    {#snippet aside()}{#if !turns.length && !title}Not saved until you send{/if}{/snippet}
+    {#if renaming}
+      <input class="name" aria-label="Chat name" maxlength="100" bind:this={nameBox} bind:value={draft} onblur={() => (renaming = false)}
+        onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveName() : e.key === 'Escape' && ((renaming = false), focusBox()))} />
+    {:else}{title || 'New chat'}{/if}
   </Header>
   <div class="body">
     <section class="pn f">
       <div class="ph"><span class="hk">c</span>Chat<span class="n">plain chat · no project</span></div>
       <div class="log" bind:this={log} {onscroll}>
         <div class="col">
-          {#if !turns.length && !failed}
+          {#if !turns.length && !failed && !title}
             <div class="hi">What are we working on?</div>
             <div class="dim">Just type. Or start from a project, a sprint or one step.</div>
             <div class="starters">
@@ -249,6 +271,7 @@
               {/each}
             </div>
           {/if}
+          {#if cid && chats[cid]?.earlier_hidden}<div class="dim xs" role="status">earlier turns not shown</div>{/if}
           {#each turns as t, i}
             <div class="turn" class:foc={i === sel} aria-current={i === sel ? 'true' : undefined}>
               <div class="me">{t.me}</div>
@@ -363,6 +386,7 @@
   .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 10px; margin-left: -10px; }
   .turn.foc { box-shadow: inset 3px 0 0 var(--ac); }
   .cost { overflow-wrap: anywhere; }
+  .name { font: inherit; color: inherit; background: var(--dk); border: 1px solid var(--ac); border-radius: 5px; padding: 0 6px; height: 30px; width: min(420px, 100%); outline: none; }
   .stopped { align-self: flex-start; padding: 0 8px; border: 1px solid var(--sel); border-radius: 999px; font-size: 11px; color: var(--fgd); }
   .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
   .tl { display: flex; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: var(--fgd); font: inherit; text-align: left; cursor: pointer; }

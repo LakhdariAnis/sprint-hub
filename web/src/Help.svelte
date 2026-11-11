@@ -26,7 +26,7 @@
     ['j k  Enter', 'Settings: pick a row; Enter edits a setting (Enter saves, Esc leaves) or copies a fix command'],
     ['e', 'list the broken files: file, line, message (also click the count in the status line)'],
     ['c  i', 'New chat: put the cursor in the message box; Enter sends, Shift+Enter is a new line, Esc leaves the box'],
-    ['x', 'New chat: close the chat (out of OPEN, kept in the vault)'],
+    ['x  R', 'New chat: x closes the chat (out of OPEN, kept in the vault); R renames it'],
     ['a  d  A', 'New chat: answer the permission card: Allow, Deny, Allow for this chat (Esc leaves the box first)'],
     ['?', 'show / hide this help'],
   ]
