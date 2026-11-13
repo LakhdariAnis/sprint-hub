@@ -88,6 +88,7 @@ test('a run hubd found gone is flagged with the f hint; y confirms too', async (
   await page.keyboard.press('y')
   await expect(page.locator('.chip.s-done')).toBeVisible()
   await expect(page.getByText(/The run is gone/)).toHaveCount(0)
+  await page.unrouteAll({ behavior: 'ignoreErrors' }) // a late refetch of Today would hit the handler as the page closes
 })
 
 test('the app shows a refused finish, and ? lists the f key', async ({ page, request }) => {
