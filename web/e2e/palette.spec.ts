@@ -78,10 +78,11 @@ for (const [w, h] of [[1920, 1080], [743, 730]]) {
     await page.keyboard.press('Control+k')
     const third = box(page).getByRole('option').nth(2)
     await expect(third).toBeVisible()
-    const id = (await third.locator('.sub').first().innerText()).split('/')
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
     await expect(third).toHaveAttribute('aria-selected', 'true')
+    // Read just before Enter: steps other specs add meanwhile reorder the list.
+    const id = (await third.locator('.sub').first().innerText()).split('/')
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(new RegExp(`#/steps/${id[0]}/${id[1]}$`))
 
