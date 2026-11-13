@@ -1,6 +1,6 @@
 <script lang="ts">
   import './theme.css'
-  import './keys.svelte'
+  import { keys } from './keys.svelte'
   import { hub } from './hub.svelte'
   import { nav } from './nav.svelte'
   import NewChat from './screens/NewChat.svelte'
@@ -32,7 +32,8 @@
     {#if hub.live === false}
       <div class="down" role="alert">hubd is not running, so this screen may be out of date. Start it with <code>uv run hubd</code>; this goes away by itself when it is back.</div>
     {/if}
-    <main>
+    <!-- data-shown: the hash whose screen is on show (it lags the URL while data loads), for e2e. -->
+    <main data-shown={keys.shown}>
       <!-- A plain line, no motion: the next screen is still loading. -->
       {#if nav.slow}<div class="slow"></div>{/if}
       {#if !r}<!-- first load: nothing to keep on show -->
