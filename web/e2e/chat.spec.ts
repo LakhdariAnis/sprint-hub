@@ -340,6 +340,12 @@ test('two chats under OPEN: 6 and 7 open them, R renames one, x closes one and t
   const digit = async (r: typeof alpha) => (await r.locator('.k').innerText()).trim()
   expect(Number(await digit(beta))).toBeLessThan(Number(await digit(alpha))) // newest first
 
+  // A reload keeps both under OPEN, in the same order, and the chat on show.
+  await page.reload()
+  await expect(page.locator('.me', { hasText: `beta ${tag}` })).toBeVisible()
+  await expect(alpha).toBeVisible()
+  expect(Number(await digit(beta))).toBeLessThan(Number(await digit(alpha)))
+
   // The digit of a row opens its chat.
   await box.press('Escape')
   await page.keyboard.press(await digit(alpha))
