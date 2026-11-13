@@ -133,6 +133,7 @@ class Hub:
         """
         known = self._repo_dirs()
         loaded = self.vault.is_dir()
+        restarted = False
         while not stop.is_set():
             if not loaded and self.vault.is_dir():
                 # `hubd init` made the vault: read it. Nothing is imported, `hubd import` does that.
@@ -155,9 +156,12 @@ class Hub:
             try:
                 async with aclosing(watching):
                     async for changes in watching:
+                        if restarted:  # a file written while watching restarted had no event
+                            restarted = False
+                            async with self.lock:
+                                self._reload_all()
                         for path in sorted({p for _, p in changes}):
                             await self.reload(Path(path))
-                        # shortcut: a file written while watching restarts shows at its next change.
                         if (now := self._repo_dirs()) != known:
                             await self._import_projects(now - known)
                             known = now
@@ -169,6 +173,7 @@ class Hub:
             except OSError:  # a watched folder vanished between the check and the watch
                 known = self._repo_dirs()
                 await asyncio.sleep(1)
+            restarted = True
 
     def _roots(self, sprints: set[Path]) -> list[Path]:
         """The folders to watch that exist now; a missing vault is watched once it appears."""

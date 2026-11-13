@@ -228,6 +228,37 @@ def test_repo_that_gets_sprint_later(vault: Path, notifier: Recorder, tmp_path: 
     asyncio.run(watching(hub, body))
 
 
+def test_project_written_while_watching_restarts(
+    vault: Path, notifier: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 611a: two projects added at once (parallel e2e); the second lands in the gap."""
+    repo = tmp_path / "first"
+    repo.mkdir()
+    hub = Hub(vault, lambda ended: FakeRunner(ended, delay=0), notifier)
+    imported = hub._import_projects
+
+    async def import_then_write(sprints: set[Path]) -> None:
+        await imported(sprints)
+        folder = vault / "projects" / "second"
+        (folder / "steps").mkdir(parents=True)
+        (folder / "project.md").write_text(
+            f"---\nname: second\nrepo: {repo}\nmodel: sonnet\nmerge: manual\n---\n"
+        )
+
+    monkeypatch.setattr(hub, "_import_projects", import_then_write)
+
+    async def body() -> None:
+        (repo / "sprint").mkdir()
+        folder = vault / "projects" / "first"
+        (folder / "steps").mkdir(parents=True)
+        (folder / "project.md").write_text(
+            f"---\nname: first\nrepo: {repo}\nmodel: sonnet\nmerge: manual\n---\n"
+        )
+        await until(lambda: "second" in hub.index.projects)
+
+    asyncio.run(watching(hub, body))
+
+
 def test_hubd_starts_without_a_vault_and_picks_it_up(tmp_path: Path, notifier: Recorder) -> None:
     vault = tmp_path / "Hub"
     repo = tmp_path / "repo"
