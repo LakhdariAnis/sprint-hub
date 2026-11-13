@@ -259,6 +259,20 @@ def test_project_written_while_watching_restarts(
     asyncio.run(watching(hub, body))
 
 
+def test_project_written_before_watching_starts(vault: Path, hub: Hub, tmp_path: Path) -> None:
+    """Step 611a: hubd read the vault at start; a project written before the watch has no event."""
+    folder = vault / "projects" / "early"
+    (folder / "steps").mkdir(parents=True)
+    (folder / "project.md").write_text(
+        f"---\nname: early\nrepo: {tmp_path}\nmodel: sonnet\nmerge: manual\n---\n"
+    )
+
+    async def body() -> None:
+        await until(lambda: "early" in hub.index.projects)
+
+    asyncio.run(watching(hub, body))
+
+
 def test_hubd_starts_without_a_vault_and_picks_it_up(tmp_path: Path, notifier: Recorder) -> None:
     vault = tmp_path / "Hub"
     repo = tmp_path / "repo"
