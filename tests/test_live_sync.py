@@ -204,7 +204,8 @@ def test_bad_projects_toml_is_an_error_not_a_crash(
         await until(lambda: any(e.path == hub.projects_file for e in hub.index.errors))
 
     events = asyncio.run(watching(hub, body))
-    assert [e["type"] for e in events] == ["error"]
+    # `reload`: the watch's first read of the vault (611a)
+    assert [e["type"] for e in events if e["type"] != "reload"] == ["error"]
 
 
 def test_repo_that_gets_sprint_later(vault: Path, notifier: Recorder, tmp_path: Path) -> None:
