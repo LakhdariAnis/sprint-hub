@@ -45,12 +45,14 @@ test('start a step, wait for done, approve it', async ({ page }) => {
 })
 
 test('plain keys switch tabs, open steps and the sidebar rail', async ({ page }) => {
+  // chat.spec runs alongside: its new chats would sort above the step in OPEN and move its digit.
+  await page.route('**/chats', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue()))
   await page.goto('/#/steps/notes/301')
   const open = page.getByRole('link', { name: 'notes 301' })
   await expect(open).toBeVisible()
   await page.keyboard.press('1')
   await expect(page).toHaveURL(/#\/projects$/)
-  // OPEN lists chats of other specs too, newest first: the step's own digit is in its row.
+  // The step's own digit is in its row.
   const digit = (await open.locator('.k').innerText()).trim()
   await page.keyboard.press(digit)
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
