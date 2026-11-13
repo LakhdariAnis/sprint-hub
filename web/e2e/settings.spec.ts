@@ -3,10 +3,17 @@ import { expect, test } from '@playwright/test'
 // Step 510c: the Settings screen on the demo hubd (its vault is a throwaway folder, so hub.toml is the demo's own).
 const noPageScroll = (page: import('@playwright/test').Page) => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight && document.documentElement.scrollWidth <= innerWidth)
 
+// Steps toward the row, up or down: other specs add projects meanwhile, which moves the rows.
 async function moveTo(page: import('@playwright/test').Page, name: string) {
+  await expect(page.locator('main')).toHaveAttribute('data-shown', '#/settings') // keys before that are held, then run at once
   for (let i = 0; i < 60; i++) {
-    if ((await page.evaluate(() => document.querySelector('.row.f .nm')?.textContent)) === name) return
-    await page.keyboard.press('j')
+    const [names, at] = await page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.row')]
+      return [rows.map((r) => r.querySelector('.nm')?.textContent), rows.findIndex((r) => r.classList.contains('f'))] as const
+    })
+    const to = names.indexOf(name)
+    if (to === at) return
+    await page.keyboard.press(to > at ? 'j' : 'k')
   }
   throw new Error(`no row ${name}`)
 }
