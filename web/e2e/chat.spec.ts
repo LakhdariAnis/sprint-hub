@@ -426,3 +426,27 @@ test('answers show code, lists, a table and links; markup stays text; wide code 
   expect(await code.locator('pre').evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
+
+// Step 611a: a chat with an answer (markdown, a tool line, the cost line) in the Sprint 4 sizes.
+for (const [w, h] of [[1920, 1080], [960, 1080], [743, 730], [743, 540]]) {
+  test(`a chat at ${w}x${h}: the box and the last answer in view, nothing wider than the window, no page scroll`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h })
+    await page.goto('/#/chat')
+    const box = page.getByRole('textbox', { name: 'Message' })
+    await expect(box).toBeInViewport({ ratio: 1 })
+    for (const text of ['say hi', 'md please']) { // a tool line, then the markdown
+      await box.fill(text)
+      await box.press('Enter')
+      await answered(page)
+    }
+    const ai = page.locator('.ai').last()
+    await expect(ai.locator('.code')).toBeVisible()
+    await expect(page.locator('.tl').last()).toBeVisible()
+    await expect(page.locator('.cost').last()).toBeInViewport()
+    await expect(box).toBeInViewport({ ratio: 1 })
+    await expect(page.getByRole('heading', { name: 'say hi' })).toBeInViewport()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    expect(await page.locator('main').evaluate((m) => m.scrollHeight <= m.clientHeight && m.scrollWidth <= m.clientWidth)).toBe(true)
+    expect(await ai.evaluate((a) => a.scrollWidth <= a.clientWidth)).toBe(true)
+  })
+}
