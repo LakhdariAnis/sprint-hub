@@ -3,7 +3,8 @@
 export type Run =
   | { t: 'text'; s: string }
   | { t: 'code'; s: string }
-  | { t: 'b' | 'i'; kids: Run[] }
+  | { t: 'b'; kids: Run[] }
+  | { t: 'i'; kids: Run[] }
   | { t: 'a'; href: string; kids: Run[] }
 export type Item = { runs: Run[]; sub?: List }
 export type List = { t: 'list'; ordered: boolean; items: Item[] }
