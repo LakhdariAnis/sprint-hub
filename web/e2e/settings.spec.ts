@@ -89,3 +89,11 @@ for (const [w, h] of [[743, 730], [743, 540]]) {
     })
   }
 }
+
+// Step 611a: a project removed between the list and its steps (another spec's afterAll) is left out, the screen still shows.
+test('a project gone since the list was read is left out, Settings still shows', async ({ page }) => {
+  await page.route('**/projects/notes/steps', (route) => route.fulfill({ status: 404, json: { detail: 'no project notes' } }))
+  await page.goto('/#/settings')
+  await expect(page.locator('.row.project', { hasText: 'demo' })).toBeVisible()
+  await expect(page.locator('.row.project', { hasText: 'notes' })).toHaveCount(0)
+})
