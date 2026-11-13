@@ -81,9 +81,14 @@ for (const [w, h] of [[1920, 1080], [743, 730]]) {
     await page.keyboard.press('ArrowDown')
     await page.keyboard.press('ArrowDown')
     await expect(third).toHaveAttribute('aria-selected', 'true')
-    // Read just before Enter: steps other specs add meanwhile reorder the list.
-    const id = (await third.locator('.sub').first().innerText()).split('/')
-    await page.keyboard.press('Enter')
+    // Read and Enter in one go: step events (FakeRunner ticks, other specs) reorder the list at any time.
+    const id = (
+      await page.evaluate(() => {
+        const sub = document.querySelector('[role=option][aria-selected=true] .sub')!.textContent!
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        return sub
+      })
+    ).split('/')
     await expect(page).toHaveURL(new RegExp(`#/steps/${id[0]}/${id[1]}$`))
 
     // The header search box opens it too (Ctrl+N moves down, Ctrl+P up).
