@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
+  import Markdown from '../Markdown.svelte'
   import { answer, answerOf, asksOf, toolsOf, change, chats, edit, saved, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
   import { costLine } from '../cost'
   import { useKeys } from '../keys.svelte'
@@ -238,9 +239,6 @@
     if (stick) tick().then(() => log && (log.scrollTop = log.scrollHeight))
   })
 
-  // ``` fences make a code block, the rest is text (610 does the markdown). A fence still open while the answer streams is a block too.
-  const parts = (s: string) => s.split('```').map((p, i) => ({ code: i % 2 === 1, text: i % 2 === 1 ? p.replace(/^[^\n]*\n/, '').replace(/\n$/, '') : p.trim() })).filter((p) => p.text)
-
   const starters = [
     ['/project', 'Talk about a project', 'loads its README and sprints'],
     ['/sprint', 'Plan or check a sprint', 'hours vs the 15 h budget'],
@@ -277,9 +275,7 @@
               <div class="me">{t.me}</div>
               {#each t.blocks as b}
                 {#if b.kind === 'text'}
-                  {#each parts(b.text) as p}
-                    {#if p.code}<pre>{p.text}</pre>{:else}<p class="ai">{p.text}</p>{/if}
-                  {/each}
+                  <div class="ai"><Markdown text={b.text} /></div>
                 {:else if b.kind === 'tool'}
                   <div class="tool" class:open={b.open}>
                     <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
@@ -380,7 +376,7 @@
   .starter:hover, .starter:focus-visible { border-color: var(--ac); outline: none; }
   .starter .c { font: 700 13px var(--mono); color: var(--ac); }
   .me { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 10px; background: var(--sel); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .ai { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+  .ai { min-width: 0; }
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
   .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 10px; margin-left: -10px; }

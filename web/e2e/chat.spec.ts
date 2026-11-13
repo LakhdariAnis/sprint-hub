@@ -378,3 +378,45 @@ test('two chats under OPEN: 6 and 7 open them, R renames one, x closes one and t
   await expect(alpha).toBeVisible()
   expect(await listed()).toMatchObject({ title: `Renamed ${tag}`, open: false })
 })
+
+// Step 610: the answer is drawn from markdown, never as HTML.
+test('answers show code, lists, a table and links; markup stays text; wide code scrolls in its block', async ({ page }) => {
+  await page.goto('/#/chat')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('md please')
+  await box.press('Enter')
+  const ai = page.locator('.ai')
+  await expect(ai.getByRole('heading', { name: 'Hello' }).or(ai.locator('.h2', { hasText: 'Hello' }))).toBeVisible()
+  await expect(ai.locator('b', { hasText: 'bold' })).toBeVisible()
+  await expect(ai.locator('li', { hasText: 'two' })).toBeVisible()
+  await expect(ai.locator('li li', { hasText: 'nested' })).toBeVisible()
+  await expect(ai.locator('td')).toHaveText(['1', '2'])
+  const code = ai.locator('.code')
+  await expect(code.locator('pre')).toHaveText("print('hi')")
+
+  // The link opens outside the app: a new tab, this page stays.
+  const link = ai.getByRole('link', { name: 'a link' })
+  await expect(link).toHaveAttribute('href', 'https://example.org/x')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', /noopener/)
+
+  // Markup in the answer is text.
+  await expect(ai).toContainText('<b>hi</b><script>window.__xss = 1</script>')
+  await expect(ai.locator('script')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as unknown as { __xss?: number }).__xss)).toBeUndefined()
+
+  // The copy button and `y` on the focused block put the code on the clipboard.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await code.getByRole('button', { name: 'Copy code' }).click()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("print('hi')")
+  await page.evaluate(() => navigator.clipboard.writeText(''))
+  await code.focus()
+  await page.keyboard.press('y')
+  await expect(code.getByRole('button', { name: 'Copy code' })).toHaveText('copied')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("print('hi')")
+
+  // Wide code scrolls inside the block; the page does not.
+  await code.locator('pre').evaluate((el) => (el.textContent = 'x'.repeat(400)))
+  expect(await code.locator('pre').evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})

@@ -55,6 +55,14 @@ class FakeRunner:
 
 
 REPLY = ["This is ", "a fake ", "answer. ", "The folder ", "has one file."]
+# `md …` gets this: each markdown construct, the fence split like a stream, markup left as text.
+MARKDOWN = [
+    "## Hello\n\nSome **bold**, `code` and [a link](https://example.org/x).\n\n",
+    "- one\n  - nested\n- two\n\n",
+    "```python\nprint(",
+    "'hi')\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n",
+    "<b>hi</b><script>window.__xss = 1</script>",
+]
 TOOL = {
     "type": "tool",
     "id": "fake_tool",
@@ -118,6 +126,8 @@ class FakeChat:
             await asyncio.gather(previous, return_exceptions=True)
         reply = REPLY
         delay = self.delay * 40 if text.startswith("stall") else self.delay  # time to press Stop
+        if text.startswith("md "):
+            reply = MARKDOWN
         if text.startswith("run "):
             answer = await self.ask(chat_id, "Bash", {"command": text.removeprefix("run ")})
             if answer["behavior"] != "allow":

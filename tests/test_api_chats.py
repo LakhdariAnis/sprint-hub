@@ -14,7 +14,7 @@ from hubd.api import create_app
 from hubd.chats import IDLE
 from hubd.daemon import Hub
 from hubd.runners.chat import ChatEvent
-from hubd.runners.fake import REPLY, FakeChat
+from hubd.runners.fake import MARKDOWN, REPLY, FakeChat
 
 NEW = {"model": "haiku", "effort": "low"}
 
@@ -256,6 +256,16 @@ def reply(events: list[dict], chat_id: str) -> str:
 
 def answers(events: list[dict]) -> list[str]:
     return [e["answer"] for e in events if e["kind"] == "permission_answer"]
+
+
+def test_md_message_gets_the_markdown_reply_without_a_tool(hub: Hub) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        c.post(f"/chats/{chat_id}/message", json={"text": "md please"})
+        until(lambda: [e["kind"] for e in events].count("turn_end") == 1)
+    assert reply(events, chat_id) == "".join(MARKDOWN)
+    assert "tool" not in [e["kind"] for e in events]
 
 
 def test_permission_allow(hub: Hub) -> None:
