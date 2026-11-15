@@ -19,6 +19,7 @@ from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import Click, NotifySend
+from hubd.runners.base import Unavailable
 from hubd.runners.chat import ChatEvent, ChatRunner, ClaudeChat
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.runners.fake import FakeChat
@@ -154,6 +155,10 @@ def create_app(
     async def not_found(_: Request, exc: NotFound) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=404)
 
+    @app.exception_handler(Unavailable)
+    async def unavailable(_: Request, exc: Unavailable) -> JSONResponse:
+        return JSONResponse({"detail": str(exc)}, status_code=503)
+
     @app.get("/health")
     def health() -> dict:
         body = {"ok": True, "version": version("hubd"), "demo": demo}
@@ -174,6 +179,10 @@ def create_app(
             {"id": k, **p.model_dump(mode="json"), "repo_missing": hub.repo_missing(k)}
             for k, p in hub.index.projects.items()
         ]
+
+    @app.post("/projects/{project}/focus")
+    async def focus_project(project: str) -> dict:
+        return {"workspace": await hub.focus(project)}
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:

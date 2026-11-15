@@ -41,7 +41,7 @@ EXTRA = {
     "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
     "comment:\n",
     "projects/notes/project.md": "---\nname: notes\nrepo: notes-repo\nmodel: sonnet\n"
-    "merge: manual\n---\nSecond demo project.\n",
+    "workspace: 2\nmerge: manual\n---\nSecond demo project.\n",
     "projects/notes/steps/301.md": "---\nstep: 301\ntitle: Parse the notes\nstate: todo\n"
     "by: claude\nmodel: sonnet\nbranch: step/301-parse\ndue: 2026-10-25\n---\n\n## Runs\n\n"
     "## Review\nverdict:\ncomment:\n\n## Questions\n",

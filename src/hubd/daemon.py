@@ -99,6 +99,15 @@ class Hub:
                 runs = entry.step.runs
                 entry.run_gone = not (runs and self.runner.running(runs[-1].session))
 
+    async def focus(self, project: str) -> int:
+        """Switch the desktop to the project's workspace; returns its number."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        if (workspace := self.index.projects[project].workspace) is None:
+            raise NotFound(f"{project} has no workspace: set `workspace:` in its project.md")
+        await self.runner.focus(workspace)
+        return workspace
+
     def emit(self, event: dict) -> None:
         for queue in self.queues:
             queue.put_nowait(event)

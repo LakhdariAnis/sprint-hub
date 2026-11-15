@@ -2,6 +2,7 @@ import subprocess
 import time
 from datetime import date, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from test_api_chats import until
 
@@ -108,3 +109,17 @@ def test_demo_records_its_popups_and_only_the_demo_serves_them(hub: Hub) -> None
             {"title": "Claude answered", "body": "say hi"}
         ]
     assert TestClient(create_app(hub)).get("/demo/notifications").status_code == 404
+
+
+def test_demo_focus_and_start_never_call_hyprctl(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_process(*a: object, **kw: object) -> None:
+        raise AssertionError("demo mode started a process")
+
+    with TestClient(demo_app()) as client:
+        projects = {p["id"]: p["workspace"] for p in client.get("/projects").json()}
+        assert projects == {"demo": None, "notes": 2}
+        monkeypatch.setattr(subprocess, "run", no_process)
+        monkeypatch.setattr(subprocess, "Popen", no_process)
+        assert client.post("/projects/notes/focus").json() == {"workspace": 2}
+        assert client.post("/projects/demo/focus").status_code == 404
+        assert client.post("/steps/notes/301/start").status_code == 200
