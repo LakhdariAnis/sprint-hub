@@ -5,7 +5,7 @@
     ['↑ ↓  j k', 'move up / down'],
     ['→  Enter', 'open'],
     ['←  Esc', 'back'],
-    ['Ctrl+K  /', 'command palette: type to find a project, step or screen, or run an action; ↑ ↓ or Ctrl+N / Ctrl+P move, Enter goes, Esc closes'],
+    ['Ctrl+K  /', 'command palette: type to find a project, step or screen, or run an action; ↑ ↓ or Ctrl+P move, Enter goes, Esc closes'],
     ['g t', 'go to Today'],
     ['g p', 'go to Projects'],
     ['g r', 'go to Review'],

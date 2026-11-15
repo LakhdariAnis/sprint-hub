@@ -114,7 +114,7 @@
   .sb { transition: width 0.16s ease; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
   .rail { width: 56px; }
-  .rail .lbl, .rail .k, .rail .newc .k { display: none; }
+  .rail .lbl, .rail .k { display: none; }
   .rail .sl { margin: 0 -10px; }
   .rail .sg { font-size: 0; height: 1px; padding: 0; margin: 10px 8px; background: var(--sel); }
   .rail .brand { padding-left: 0; padding-right: 0; justify-content: center; }
