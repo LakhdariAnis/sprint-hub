@@ -1,5 +1,6 @@
 """The chat routes with FakeChat: open, messages, stop, `chat` events, bad bodies."""
 
+import asyncio
 import json
 import time
 from collections.abc import Callable
@@ -481,3 +482,13 @@ def test_close_ends_the_process_keeps_the_entry_and_a_message_reopens(
         assert chatlog.load(chatlog.path_of(vault, None))[0].open is False
         c.post(f"/chats/{chat_id}/message", json={"text": "back"})
         assert c.get(f"/chats/{chat_id}").json()["open"]
+
+
+def test_project_chat_opens_with_its_workspace(hub: Hub) -> None:
+    asyncio.run(hub.set_workspace("demo", 4))
+    c, _ = client(hub)
+    with c:
+        runner = c.app.state.chats.runner
+        c.post("/chats", json=NEW | {"project": "demo"})
+        c.post("/chats", json=NEW)  # a scratch chat has no project, so no workspace
+        assert runner.workspaces == [4, None]

@@ -70,11 +70,13 @@ class ChatRunner(Protocol):
         effort: str | None,
         system: str | None = None,
         scratch: bool = False,
+        workspace: int | None = None,
     ) -> None:
         """Start the chat in `cwd`, or resume it when `chat_id` was opened before.
 
         `system` is appended to Claude's system prompt; a resume needs it again. `scratch`: a
-        chat with no project, which gets no command tools (`hubd.permits`).
+        chat with no project, which gets no command tools (`hubd.permits`). `workspace`: where
+        the windows it opens go.
         """
         ...
 
@@ -326,6 +328,7 @@ class ClaudeChat:
         effort: str | None,
         system: str | None = None,
         scratch: bool = False,
+        workspace: int | None = None,
     ) -> None:
         chat_id = str(uuid.UUID(chat_id))  # ValueError: not a session id
         if chat_id in self.chats:
@@ -337,6 +340,8 @@ class ClaudeChat:
         )
         # Claude gives up on an MCP tool after MCP_TOOL_TIMEOUT ms: hubd must deny first.
         env = os.environ | {"MCP_TOOL_TIMEOUT": str((permits.ASK_WAIT + 60) * 1000)}
+        if workspace is not None:  # the windows it opens go there (`hubd.windows`)
+            env["HUB_WORKSPACE"] = str(workspace)
         try:
             process = await asyncio.create_subprocess_exec(
                 self.claude,

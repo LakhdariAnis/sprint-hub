@@ -56,11 +56,12 @@ class ClaudeCodeRunner:
 
         With a workspace and `hyprctl` on PATH: `hl.dsp.exec_cmd` opens it there, without
         switching to it. Hyprland starts that process, not hubd, so the hook's env goes on it.
+        `HUB_WORKSPACE` sends the windows Claude opens there too (`hubd.windows`).
         """
         argv = [arg.replace("{cwd}", str(cwd)) for arg in self.terminal] + ["claude", *claude_args]
         if workspace is None or shutil.which("hyprctl") is None:
             return argv
-        env = [f"HUB_RUN={step.step}", f"HUB_URL={self.hub_url}"]
+        env = [f"HUB_RUN={step.step}", f"HUB_URL={self.hub_url}", f"HUB_WORKSPACE={workspace}"]
         line = shlex.join(["env", *env, *argv])  # run by `sh -c`: a path with spaces needs quotes
         # Hyprland's Lua dispatch; a JSON string is also a valid Lua string here.
         rules = f'{{ workspace = "{workspace} silent" }}'

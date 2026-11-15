@@ -92,6 +92,7 @@ class Chats:
         context: Callable[[str, int | None, str | None], Awaitable[Context]],
         transcript: Transcript = no_transcript,
         popup: Popup = lambda *_: False,
+        workspace: Callable[[str], int | None] = lambda _: None,
     ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
@@ -102,6 +103,7 @@ class Chats:
         self.chats: dict[str, Chat] = {}
         self.ask_wait = permits.ASK_WAIT
         self.popup = popup
+        self.workspace = workspace  # a project's Hyprland workspace, read at each open
         self.clock = time.monotonic  # tests move it
         # Each page window's last report: window id -> (focused, chat it shows, when).
         self.windows: dict[str, tuple[bool, str | None, float]] = {}
@@ -192,17 +194,21 @@ class Chats:
         self._room()
         chat = Chat(str(uuid.uuid4()), project, model, effort, cwd, context, sprint, step)
         self.chats[chat.id] = chat
-        await self.runner.open(chat.id, cwd, model, effort, chat.system, chat.scratch)
+        await self._start(chat)
         return chat
+
+    async def _start(self, chat: Chat) -> None:
+        workspace = self.workspace(chat.project) if chat.project else None
+        await self.runner.open(
+            chat.id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch, workspace
+        )
 
     async def send(self, chat_id: str, text: str) -> None:
         chat = await self.load(chat_id)
         chat.used = time.monotonic()
         if not self.live(chat_id):
             self._room(chat_id)
-            await self.runner.open(
-                chat.id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
-            )
+            await self._start(chat)
         chat.title = chat.title or chatlog.title_of(text)
         chat.open, chat.stamp = True, datetime.now()
         self._save(chat)
@@ -245,9 +251,7 @@ class Chats:
             self._save(chat)
         if self.live(chat_id):
             await self.runner.stop(chat_id)
-            await self.runner.open(
-                chat_id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch
-            )
+            await self._start(chat)
         return chat
 
     async def edit(self, chat_id: str, title: str | None, open: bool | None) -> Chat:

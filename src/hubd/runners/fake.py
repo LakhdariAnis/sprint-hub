@@ -108,6 +108,7 @@ class FakeChat:
         self.ask = no_one
         self.opened: list[tuple[str, str, str | None]] = []  # (chat id, model, effort) per open
         self.systems: list[str | None] = []  # `system` per open
+        self.workspaces: list[int | None] = []  # `workspace` per open
 
     async def open(
         self,
@@ -117,10 +118,12 @@ class FakeChat:
         effort: str | None,
         system: str | None = None,
         scratch: bool = False,
+        workspace: int | None = None,
     ) -> None:
         self.opened.append((chat_id, model, effort))
         self.models[chat_id] = model
         self.systems.append(system)
+        self.workspaces.append(workspace)
         self.chats.add(chat_id)
 
     async def send(self, chat_id: str, text: str) -> None:

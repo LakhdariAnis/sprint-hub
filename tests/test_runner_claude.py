@@ -114,7 +114,7 @@ def test_command_with_workspace_goes_through_hyprctl(hypr: Hypr) -> None:
     assert runner.command(STEP, Path("/repo"), ["go"], 3) == [
         "hyprctl",
         "dispatch",
-        f'hl.dsp.exec_cmd("env HUB_RUN=106 HUB_URL={URL} foot -D /repo claude go", '
+        f'hl.dsp.exec_cmd("env HUB_RUN=106 HUB_URL={URL} HUB_WORKSPACE=3 foot -D /repo claude go", '
         '{ workspace = "3 silent" })',
     ]
 
@@ -124,7 +124,7 @@ def test_command_quotes_a_path_with_spaces(hypr: Hypr) -> None:
     lua = runner.command(STEP, Path("/my repo/it's"), ["a b"], 4)[2]
     assert lua.endswith(', { workspace = "4 silent" })')
     line = json.loads(lua.removeprefix("hl.dsp.exec_cmd(").rpartition(", {")[0])
-    assert shlex.split(line)[3:] == ["xdg-terminal-exec", "--dir=/my repo/it's", "claude", "a b"]
+    assert shlex.split(line)[4:] == ["xdg-terminal-exec", "--dir=/my repo/it's", "claude", "a b"]
 
 
 def test_no_hyprctl_on_path_launches_directly(
