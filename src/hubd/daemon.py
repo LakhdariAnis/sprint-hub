@@ -451,11 +451,7 @@ class Hub:
             if entry.step.by == "me":
                 raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
             settings = self.index.projects[project]
-            repo = self.repo(project)
-            if repo is None:
-                raise InvalidTransition(f"project {project}: no repo to run in")
-            if not repo.is_dir():
-                raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
+            repo = self._run_repo(project)
             new = transition(entry.step, Event.start, Actor.daemon)
             # Changes requested: continue the last run's chat, the review comment is the prompt.
             changes = entry.step.state == State.changes
@@ -469,16 +465,7 @@ class Hub:
             else:
                 model = new.model or self.command_model(entry) or settings.model
                 session = str(uuid4())
-            running = next(
-                (
-                    e.step.step
-                    for e in self.index.steps
-                    if e.step.state == State.doing
-                    and e.step.by == "claude"
-                    and self.repo(e.project) == repo
-                ),
-                None,
-            )
+            running = self._running_in(repo, step_id)
             if reason := self.runner.refusal(step_id, repo, resume is None, running):
                 raise InvalidTransition(f"step {step_id}: {reason}")
             if not new.branch and entry.spec:
@@ -507,6 +494,70 @@ class Hub:
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too
                 entry.step = old
+                raise
+            self.emit({"type": "step", **step_json(entry)})
+            return new
+
+    def _run_repo(self, project: str) -> Path:
+        repo = self.repo(project)
+        if repo is None:
+            raise InvalidTransition(f"project {project}: no repo to run in")
+        if not repo.is_dir():
+            raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
+        return repo
+
+    def _running_in(self, repo: Path, step_id: str) -> str | None:
+        """Another `by: claude` step `doing` in this repo, if any."""
+        return next(
+            (
+                e.step.step
+                for e in self.index.steps
+                if e.step.state == State.doing
+                and e.step.by == "claude"
+                and e.step.step != step_id
+                and self.repo(e.project) == repo
+            ),
+            None,
+        )
+
+    async def reopen(self, project: str, step_id: str) -> Step:
+        """Open the last run's chat again after its terminal closed: `done` -> `doing`.
+
+        A `doing` step whose run is gone reopens too and stays `doing`. Each open is its own run
+        line with the same session, so `run_ended` and `finish` match it and its minutes count.
+        """
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by == "me":
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
+            if not entry.step.runs:
+                raise InvalidTransition(f"step {step_id}: no run yet, nothing to reopen")
+            last = entry.step.runs[-1]
+            if self.runner.running(last.session):
+                raise InvalidTransition(f"step {step_id}: the chat is still open")
+            gone = entry.step.state == State.doing and entry.run_gone
+            new = (
+                entry.step.model_copy()
+                if gone
+                else transition(entry.step, Event.reopen, Actor.daemon)
+            )
+            repo = self._run_repo(project)
+            running = self._running_in(repo, step_id)
+            if reason := self.runner.refusal(step_id, repo, False, running):
+                raise InvalidTransition(f"step {step_id}: {reason}")
+            started = datetime.now().replace(second=0, microsecond=0)
+            new.runs = [*new.runs, Run(started=started, model=last.model, session=last.session)]
+            before = entry.path.read_bytes()
+            save_step(entry.path, new)
+            old, entry.step = entry.step, new
+            entry.run_gone = False
+            try:
+                await self.runner.resume(
+                    new, last.session, repo, "", self.index.projects[project].workspace
+                )
+            except BaseException:
+                _write_atomic(entry.path, before)  # no terminal: the file says so too
+                entry.step, entry.run_gone = old, gone
                 raise
             self.emit({"type": "step", **step_json(entry)})
             return new
@@ -588,7 +639,10 @@ class Hub:
             if entry.step.state != State.doing:
                 return entry.step  # a late hook: `f` already ended this run
             new = self._end_run(entry)
-            self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
+            self.notifier.notify(
+                "Run ended",
+                f"{entry.project} {step_id} {new.title}: review it, or o reopens the chat",
+            )
             return new
 
     async def finish(self, project: str, step_id: str) -> Step:
