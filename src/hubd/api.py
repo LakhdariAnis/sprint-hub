@@ -304,6 +304,10 @@ def create_app(
     async def finish(project: str, step_id: str) -> dict:
         return (await hub.finish(project, step_id)).model_dump(mode="json")
 
+    @app.post("/steps/{project}/{step_id}/reopen")
+    async def reopen(project: str, step_id: str) -> dict:
+        return (await hub.reopen(project, step_id)).model_dump(mode="json")
+
     @app.post("/steps/{project}/{step_id}/approve")
     async def approve(project: str, step_id: str, body: Approve | None = None) -> dict:
         step, commit = await hub.approve(project, step_id, body.own_hours if body else None)

@@ -31,6 +31,20 @@ def test_invalid_start_is_409_with_reason(hub: Hub) -> None:
     assert client.post("/steps/demo/999/start").status_code == 404
 
 
+def test_reopen(vault: Path, hub: Hub) -> None:
+    (vault / "demo-repo" / "sprint" / "103-ui.md").write_text("# Step 103\n\n## Tasks\n- Show it\n")
+    client = TestClient(create_app(hub))
+    response = client.post("/steps/demo/103/reopen")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "step 103: the chat is still open"}
+    hub.runner.ended.add("7b1e…a04")
+    response = client.post("/steps/demo/103/reopen")
+    assert response.status_code == 200
+    assert response.json()["state"] == "doing"
+    assert len(response.json()["runs"]) == 2
+    assert client.post("/steps/demo/999/reopen").status_code == 404
+
+
 def test_run_ended_from_the_hook(hub: Hub) -> None:
     client = TestClient(create_app(hub))
     body = {"session_id": "3f2a…c91", "step": "102"}
