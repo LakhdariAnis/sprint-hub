@@ -11,6 +11,8 @@ from hubd.runners import claude
 from hubd.settings import load_settings
 from hubd.vault import load_vault, vault_path
 
+WARNING = "warning:"  # a line that is not a failure, but is not fine either
+
 
 def _run(*argv: str) -> str:
     return subprocess.run(argv, capture_output=True, text=True, timeout=10, check=True).stdout
@@ -75,6 +77,26 @@ def _commands(vault: Path) -> list[tuple[bool, str]]:
     return results
 
 
+def _workspaces(vault: Path) -> list[tuple[bool, str]]:
+    """Per project with a workspace: `hyprctl` found or not. A shared number warns."""
+    projects = {n: p.workspace for n, p in load_vault(vault).projects.items() if p.workspace}
+    hypr = shutil.which("hyprctl") is not None
+    results = [
+        (True, f"{name}: runs open on workspace {n}")
+        if hypr
+        else (
+            False,
+            f"{name}: workspace {n} needs hyprctl on PATH (Hyprland); its runs open anywhere",
+        )
+        for name, n in projects.items()
+    ]
+    for n in sorted(set(projects.values())):
+        names = [name for name, w in projects.items() if w == n]
+        if len(names) > 1:  # not a failure: the windows just tile together
+            results.append((True, f"{WARNING} workspace {n} is shared by {', '.join(names)}"))
+    return results
+
+
 def fix_for(text: str) -> str | None:
     """The command that fixes a failed line, when there is one."""
     return "uv run hubd install-hook" if "run hubd install-hook" in text else None
@@ -84,7 +106,13 @@ def report(
     vault: Path, settings: Path = install.SETTINGS, theme_file: Path = theme.OMARCHY
 ) -> list[dict]:
     """Every check as `{ok, text, fix}`; `hubd doctor` and `GET /doctor` share it."""
-    results = [*checks(settings), _theme(theme_file), _terminal(vault), *_commands(vault)]
+    results = [
+        *checks(settings),
+        _theme(theme_file),
+        _terminal(vault),
+        *_commands(vault),
+        *_workspaces(vault),
+    ]
     return [{"ok": ok, "text": text, "fix": None if ok else fix_for(text)} for ok, text in results]
 
 
@@ -95,7 +123,8 @@ def main(
 ) -> int:
     results = report(vault_path(), settings, theme_file)
     for r in results:
-        print(f"{'✔' if r['ok'] else '✘'} {r['text']}")
+        mark = "⚠" if r["text"].startswith(WARNING) else "✔" if r["ok"] else "✘"
+        print(f"{mark} {r['text']}")
     # Info, not a check: hubd also runs without the service (bin/sprint-hub-app starts it).
     print(f"ℹ hubd service: {(service_state or service.state)()}")
     return 0 if all(r["ok"] for r in results) else 1

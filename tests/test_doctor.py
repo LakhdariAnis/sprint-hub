@@ -174,3 +174,33 @@ def test_get_doctor(hub, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert body["service"] == "not installed"
     assert body["version"]
     assert {"ok": False, "text": "claude not on PATH", "fix": None} in body["checks"]
+
+
+def add_project(vault: Path, name: str, workspace: int | None) -> None:
+    folder = vault / "projects" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    line = f"workspace: {workspace}\n" if workspace else ""
+    (folder / "project.md").write_text(
+        f"---\nname: {name}\nmodel: haiku\nmerge: manual\n{line}---\n"
+    )
+
+
+def test_workspace_lines(vault: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    add_project(vault, "robot", 3)
+    add_project(vault, "notes", None)  # no workspace: no line
+    monkeypatch.setattr(doctor.shutil, "which", lambda exe: "/usr/bin/hyprctl")
+    assert doctor._workspaces(vault) == [(True, "robot: runs open on workspace 3")]
+    monkeypatch.setattr(doctor.shutil, "which", lambda exe: None)
+    [(ok, text)] = doctor._workspaces(vault)
+    assert not ok and "robot: workspace 3 needs hyprctl on PATH" in text
+
+
+def test_shared_workspace_warns_once(vault: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    for name in ("a", "b"):
+        add_project(vault, name, 3)
+    add_project(vault, "c", 4)
+    monkeypatch.setattr(doctor.shutil, "which", lambda exe: "/usr/bin/hyprctl")
+    results = doctor._workspaces(vault)
+    assert results[-1] == (True, "warning: workspace 3 is shared by a, b")
+    assert [t for _, t in results].count(results[-1][1]) == 1
+    assert all(ok for ok, _ in results)  # a warning never fails the doctor
