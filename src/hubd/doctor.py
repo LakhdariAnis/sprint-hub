@@ -33,8 +33,10 @@ def checks(settings: Path = install.SETTINGS) -> list[tuple[bool, str]]:
 
 
 def _hook(settings: Path) -> list[tuple[bool, str]]:
-    problem = install.hook_problem(settings)
-    return [(False, problem)] if problem else [(True, f"{install.EVENT} hook installed")]
+    problems = [(event, install.hook_problem(settings, event)) for event in install.EVENTS]
+    if (first := problems[0][1]) and first.startswith("cannot read"):
+        return [(False, first)]  # one unreadable file, one line
+    return [(not p, p or f"{event} hook installed") for event, p in problems]
 
 
 def _theme(path: Path) -> tuple[bool, str]:

@@ -43,7 +43,7 @@ In this order, from this repo:
    project). It reads the repos and writes only in the vault. A step from a closed sprint (`sprint/archive/`), or
    whose branch is already in a remote branch (pushed = reviewed), imports as `approved`; running it again also moves
    such a step from `todo` or `done` to `approved` and leaves every other step file as it is.
-4. `uv run hubd install-hook` adds the SessionEnd hook to `~/.claude/settings.json`, so hubd hears when a run ends.
+4. `uv run hubd install-hook` adds the SessionEnd, Stop and Notification hooks to `~/.claude/settings.json`, so hubd hears when a run ends or waits for you.
 5. `uv run hubd install-service` runs hubd from login on (see below).
 6. `uv run hubd doctor` checks all of the above; every line should be `✔`.
 

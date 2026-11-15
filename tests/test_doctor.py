@@ -58,7 +58,7 @@ def test_all_good(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> No
     assert out.pop() == "ℹ hubd service: not installed"  # info line, never a failure
     assert all(line.startswith("✔") for line in out)
     assert "✔ version 9.9.9 (Claude Code)" in out
-    assert len(out) == 8  # path, version, 3 flags, hook, theme, terminal
+    assert len(out) == 10  # path, version, 3 flags, 3 hooks, theme, terminal
 
 
 def test_missing_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
@@ -75,6 +75,8 @@ def test_no_claude_and_no_hook(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
     assert capsys.readouterr().out.splitlines() == [
         "✘ claude not on PATH",
         "✘ SessionEnd hook missing: run hubd install-hook",
+        "✘ Stop hook missing: run hubd install-hook",
+        "✘ Notification hook missing: run hubd install-hook",
         f"✘ theme {tmp_path / 'colors.toml'} not found: the app uses its default colours",
         "✘ terminal claude not on PATH",
         "ℹ hubd service: not installed",
@@ -99,11 +101,23 @@ def test_hook_from_other_venv_and_broken_settings(tmp_path: Path) -> None:
     other = {"type": "command", "command": "/old/bin/python -m hubd.hook"}
     path = settings(tmp_path, {"hooks": {"SessionEnd": [{"hooks": [other]}]}})
     assert doctor._hook(path) == [
-        (False, "SessionEnd hook points to another python: run hubd install-hook")
+        (False, "SessionEnd hook points to another python: run hubd install-hook"),
+        (False, "Stop hook missing: run hubd install-hook"),
+        (False, "Notification hook missing: run hubd install-hook"),
     ]
     path.write_text("{")
     [(ok, text)] = doctor._hook(path)
     assert not ok and text.startswith("cannot read")
+
+
+def test_each_of_the_three_hooks(tmp_path: Path) -> None:
+    only_end = install.with_hook({})
+    del only_end["hooks"]["Stop"]
+    assert doctor._hook(settings(tmp_path, only_end)) == [
+        (True, "SessionEnd hook installed"),
+        (False, "Stop hook missing: run hubd install-hook"),
+        (True, "Notification hook installed"),
+    ]
 
 
 def add_step(vault: Path, step: str, state: str = "todo") -> Path:
@@ -145,9 +159,10 @@ def test_report_has_a_fix_for_the_hook(
     assert hook == [
         {
             "ok": False,
-            "text": "SessionEnd hook missing: run hubd install-hook",
+            "text": f"{event} hook missing: run hubd install-hook",
             "fix": "uv run hubd install-hook",
         }
+        for event in ("SessionEnd", "Stop", "Notification")
     ]
     assert all(r["fix"] is None for r in rows if r["ok"])
 
