@@ -101,6 +101,8 @@ runs in the page through the documented headless mode (`claude -p`, stream-json 
 `--resume`), behind a `ChatRunner` adapter with a fake for tests and demo (rule 4). Model, effort and project pills, a
 `/` menu, project / sprint / step context, permission prompts in the page, tool calls, open chats in the sidebar,
 a markdown subset without a new tool. Also: Ctrl+W asks before closing the app window, and a second window can be opened.
+Each project can have its own Hyprland workspace (`workspace: 2`–`9` in `project.md`): a step run opens its terminal
+there (613a), the hub shows the number and `w` jumps to it (613b).
 
 ### 0.5.0 — Away from the laptop (Sprint 7)
 Close a sprint at week end (moved from 0.3.0 on 2026-11-01): move unfinished steps to the next sprint, ask for actual hours.
