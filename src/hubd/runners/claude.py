@@ -8,6 +8,7 @@ from pathlib import Path
 
 from hubd import install, session
 from hubd.model import Step
+from hubd.runners.base import Unavailable
 from hubd.states import InvalidTransition
 
 # Every flag below is in https://code.claude.com/docs/en/cli-reference (checked 2026-10-16).
@@ -90,6 +91,24 @@ class ClaudeCodeRunner:
             await self._hypr(argv, self.env(step))
         else:
             await self._spawn(argv, cwd, self.env(step))
+
+    async def focus(self, workspace: int) -> None:
+        if shutil.which("hyprctl") is None:
+            raise Unavailable("hyprctl not on PATH of hubd: workspaces need Hyprland")
+        argv = ["hyprctl", "dispatch", "workspace", str(workspace)]
+        try:
+            done = await asyncio.to_thread(
+                subprocess.run,
+                argv,
+                env=session.env(),
+                capture_output=True,
+                text=True,
+                timeout=HYPRCTL_WAIT,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise Unavailable(f"hyprctl failed: {exc}") from exc
+        if (out := done.stdout.strip()) != "ok":
+            raise Unavailable(f"hyprctl said {out or done.stderr.strip() or 'nothing'}")
 
     async def _hypr(self, argv: list[str], env: dict[str, str]) -> None:
         # hyprctl prints `ok` and exits 0 even when the terminal never starts, so only a missing

@@ -10,6 +10,10 @@ from hubd.model import Step
 RunEnded = Callable[[str, str], Awaitable[None]]
 
 
+class Unavailable(Exception):
+    """The desktop cannot do it right now (no `hyprctl`, or it refused): the API says 503."""
+
+
 class AgentRunner(Protocol):
     """`start` and `resume` return once the run is launched. The end comes later: `RunEnded`."""
 
@@ -23,6 +27,10 @@ class AgentRunner(Protocol):
 
     def running(self, session_id: str) -> bool:
         """Is this session alive right now? Asked when hubd starts."""
+        ...
+
+    async def focus(self, workspace: int) -> None:
+        """Switch the desktop to this Hyprland workspace; raises `Unavailable` with the reason."""
         ...
 
     async def start(

@@ -17,12 +17,16 @@ class FakeRunner:
         self.tasks: dict[str, asyncio.Task[None]] = {}  # keeps runs alive; tests await them
         self.resumed: list[tuple[str, str]] = []  # (session_id, prompt) of each resume
         self.started: list[tuple[str, str]] = []  # (session_id, prompt) of each new chat
+        self.focused: list[int] = []  # workspaces asked for; the fake never calls `hyprctl`
 
     def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> None:
         return None  # it only writes a progress file, so the demo can run steps side by side
 
     def running(self, session_id: str) -> bool:
         return True  # the demo's `doing` steps show a run in progress
+
+    async def focus(self, workspace: int) -> None:
+        self.focused.append(workspace)
 
     async def start(
         self,

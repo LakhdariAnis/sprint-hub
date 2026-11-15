@@ -7,6 +7,7 @@ import pytest
 
 from hubd.model import Step
 from hubd.runners import claude
+from hubd.runners.base import Unavailable
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import Settings
 from hubd.states import InvalidTransition
@@ -151,3 +152,20 @@ def test_missing_terminal_raises_with_workspace(
     with pytest.raises(InvalidTransition, match="nope not on PATH"):
         asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
     assert hypr == []
+
+
+def test_focus_dispatches_the_workspace(hypr: Hypr) -> None:
+    asyncio.run(ClaudeCodeRunner(["foot"], URL).focus(3))
+    assert hypr == [["hyprctl", "dispatch", "workspace", "3"]]
+
+
+def test_focus_without_hyprctl_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(claude.shutil, "which", lambda exe: None)
+    with pytest.raises(Unavailable, match="hyprctl not on PATH"):
+        asyncio.run(ClaudeCodeRunner(["foot"], URL).focus(3))
+
+
+def test_focus_refused_is_unavailable(hypr: Hypr) -> None:
+    hypr.out = "Invalid dispatcher\n"
+    with pytest.raises(Unavailable, match="hyprctl said Invalid dispatcher"):
+        asyncio.run(ClaudeCodeRunner(["foot"], URL).focus(3))
