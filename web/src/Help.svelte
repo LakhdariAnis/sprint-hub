@@ -19,6 +19,7 @@
     ['w', 'jump to the Hyprland workspace of this project (Project, Step); `workspace:` in project.md sets it, its number shows as a chip'],
     ['n', 'New chat; on a Step in changes: a fresh run with your comment in its prompt, when the old chat cannot be resumed'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],
+    ['o', 'reopen the chat of a run whose terminal closed: the same Claude chat in a new terminal, the step back to doing (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],

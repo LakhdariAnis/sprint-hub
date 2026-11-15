@@ -6,7 +6,7 @@
   import { chatAbout } from '../chat.svelte'
   import { jump, newChat, say, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
-  import { ago, finishStep, goal, startedOn, startStep, tickTask } from '../steps'
+  import { ago, finishStep, goal, reopenStep, startedOn, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps, workspaceOf } from '../store.svelte'
 
@@ -42,6 +42,17 @@
       .finally(() => ((busy = false), (confirming = false)))
   }
   const finishKey = () => canFinish && !busy && (confirming ? finish() : (confirming = true))
+
+  // The terminal was closed: the last run's chat opens again. hubd says why when it cannot (chat still open…).
+  const canReopen = $derived(!!s?.runs.length && !manual && (s.state === 'done' || (s.state === 'doing' && !!s.run_gone)))
+  const reopen = () => {
+    if (!canReopen || busy) return
+    busy = true
+    error = ''
+    reopenStep(project, id)
+      .then((d) => (put(project, d), say(startedOn(workspaceOf(project)))), (e: Error) => say(e.message, true))
+      .finally(() => (busy = false))
+  }
   const back = () => (location.hash = `#/projects/${encodeURIComponent(project)}`)
 
   // The cursor starts on the current task: the one doing, else the first todo.
@@ -78,7 +89,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, w: () => jump(project), y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, o: reopen, w: () => jump(project), y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -126,6 +137,9 @@
       <!-- hubd has no stop API yet -->
       <button class="btn" type="button" disabled title="Stopping a run comes in a later sprint">Stop <span class="kb">s</span></button>
     {/if}
+    {#if canReopen}
+      <button class="btn" type="button" disabled={busy} onclick={reopen}>Reopen chat <span class="kb">o</span></button>
+    {/if}
     {#if canFinish}
       <button class="btn" type="button" disabled={busy} onclick={finishKey}>Finish <span class="kb">f</span></button>
     {/if}
@@ -138,7 +152,7 @@
 {#if confirming && canFinish}
   <p class="note ask">Finish this run? {id} goes to done, even if Claude is still working. <span class="kb">f</span> or <span class="kb">y</span> finish, <span class="kb">Esc</span> cancel.</p>
 {:else if s?.run_gone && canFinish}
-  <p class="note ask">The run is gone: no Claude session for it is running, and its end never arrived. Press <span class="kb">f</span> to finish it.</p>
+  <p class="note ask">The run is gone: no Claude session for it is running, and its end never arrived. <span class="kb">o</span> reopens the chat, <span class="kb">f</span> finishes it.</p>
 {:else if ticked}
   <p class="note">All tasks ticked. Exit Claude (<code>/exit</code>) to send it to review.</p>
 {/if}
@@ -156,6 +170,8 @@
       </div>
       {#if lastRun}
         <div class="last">{s.runs.length} {s.runs.length === 1 ? 'run' : 'runs'} · last started {lastRun.started?.slice(0, 16).replace('T', ' ')} · {lastRun.model}</div>
+        <!-- For the times hubd is down: the same chat by hand, from the repo. -->
+        {#if lastRun.session && !manual}<div class="last cm resume" title="Session {lastRun.session}: run this in the repo to open the chat without hubd"><span>SESSION</span> <code>claude --resume {lastRun.session}</code></div>{/if}
       {/if}
       {#if s.review?.comment}<div class="last cm"><span>YOUR LAST COMMENT</span> {s.review.comment}</div>{/if}
     </section>
@@ -274,6 +290,8 @@
   .over { font-style: normal; color: var(--y); }
   .last { font: 12px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
   .cm span { color: var(--fgd); }
+  .resume { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
+  .resume code { color: var(--fg); }
   .ck { grid-column: 1; grid-row: 2; }
   /* No checklist yet: the pane hugs its one line instead of filling the column. */
   .ck.short { align-self: start; }

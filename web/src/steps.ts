@@ -12,7 +12,7 @@ export type Step = {
   model: string | null
   branch: string | null
   sprint: number | null
-  runs: { started?: string; minutes: number | null; model?: string }[]
+  runs: { started?: string; minutes: number | null; model?: string; session?: string }[]
   tasks: Task[]
   questions: Question[]
   review?: { verdict: 'approve' | 'changes' | null; comment: string } | null
@@ -49,6 +49,8 @@ async function post(project: string, id: string, move: string, body?: object): P
 // `fresh`: from `changes`, a new chat with the comment in its prompt instead of resuming the last one.
 export const startStep = (project: string, id: string, fresh = false) => post(project, id, fresh ? 'start?fresh=true' : 'start')
 export const finishStep = (project: string, id: string) => post(project, id, 'finish')
+// The last run's chat again (`claude --resume`), after its terminal closed.
+export const reopenStep = (project: string, id: string) => post(project, id, 'reopen')
 // `commit`: what the base branch is on after the merge; null when there was nothing to merge.
 export const approveStep = (project: string, id: string, own_hours: number | null) => post(project, id, 'approve', { own_hours }) as Promise<Step & { commit: string | null }>
 export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
