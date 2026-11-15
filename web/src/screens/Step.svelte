@@ -4,7 +4,7 @@
   import Workspace from '../Workspace.svelte'
   import { hub } from '../hub.svelte'
   import { chatAbout } from '../chat.svelte'
-  import { newChat, useKeys } from '../keys.svelte'
+  import { jump, newChat, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
   import { ago, finishStep, goal, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
@@ -78,7 +78,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, w: () => jump(project), y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())

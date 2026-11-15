@@ -1,15 +1,27 @@
 import { onMount } from 'svelte'
 import { hashOf, rows } from './open.svelte'
+import { focusProject } from './steps'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
-export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null })
+export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null, notice: null as { text: string; bad: boolean } | null })
 export function toggleRail() {
   keys.rail = !keys.rail
   try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
 }
+
+// One line in the status line (a toast): a result or a reason, gone after a few seconds.
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+export function say(text: string | null, bad = false) {
+  if (!text) return
+  keys.notice = { text, bad }
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (keys.notice = null), 6000)
+}
+// `w`: the project's workspace; the status line says why when hubd cannot.
+export const jump = (project: string) => focusProject(project).then((why) => why && say(why, true))
 
 export const openPalette = () => (keys.palette = true)
 // `n`: a screen with its own `n` (the Step screen's fresh chat) wins; elsewhere it opens New chat.

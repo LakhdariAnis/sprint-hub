@@ -131,3 +131,15 @@ export function needsWork(steps: Step[]): Step | undefined {
 // The chip's hover text; null (no chip) when the project has no workspace.
 export const workspaceTitle = (n: number | null | undefined) => (n ? `Workspace ${n}` : null)
 export const startedOn = (n: number | null | undefined) => (n ? `Started on workspace ${n}` : null)
+
+// Switches the desktop to the project's workspace. Resolves to hubd's reason when it did not, else null.
+export async function focusProject(project: string): Promise<string | null> {
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(project)}/focus`, { method: 'POST' })
+    if (r.ok) return null
+    const reply = await r.json().catch(() => null)
+    return typeof reply?.detail === 'string' ? reply.detail : `hubd answered ${r.status}`
+  } catch {
+    return 'Cannot reach hubd'
+  }
+}

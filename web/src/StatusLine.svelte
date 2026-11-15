@@ -3,7 +3,7 @@
   import { hub } from './hub.svelte'
   import { nav } from './nav.svelte'
   import { router } from './route.svelte'
-  import { key, steps } from './store.svelte'
+  import { key, steps, workspaceOf } from './store.svelte'
 
   // The screen on show, not the URL: the frame swaps with the screen.
   const r = $derived(nav.route ?? router.route)
@@ -21,8 +21,8 @@
     chat: [['c i', 'compose'], ['n', 'new chat']],
     today: [['p o m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
-    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['c', 'chat about this'], ['Esc', 'back']],
-    step: [...when(canStart, [['s', cur?.state === 'changes' ? 'continue chat' : 'start']]), ...when(cur?.state === 'changes' && cur.by !== 'me', [['n', 'new chat']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['c', 'chat about this'], ['Esc', 'back']],
+    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'project' ? r.project : ''), [['w', 'workspace']]), ['Esc', 'back']],
+    step: [...when(canStart, [['s', cur?.state === 'changes' ? 'continue chat' : 'start']]), ...when(cur?.state === 'changes' && cur.by !== 'me', [['n', 'new chat']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'step' ? r.project : ''), [['w', 'workspace']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
     settings: [['j k', 'move'], ['↵', 'edit / copy']],
     review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
@@ -54,6 +54,9 @@
   {#if warned}
     <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {warned} {warned === 1 ? 'warning' : 'warnings'}</button>
   {/if}
+  {#if keys.notice}
+    <span class="nt" class:bad={keys.notice.bad} role="status" title={keys.notice.text}>{keys.notice.text}</span>
+  {/if}
   {#each list as [key, text]}
     <span>{#each key.split(' ') as k}<span class="kb">{k}</span> {/each}{text}</span>
   {/each}
@@ -70,6 +73,9 @@
   .keys > span { height: 31px; display: flex; align-items: center; gap: 4px; }
   .keys > .md { height: auto; align-self: center; }
   .fc { margin-left: auto; }
+  /* Right after the mode like the broken files: read in full at half screen, cut with an ellipsis only past that. */
+  .keys > .nt { color: var(--g); max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+  .keys > .nt.bad { color: var(--y); }
   /* Right after the mode: the groups that do not fit drop from the end, this one stays. */
   .keys > .er { height: auto; align-self: center; padding: 0 8px; border: 1px solid var(--y); border-radius: 3px; background: none; font: inherit; line-height: 16px; color: var(--y); cursor: pointer; }
   .keys > .er:hover { background: var(--lt); }
