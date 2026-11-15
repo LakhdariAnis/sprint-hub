@@ -15,7 +15,7 @@ from hubd import focus, importer, init, weeks
 from hubd.context import Context, build
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
-from hubd.notify import Notifier
+from hubd.notify import Click, Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
 from hubd.vault import (
@@ -541,10 +541,6 @@ class Hub:
         entry = self._run_entry(session_id, step_id)
         if not notify or entry.step.state != State.doing:
             return False  # off in Settings, or a late hook after the run ended
-        now = self.clock()
-        if now - self.waited.get((session_id, kind), -WAIT_GAP) < WAIT_GAP:
-            return False
-        self.waited[(session_id, kind)] = now
         where = f"{entry.project} {step_id}"
         title, body = {
             "turn": ("Claude answered", f"{where} {entry.step.title}"),
@@ -552,7 +548,17 @@ class Hub:
             "idle": ("Claude waits for you", where),
         }[kind]
         project = entry.project
-        self.notifier.notify(title, body, lambda: focus.open_run(session_id, project, step_id))
+        return self.popup(
+            (session_id, kind), title, body, lambda: focus.open_run(session_id, project, step_id)
+        )
+
+    def popup(self, key: tuple[str, str], title: str, body: str, on_click: Click) -> bool:
+        """A "waits for you" popup, at most one per `key` (session or chat, kind) per `WAIT_GAP`."""
+        now = self.clock()
+        if now - self.waited.get(key, -WAIT_GAP) < WAIT_GAP:
+            return False
+        self.waited[key] = now
+        self.notifier.notify(title, body, on_click)
         return True
 
     async def run_ended(self, session_id: str, step_id: str) -> Step:

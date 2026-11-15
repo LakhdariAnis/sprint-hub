@@ -14,6 +14,7 @@ from hubd import chatlog, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.model import one_line
+from hubd.notify import Click
 from hubd.runners.chat import ChatEvent, ChatRunner
 from hubd.transcript import Transcript, no_transcript
 
@@ -21,6 +22,8 @@ MAX_LIVE = 3  # claude processes at once
 IDLE = 15 * 60  # seconds without a message or an event before the process is closed
 EVERY = 60  # seconds between idle checks
 ALLOW = {"behavior": "allow"}
+# (chat, kind), title, body, click -> sent? Rate limit and Settings toggle live behind it.
+Popup = Callable[[tuple[str, str], str, str, Click], bool]
 
 
 class Full(Exception):
@@ -87,6 +90,7 @@ class Chats:
         vault: Path,
         context: Callable[[str, int | None, str | None], Awaitable[Context]],
         transcript: Transcript = no_transcript,
+        popup: Popup = lambda *_: False,
     ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
@@ -96,6 +100,14 @@ class Chats:
         self.transcript = transcript
         self.chats: dict[str, Chat] = {}
         self.ask_wait = permits.ASK_WAIT
+        self.popup = popup
+
+    def _tell(self, chat: Chat, kind: str, title: str, body: str) -> None:
+        """A desktop popup for `chat`: Claude waits and Anis is not looking at it."""
+        self.popup((chat.id, kind), title, body, lambda: None)
+
+    def _label(self, chat: Chat) -> str:
+        return chat.title or chat.project or "New chat"
 
     def get(self, chat_id: str) -> Chat:
         if chat_id not in self.chats:
@@ -247,15 +259,17 @@ class Chats:
         await self.on_event(
             chat_id, {"type": "permission", "request": request, **card, "wide": wide}
         )
+        self._tell(chat, "permission", "Claude needs permission", permits.short(tool, tool_input))
+        minutes = round(self.ask_wait / 60)
         try:
             answer = await asyncio.wait_for(future, self.ask_wait)
         except TimeoutError:
             answer = "timeout"
+            self._tell(chat, "timeout", f"Permission denied after {minutes} min", self._label(chat))
         finally:
             chat.asking.pop(request, None)
         if answer == "chat":
             chat.allowed.add(tool)
-        minutes = round(self.ask_wait / 60)
         message = {
             "deny": "Anis denied this call. Do not retry it; ask him or go on without it.",
             "timeout": f"No answer from Anis in {minutes} min, so it was denied. Do not retry it.",
@@ -293,6 +307,8 @@ class Chats:
             for turn in waiting:  # the process is gone: no `turn_end` comes
                 turn["done"] = True
         self.emit({"type": "chat", "id": chat_id, **event})
+        if chat and kind == "turn_end":
+            self._tell(chat, "turn", "Claude answered", self._label(chat))
 
     async def close_idle(self, now: float, idle: float = IDLE) -> None:
         """Close the process of each chat with no turn under way and nothing for `idle` s."""

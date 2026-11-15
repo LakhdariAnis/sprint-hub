@@ -70,3 +70,10 @@ def card(tool: str, tool_input: dict[str, Any]) -> dict[str, str | None]:
     cut = len(lines) - DIFF_LINES
     lines = lines[:DIFF_LINES] + ([f"… {cut} more lines"] if cut > 0 else [])
     return {"target": path, "diff": "\n".join(lines) or None}
+
+
+def short(tool: str, tool_input: dict[str, Any]) -> str:
+    """The popup's line: the tool and the file's name, or the command's first 40 characters."""
+    target = str(card(tool, tool_input)["target"] or "")
+    target = Path(target).name if path_of(tool_input) else " ".join(target.split())[:40]
+    return f"{tool}: {target}"

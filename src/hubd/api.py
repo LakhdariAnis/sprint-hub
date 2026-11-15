@@ -18,7 +18,7 @@ from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
 from hubd.model import one_line
-from hubd.notify import NotifySend
+from hubd.notify import Click, NotifySend
 from hubd.runners.chat import ChatEvent, ChatRunner, ClaudeChat
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.runners.fake import FakeChat
@@ -105,7 +105,11 @@ def create_app(
     # hub.toml as hubd runs with it; `hour` is the live reminder hour, read by the reminder loop.
     current = current or (load_current(hub.vault / "hub.toml") if hub else Current(Settings()))
     hour = [reminder_hour]
-    chats = Chats(chat, hub.emit, hub.vault, hub.context, transcript) if hub else None
+
+    def popup(key: tuple[str, str], title: str, body: str, on_click: Click) -> bool:
+        return current.settings.notify_waiting and hub.popup(key, title, body, on_click)
+
+    chats = Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup) if hub else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
