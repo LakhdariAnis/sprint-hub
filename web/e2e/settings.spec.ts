@@ -68,6 +68,24 @@ test('reminder_hour: 99 is refused with the reason, 8 saves; terminal without {c
   await expect(page.getByRole('status')).toContainText('saved')
 })
 
+test('notify_waiting: Enter turns it off, a click turns it on, the label reads in full at half screen', async ({ page }) => {
+  await page.setViewportSize({ width: 960, height: 1080 })
+  await page.goto('/#/settings')
+  await moveTo(page, 'notify_waiting')
+  const sw = page.getByRole('switch', { name: 'Notify when a run waits' })
+  await expect(sw).toHaveAttribute('aria-checked', 'true')
+  await page.keyboard.press('Enter')
+  await expect(sw).toHaveAttribute('aria-checked', 'false')
+  await expect(page.getByRole('status')).toContainText('saved')
+  expect((await (await page.request.get('/settings')).json()).notify_waiting).toBe(false)
+  const hint = page.locator('.row.f .hint')
+  await expect(hint).toContainText('Notify when a run waits')
+  expect(await hint.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  await sw.click()
+  await expect(sw).toHaveAttribute('aria-checked', 'true')
+  expect((await (await page.request.get('/settings')).json()).notify_waiting).toBe(true)
+})
+
 for (const [w, h] of [[743, 730], [743, 540]]) {
   for (const rail of [false, true]) {
     test(`Settings at ${w}x${h}${rail ? ' rail' : ''}: j and k reach every row, none cut, no page scroll`, async ({ page }) => {

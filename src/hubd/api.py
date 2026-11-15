@@ -245,7 +245,7 @@ def create_app(
             **current.settings.model_dump(),
             "error": current.error,
             "comments": has_comments(path),
-            "restart": [],  # both apply at once, see put_settings
+            "restart": [],  # all apply at once, see put_settings
         }
 
     @app.get("/settings")
@@ -356,7 +356,8 @@ def create_app(
 
     @app.post("/runs/waiting")
     async def run_waiting(body: RunWaiting) -> dict:  # on the loop: no race on `waited`
-        return {"sent": hub.run_waiting(body.session_id, body.step, body.kind)}
+        notify = current.settings.notify_waiting  # Settings toggle, applies at once
+        return {"sent": hub.run_waiting(body.session_id, body.step, body.kind, notify)}
 
     return _with_web(app)
 

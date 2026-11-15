@@ -7,7 +7,7 @@
   import { loadSettings, saveSettings, sx, type Check } from '../settings.svelte'
   import { lists } from '../store.svelte'
 
-  type Name = 'terminal' | 'reminder_hour'
+  type Name = 'terminal' | 'reminder_hour' | 'notify_waiting'
   type R =
     | { group: string; kind: 'check'; c: Check }
     | { group: string; kind: 'info'; label: string; value: string }
@@ -24,11 +24,13 @@
     { group: 'Health', kind: 'info', label: 'service', value: doctor.service },
     { group: 'Settings', kind: 'set', name: 'terminal' },
     { group: 'Settings', kind: 'set', name: 'reminder_hour' },
+    { group: 'Settings', kind: 'set', name: 'notify_waiting' },
     ...(lists.projects ?? []).map((p): R => ({ group: 'Projects', kind: 'project', p })),
   ])
   const hint: Record<Name, string> = {
     terminal: 'argv split on spaces, must contain {cwd}',
     reminder_hour: '0–23, local time',
+    notify_waiting: 'Notify when a run waits: its turn ended or it needs a permission',
   }
   const shown = (n: Name) => (n === 'terminal' ? settings.terminal.join(' ') : String(settings.reminder_hour))
 
@@ -69,9 +71,23 @@
     }
     busy = false
   }
+  // The toggle saves on ↵ or a click, no text box.
+  async function toggle() {
+    if (busy) return
+    busy = true
+    note = null
+    try {
+      const why = await saveSettings({ notify_waiting: !settings.notify_waiting })
+      note = why ? { name: 'notify_waiting', ok: false, text: why } : { name: 'notify_waiting', ok: true, text: 'saved to hub.toml, applies at once' }
+    } catch {
+      note = { name: 'notify_waiting', ok: false, text: 'cannot reach hubd' }
+    }
+    busy = false
+  }
   function activate() {
     const r = rows[at]
-    if (r?.kind === 'set') edit(r.name)
+    if (r?.kind === 'set' && r.name === 'notify_waiting') toggle()
+    else if (r?.kind === 'set') edit(r.name)
     else if (r?.kind === 'check') (document.querySelector('.row.f .cp') as HTMLElement | null)?.click()
   }
   useKeys({ j: () => move(1), k: () => move(-1), Enter: activate })
@@ -97,7 +113,7 @@
           <div class="gr">{r.group.toUpperCase()}</div>
           {#if r.group === 'Settings'}
             {#if settings.error}<div class="warn" role="alert">hub.toml is not read, so these are the defaults: {settings.error}</div>{/if}
-            {#if settings.comments}<div class="dim pad">Saving rewrites hub.toml from these two settings: comments and other lines in it are lost.</div>{/if}
+            {#if settings.comments}<div class="dim pad">Saving rewrites hub.toml from these settings: comments and other lines in it are lost.</div>{/if}
           {/if}
         {/if}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -110,13 +126,16 @@
             <span class="tx"><span class="dim">{r.label}</span> <span class="mono">{r.value}</span></span>
           {:else if r.kind === 'set'}
             <span class="nm mono">{r.name}</span>
-            {#if editing === r.name}
+            {#if r.name === 'notify_waiting'}
+              <button class="val mono tg" role="switch" aria-checked={settings.notify_waiting} aria-label="Notify when a run waits" disabled={busy}
+                onclick={(e) => { e.stopPropagation(); sel = i; toggle() }}>{settings.notify_waiting ? 'on' : 'off'}</button>
+            {:else if editing === r.name}
               <input class="in mono" aria-label={r.name} bind:value={text} use:focus disabled={busy}
                 onkeydown={(e) => { if (e.key === 'Enter') save(r.name); else if (e.key === 'Escape') { editing = null; note = null } }} />
             {:else}
               <span class="val mono">{shown(r.name)}</span>
             {/if}
-            <span class="hint">{editing === r.name ? 'Enter saves · Esc leaves' : hint[r.name]}{settings.restart.includes(r.name) ? ' · needs a restart' : ' · applies at once'}</span>
+            <span class="hint">{editing === r.name ? 'Enter saves · Esc leaves' : hint[r.name]}{r.name === 'notify_waiting' ? ' · ↵ toggles' : ''}{settings.restart.includes(r.name) ? ' · needs a restart' : ' · applies at once'}</span>
             {#if note?.name === r.name}<span class="note" class:err={!note.ok} role={note.ok ? 'status' : 'alert'}>{note.text}</span>{/if}
           {:else}
             <b class="pname">{r.p.name}</b>
@@ -154,6 +173,8 @@
   .set { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 0.8fr); }
   .nm { color: var(--fg2); }
   .val { color: var(--fg); }
+  .tg { justify-self: start; min-width: 44px; height: 26px; padding: 0 10px; border: 1px solid var(--sel); border-radius: 4px; background: var(--bg); cursor: pointer; }
+  .tg[aria-checked='true'] { color: var(--g); border-color: var(--g); }
   .in { width: 100%; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--ac); border-radius: 4px; background: var(--bg); }
   .hint { color: var(--fgd); font-size: 12.5px; }
   .note { grid-column: 2 / -1; color: var(--g); }

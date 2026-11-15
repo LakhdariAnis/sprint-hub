@@ -19,6 +19,7 @@ def test_get_defaults(hub: Hub) -> None:
         "path": str(toml(hub)),
         "terminal": ["xdg-terminal-exec", "--dir={cwd}"],
         "reminder_hour": 9,
+        "notify_waiting": True,
         "error": None,
         "comments": False,
         "restart": [],
@@ -68,3 +69,15 @@ def test_put_reaches_the_runner(hub: Hub) -> None:
     app = create_app(hub)
     TestClient(app).put("/settings", json=GOOD)
     assert hub.runner.terminal == GOOD["terminal"]
+
+
+def test_notify_waiting_off_sends_nothing(hub: Hub, notifier) -> None:
+    client = TestClient(create_app(hub))
+    off = client.put("/settings", json={**GOOD, "notify_waiting": False})
+    assert off.json()["notify_waiting"] is False
+    assert load_settings(toml(hub)).notify_waiting is False
+    body = {"session_id": "3f2a…c91", "step": "102", "kind": "turn"}
+    assert client.post("/runs/waiting", json=body).json() == {"sent": False}
+    assert notifier.sent == []
+    client.put("/settings", json={**GOOD, "notify_waiting": True})
+    assert client.post("/runs/waiting", json=body).json() == {"sent": True}
