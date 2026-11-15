@@ -101,6 +101,7 @@ def test_run_waiting_per_kind(hub: Hub, notifier, kind: str, popup: tuple[str, s
     response = client.post("/runs/waiting", json=body)
     assert response.json() == {"sent": True}
     assert notifier.sent == [popup]
+    assert callable(notifier.clicks[0])  # a click opens the run
     assert client.get("/steps/demo/102").json()["state"] == "doing"  # no state change
 
 

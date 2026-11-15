@@ -1,4 +1,5 @@
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,11 @@ class Recorder:
 
     def __init__(self) -> None:
         self.sent: list[tuple[str, str]] = []
+        self.clicks: list[Callable[[], None] | None] = []
 
-    def notify(self, title: str, body: str) -> None:
+    def notify(self, title: str, body: str, on_click: Callable[[], None] | None = None) -> None:
         self.sent.append((title, body))
+        self.clicks.append(on_click)
 
 
 @pytest.fixture

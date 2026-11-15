@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd import importer, init, weeks
+from hubd import focus, importer, init, weeks
 from hubd.context import Context, build
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
@@ -551,7 +551,8 @@ class Hub:
             "permission": ("Claude needs permission", where),
             "idle": ("Claude waits for you", where),
         }[kind]
-        self.notifier.notify(title, body)
+        project = entry.project
+        self.notifier.notify(title, body, lambda: focus.open_run(session_id, project, step_id))
         return True
 
     async def run_ended(self, session_id: str, step_id: str) -> Step:
