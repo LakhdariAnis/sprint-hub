@@ -55,7 +55,7 @@
     <button class="er" type="button" onclick={() => (keys.errors = true)}>⚠ {warned} {warned === 1 ? 'warning' : 'warnings'}</button>
   {/if}
   {#if keys.notice}
-    <span class="nt" class:bad={keys.notice.bad} role="status" title={keys.notice.text}>{keys.notice.text}</span>
+    <span class="nt" class:bad={keys.notice.bad} aria-live="polite" title={keys.notice.text}>{keys.notice.text}</span>
   {/if}
   {#each list as [key, text]}
     <span>{#each key.split(' ') as k}<span class="kb">{k}</span> {/each}{text}</span>

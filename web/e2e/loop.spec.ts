@@ -11,7 +11,7 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await next.getByRole('link', { name: /301\s+Parse the notes/ }).click()
 
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
-  const chip = page.locator('.hd .chip')
+  const chip = page.locator('.hd .chip:not(.ws)')
   await expect(chip).toHaveText(/todo/)
   await page.getByRole('button', { name: /Start/ }).click()
   await expect(chip).toHaveText(/running/)
@@ -169,7 +169,7 @@ test('x ticks the tasks of a manual step: todo, doing, done', async ({ page }) =
   await page.goto('/#/today')
   await expect(page.locator('.pn', { hasText: 'Now' }).getByRole('link', { name: /101/ })).toContainText('demo · me')
   await page.goto('/#/steps/demo/101')
-  const chip = page.locator('.hd .chip').first()
+  const chip = page.locator('.hd .chip:not(.ws)').first()
   await expect(chip).toHaveText(/todo/)
   await expect(page.locator('.hd .chip', { hasText: 'manual' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Start/ })).toHaveCount(0)
