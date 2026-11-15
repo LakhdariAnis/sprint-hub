@@ -46,11 +46,16 @@ def _windows(env: dict[str, str]) -> set[int]:
         return set()  # no Hyprland: fall back to the app
 
 
-def open_run(session_id: str, project: str, step: str) -> None:
+def open_run(session_id: str, project: str, step: str, workspace: int | None = None) -> None:
     env = session.env()
     try:
-        if pid := window_pid(session_id, _windows(env)):
+        windows = _windows(env)
+        if pid := window_pid(session_id, windows):
             subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], env=env, timeout=5)
+        elif (
+            workspace and windows
+        ):  # terminal not found (a server terminal?): at least its workspace
+            subprocess.run(["hyprctl", "dispatch", "workspace", str(workspace)], env=env, timeout=5)
         else:
             subprocess.Popen([str(APP), f"#/step/{project}/{step}"], env=env)
     except (OSError, subprocess.SubprocessError):

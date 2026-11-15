@@ -554,8 +554,12 @@ class Hub:
             "idle": ("Claude waits for you", where),
         }[kind]
         project = entry.project
+        workspace = self.index.projects[project].workspace
         return self.popup(
-            (session_id, kind), title, body, lambda: focus.open_run(session_id, project, step_id)
+            (session_id, kind),
+            title,
+            body,
+            lambda: focus.open_run(session_id, project, step_id, workspace),
         )
 
     def popup(self, key: tuple[str, str], title: str, body: str, on_click: Click) -> bool:

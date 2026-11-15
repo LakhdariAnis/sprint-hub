@@ -40,3 +40,22 @@ def test_open_run_without_terminal_opens_the_app(monkeypatch: pytest.MonkeyPatch
     focus.open_run(SESSION, "demo", "102")
     assert calls == [[str(focus.APP), "#/step/demo/102"]]
     assert focus.APP.is_file()
+
+
+def test_open_run_falls_back_to_the_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(focus, "_windows", lambda env: {10})
+    monkeypatch.setattr(focus, "window_pid", lambda session, windows: None)
+    monkeypatch.setattr(subprocess, "run", lambda argv, **_: calls.append(argv))
+    focus.open_run(SESSION, "demo", "102", 3)
+    assert calls == [["hyprctl", "dispatch", "workspace", "3"]]
+
+
+def test_open_run_without_hyprland_opens_the_app_even_with_a_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(focus, "_windows", lambda env: set())
+    monkeypatch.setattr(subprocess, "Popen", lambda argv, **_: calls.append(argv))
+    focus.open_run(SESSION, "demo", "102", 3)
+    assert calls == [[str(focus.APP), "#/step/demo/102"]]
