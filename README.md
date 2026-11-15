@@ -19,6 +19,13 @@ the command palette, `e` shows the errors. On the Step screen `s` starts a step 
 arrived; on Review `a` approves and `c` requests changes. `?` shows all keys. A project opens on the step that needs
 work, a step on its current task.
 
+The app opens on New chat. In the demo it talks to a fake Claude; with `uv run hubd` and `claude` installed it runs the
+real one in the page (`claude -p`, stream-json). Chat keys: `n` opens New chat from anywhere, `c` or `i` puts the cursor
+in the message box, `Enter` sends, and `/` in the box opens the menu (`/model`, `/effort`, `/project`, `/sprint`, `/step`, `/clear`). When
+Claude wants to edit a file or run a command, `a` allows it, `d` denies it, `A` allows it for the rest of the chat. `Esc Esc`
+stops a running answer, `x` closes the chat, `R` renames it. Open chats stay in the sidebar under OPEN, also after a hubd
+restart.
+
 ### Set it up on your own projects
 
 In this order, from this repo:
@@ -106,5 +113,5 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull req
 ## Roadmap
 
 Versions and scope: [docs/ROADMAP.md](docs/ROADMAP.md). Long-term design: [docs/HUB-DESIGN.md](docs/HUB-DESIGN.md).
-Current version: 0.3.0 (daily use: theme, deadlines, questions, palette, service, weekly planning). Next: 0.4.0,
-chat in the app, then 0.5.0, away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
+Current version: 0.4.0 (chat in the app: New chat home screen, pills and `/` menu, project / sprint / step context,
+permission prompts, tool lines, open chats). Next: 0.5.0, away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
