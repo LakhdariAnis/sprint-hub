@@ -10,9 +10,9 @@
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { chatAbout } from '../chat.svelte'
-  import { jump, useKeys } from '../keys.svelte'
-  import { untrack } from 'svelte'
-  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, type Step } from '../steps'
+  import { jump, say, useKeys } from '../keys.svelte'
+  import { tick, untrack } from 'svelte'
+  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setWorkspace, type Step } from '../steps'
   import { etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
   import { watchEta } from '../hub.svelte'
   import { etaLine, factorNote } from '../week'
@@ -50,7 +50,25 @@
   const move = (d: number) => (col === 's' ? pick(clamp(gi + d, groups.length)) : (si = clamp(si + d, group?.steps.length ?? 0)))
   const left = () => (col = 's')
   const right = () => (col = 't')
+  // `W`: a number box in the header; ↵ saves 2 to 9, empty clears it, Esc leaves it.
+  let wsEdit = $state(false)
+  let wsDraft = $state('')
+  let wsBox = $state<HTMLInputElement>()
+  function editWorkspace() {
+    wsDraft = String(workspaceOf(project) ?? '')
+    wsEdit = true
+    tick().then(() => (wsBox?.focus(), wsBox?.select()))
+  }
+  async function saveWorkspace() {
+    const t = wsDraft.trim()
+    const n = t ? Number(t) : null
+    if (n !== null && !(Number.isInteger(n) && n >= 2 && n <= 9)) return say('Workspace is a number from 2 to 9, or empty for none', true)
+    wsEdit = false
+    const why = await setWorkspace(project, n)
+    say(why ?? (n ? `Runs of ${project} open on workspace ${n}` : `Runs of ${project} open anywhere`), !!why)
+  }
   useKeys({
+    W: editWorkspace,
     j: () => move(1),
     k: () => move(-1),
     h: left,
@@ -117,7 +135,11 @@
 <div class="page">
 <Header>
   {#snippet crumb()}<a href="#/projects">Projects</a> › {project}{/snippet}
-  {project} <Workspace n={workspaceOf(project)} />
+  {project}
+  {#if wsEdit}
+    <input class="wsin" inputmode="numeric" maxlength="1" placeholder="none" aria-label="Workspace, 2 to 9, empty for none" bind:this={wsBox} bind:value={wsDraft} onblur={() => (wsEdit = false)}
+      onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveWorkspace() : e.key === 'Escape' && (wsEdit = false))} />
+  {:else}<Workspace n={workspaceOf(project)} />{/if}
 </Header>
 
 {#if gone}
@@ -218,6 +240,7 @@
 </div>
 
 <style>
+  .wsin { font: inherit; color: inherit; background: var(--dk); border: 1px solid var(--ac); border-radius: 5px; padding: 0 6px; height: 26px; width: 72px; outline: none; }
   .gone { flex: none; margin: 0; padding: 8px 28px; color: var(--y); overflow-wrap: anywhere; }
   .dim { color: var(--fgd); }
   /* Under the header: one line of ETA, its factor, and the sprints that are late or in the wrong week. Wraps, never cuts. */

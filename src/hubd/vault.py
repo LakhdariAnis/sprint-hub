@@ -222,6 +222,17 @@ def _load_project(path: Path) -> Project:
     return Project.model_validate(frontmatter.load(path).metadata)
 
 
+def save_workspace(path: Path, workspace: int | None) -> None:
+    """Set or remove `workspace:` in a `project.md` frontmatter; every other byte stays."""
+    lines = path.read_bytes().decode().split("\n")
+    if lines[0].rstrip() != "---":
+        raise ValueError(f"{path}: no frontmatter")
+    end = next(i for i, line in enumerate(lines[1:], 1) if line.rstrip() == "---")
+    eol = "\r" if lines[0].endswith("\r") else ""
+    _set_fields(lines, 1, end, {"workspace": None if workspace is None else str(workspace)}, eol)
+    _write_atomic(path, "\n".join(lines).encode())
+
+
 def _load_step(path: Path) -> Step:
     post = frontmatter.load(path)
     meta = dict(post.metadata)

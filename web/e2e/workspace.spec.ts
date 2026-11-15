@@ -39,6 +39,27 @@ test('w jumps through hubd, and says why when the project has no workspace', asy
   await expect(status(page)).toHaveClass(/bad/)
 })
 
+// Same file as the chip tests: they run in order, so `demo` is back to no workspace before they look.
+test('W sets the workspace in the header, empty clears it, a bad number is refused', async ({ page }) => {
+  await page.goto('/#/projects/demo')
+  await expect(page.getByRole('heading', { name: 'demo' })).toBeVisible()
+  const box = page.getByRole('textbox', { name: /Workspace/ })
+  await page.keyboard.press('W')
+  await box.fill('1')
+  await box.press('Enter')
+  await expect(status(page)).toHaveText(/2 to 9/)
+  await box.fill('5')
+  await box.press('Enter')
+  await expect(page.locator('header.hd .chip.ws')).toHaveText('5')
+  await expect(status(page)).toHaveText('Runs of demo open on workspace 5')
+  await page.keyboard.press('W')
+  await expect(box).toHaveValue('5')
+  await box.fill('')
+  await box.press('Enter')
+  await expect(status(page)).toHaveText('Runs of demo open anywhere')
+  await expect(page.locator('header.hd .chip.ws')).toHaveCount(0)
+})
+
 test('key help lists w', async ({ page }) => {
   await page.goto('/#/projects')
   await page.keyboard.press('?')

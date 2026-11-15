@@ -135,6 +135,18 @@ export const workspaceTitle = (n: number | null | undefined) => (n ? `Workspace 
 export const startedOn = (n: number | null | undefined) => (n ? `Started on workspace ${n}` : null)
 
 // Switches the desktop to the project's workspace. Resolves to hubd's reason when it did not, else null.
+// `W`: set the project's workspace (null = none); the reason when hubd refuses.
+export async function setWorkspace(project: string, workspace: number | null): Promise<string | null> {
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(project)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspace }) })
+    if (r.ok) return null
+    const reply = await r.json().catch(() => null)
+    return typeof reply?.detail === 'string' ? reply.detail : `hubd answered ${r.status}`
+  } catch {
+    return 'Cannot reach hubd'
+  }
+}
+
 export async function focusProject(project: string): Promise<string | null> {
   try {
     const r = await fetch(`/projects/${encodeURIComponent(project)}/focus`, { method: 'POST' })

@@ -34,6 +34,7 @@ from hubd.vault import (
     planned_hours,
     save_step,
     save_time,
+    save_workspace,
     step_tasks,
     tick_task,
     worktrees,
@@ -107,6 +108,15 @@ class Hub:
             raise NotFound(f"{project} has no workspace: set `workspace:` in its project.md")
         await self.runner.focus(workspace)
         return workspace
+
+    async def set_workspace(self, project: str, workspace: int | None) -> None:
+        """Write the project's Hyprland workspace (None = anywhere) to its project.md."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        path = self.vault / "projects" / project / "project.md"
+        async with self.lock:
+            await asyncio.to_thread(save_workspace, path, workspace)
+            self._reload_all()
 
     def emit(self, event: dict) -> None:
         for queue in self.queues:
