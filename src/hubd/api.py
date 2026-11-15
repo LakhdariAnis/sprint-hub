@@ -86,6 +86,10 @@ class ChatChange(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh", "max"] | None = None
 
 
+class ProjectChange(BaseModel):
+    workspace: int | None = Field(ge=2, le=9)  # None: its runs open anywhere
+
+
 class PermissionAnswer(BaseModel):
     answer: Literal["allow", "deny", "chat"]  # chat: Allow for this chat
 
@@ -183,6 +187,11 @@ def create_app(
     @app.post("/projects/{project}/focus")
     async def focus_project(project: str) -> dict:
         return {"workspace": await hub.focus(project)}
+
+    @app.patch("/projects/{project}")
+    async def change_project(project: str, body: ProjectChange) -> dict:
+        await hub.set_workspace(project, body.workspace)
+        return {"workspace": hub.index.projects[project].workspace}
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:

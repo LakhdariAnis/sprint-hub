@@ -58,3 +58,26 @@ def test_focus_runs_hyprctl(vault: Path, notifier, monkeypatch: pytest.MonkeyPat
     hub = Hub(vault, lambda ended: ClaudeCodeRunner(["foot"], "http://hub"), notifier)
     assert TestClient(create_app(hub)).post("/projects/demo/focus").status_code == 200
     assert calls == [["hyprctl", "dispatch", "workspace", "3"]]
+
+
+def test_patch_sets_and_clears_the_workspace(vault: Path, hub: Hub) -> None:
+    path = vault / "projects" / "demo" / "project.md"
+    client = TestClient(create_app(hub))
+    response = client.patch("/projects/demo", json={"workspace": 4})
+    assert (response.status_code, response.json()) == (200, {"workspace": 4})
+    assert "workspace: 4" in path.read_text()
+    assert client.patch("/projects/demo", json={"workspace": 5}).json() == {"workspace": 5}
+    assert path.read_text().count("workspace:") == 1
+    assert client.patch("/projects/demo", json={"workspace": None}).json() == {"workspace": None}
+    assert "workspace" not in path.read_text()
+
+
+@pytest.mark.parametrize("bad", [1, 10, "x"])
+def test_patch_refuses_a_bad_workspace(hub: Hub, bad: object) -> None:
+    response = TestClient(create_app(hub)).patch("/projects/demo", json={"workspace": bad})
+    assert response.status_code == 422
+
+
+def test_patch_unknown_project_is_404(hub: Hub) -> None:
+    response = TestClient(create_app(hub)).patch("/projects/nope", json={"workspace": 3})
+    assert response.status_code == 404
