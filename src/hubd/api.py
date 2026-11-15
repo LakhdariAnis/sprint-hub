@@ -57,6 +57,10 @@ class RunEnded(BaseModel):
     step: str
 
 
+class RunWaiting(RunEnded):
+    kind: Literal["turn", "permission", "idle"]
+
+
 class NewChat(BaseModel):
     project: str | None = None  # none: a plain chat in `chats/scratch/` of the vault
     sprint: int | None = None  # with a project: its context is told to Claude (606)
@@ -349,6 +353,10 @@ def create_app(
     @app.post("/runs/ended")
     async def run_ended(body: RunEnded) -> dict:
         return (await hub.run_ended(body.session_id, body.step)).model_dump(mode="json")
+
+    @app.post("/runs/waiting")
+    async def run_waiting(body: RunWaiting) -> dict:  # on the loop: no race on `waited`
+        return {"sent": hub.run_waiting(body.session_id, body.step, body.kind)}
 
     return _with_web(app)
 

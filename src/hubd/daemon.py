@@ -2,6 +2,7 @@
 
 import asyncio
 import subprocess
+import time
 from collections.abc import Callable, Iterator
 from contextlib import aclosing, contextmanager, suppress
 from datetime import date, datetime, timedelta
@@ -40,6 +41,7 @@ from hubd.vault import (
 from hubd.weeks import Sprint, parse_sprints
 
 COMMANDS = Path(".claude/commands")
+WAIT_GAP = 30.0  # seconds between two "waits for you" popups of one session and kind
 
 
 class NotFound(Exception):
@@ -89,6 +91,8 @@ class Hub:
         self.queues: set[asyncio.Queue[dict]] = set()
         self.runner = runner(self.run_ended)
         self.notifier = notifier
+        self.clock = time.monotonic  # tests move it
+        self.waited: dict[tuple[str, str], float] = {}  # (session, kind) -> last popup
         self.lock = asyncio.Lock()
         for entry in self.index.steps:  # a hook sent while hubd was down never arrived
             if entry.step.state == State.doing and entry.step.by == "claude":
@@ -520,14 +524,39 @@ class Hub:
             self.emit({"type": "step", **step_json(entry)})
             return entry
 
+    def _run_entry(self, session_id: str, step_id: str) -> StepEntry:
+        entry = next(
+            (e for e in self.index.steps if any(r.session == session_id for r in e.step.runs)),
+            None,
+        )
+        if entry is None or entry.step.step != step_id:
+            raise NotFound(f"no run {session_id} for step {step_id}")
+        return entry
+
+    def run_waiting(self, session_id: str, step_id: str, kind: str, notify: bool = True) -> bool:
+        """Claude ended its turn or wants Anis (`hubd.hook`): a popup, no state change.
+
+        At most one per session and kind every `WAIT_GAP` s. True = a popup was sent.
+        """
+        entry = self._run_entry(session_id, step_id)
+        if not notify or entry.step.state != State.doing:
+            return False  # off in Settings, or a late hook after the run ended
+        now = self.clock()
+        if now - self.waited.get((session_id, kind), -WAIT_GAP) < WAIT_GAP:
+            return False
+        self.waited[(session_id, kind)] = now
+        where = f"{entry.project} {step_id}"
+        title, body = {
+            "turn": ("Claude answered", f"{where} {entry.step.title}"),
+            "permission": ("Claude needs permission", where),
+            "idle": ("Claude waits for you", where),
+        }[kind]
+        self.notifier.notify(title, body)
+        return True
+
     async def run_ended(self, session_id: str, step_id: str) -> Step:
         async with self.lock:
-            entry = next(
-                (e for e in self.index.steps if any(r.session == session_id for r in e.step.runs)),
-                None,
-            )
-            if entry is None or entry.step.step != step_id:
-                raise NotFound(f"no run {session_id} for step {step_id}")
+            entry = self._run_entry(session_id, step_id)
             if entry.step.runs[-1].session != session_id:
                 raise InvalidTransition(f"step {step_id}: {session_id} is not the latest run")
             if entry.step.state != State.doing:
