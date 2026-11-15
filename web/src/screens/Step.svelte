@@ -4,9 +4,9 @@
   import Workspace from '../Workspace.svelte'
   import { hub } from '../hub.svelte'
   import { chatAbout } from '../chat.svelte'
-  import { jump, newChat, useKeys } from '../keys.svelte'
+  import { jump, newChat, say, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
-  import { ago, finishStep, goal, startStep, tickTask } from '../steps'
+  import { ago, finishStep, goal, startedOn, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
   import { key, put, steps, workspaceOf } from '../store.svelte'
 
@@ -26,7 +26,7 @@
     busy = true
     error = ''
     startStep(project, id, fresh)
-      .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
+      .then((d) => (put(project, d), say(startedOn(workspaceOf(project)))), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
 
