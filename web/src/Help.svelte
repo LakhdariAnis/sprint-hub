@@ -16,6 +16,7 @@
     ['b', 'hide / show the sidebar labels'],
     ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
     ['s', 'start the step (Step screen)'],
+    ['w', 'jump to the Hyprland workspace of this project (Project, Step); `workspace:` in project.md sets it, its number shows as a chip'],
     ['n', 'New chat; on a Step in changes: a fresh run with your comment in its prompt, when the old chat cannot be resumed'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
