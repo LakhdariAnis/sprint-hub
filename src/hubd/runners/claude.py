@@ -81,7 +81,9 @@ class ClaudeCodeRunner:
     async def resume(
         self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
     ) -> None:
-        await self._launch(step, cwd, [RESUME, session_id, prompt], workspace)
+        # No prompt (a reopen): the chat opens as it was left, waiting for Anis.
+        args = [RESUME, session_id, *([prompt] if prompt else [])]
+        await self._launch(step, cwd, args, workspace)
 
     async def _launch(
         self, step: Step, cwd: Path, claude_args: list[str], workspace: int | None

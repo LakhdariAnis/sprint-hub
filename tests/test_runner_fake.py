@@ -60,6 +60,26 @@ def test_resume_runs_the_same_step_again(tmp_path: Path) -> None:
     assert ended == [("s1", "102"), ("s1", "102")]
 
 
+def test_a_session_is_gone_after_its_run_ended_until_it_reopens(tmp_path: Path) -> None:
+    shutil.copytree(REPO, tmp_path, dirs_exist_ok=True)
+
+    async def main() -> None:
+        runner = FakeRunner(run_ended, delay=0)
+        assert runner.running("s1")  # one it never ran: the demo's `doing` steps
+        await runner.start(STEP, "s1", "sonnet", tmp_path, "go")
+        assert runner.running("s1")
+        await runner.tasks["s1"]
+        assert not runner.running("s1")
+        await runner.resume(STEP, "s1", tmp_path, "")
+        assert runner.running("s1")
+        assert runner.resumed == [("s1", "")]
+
+    async def run_ended(session_id: str, step_id: str) -> None:
+        pass
+
+    asyncio.run(main())
+
+
 def test_missing_spec_raises(tmp_path: Path) -> None:
     async def run_ended(session_id: str, step_id: str) -> None:
         raise AssertionError("must not be called")

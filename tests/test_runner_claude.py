@@ -69,6 +69,13 @@ def test_resume_command(spawned: list[dict]) -> None:
     assert call["env"]["HUB_RUN"] == "106"
 
 
+def test_resume_without_a_prompt_passes_none(spawned: list[dict]) -> None:
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    asyncio.run(runner.resume(STEP, SESSION, Path("/repo"), ""))
+    [call] = spawned
+    assert call["argv"] == ["foot", "-D", "/repo", "claude", "--resume", SESSION]
+
+
 def test_never_skips_permissions(spawned: list[dict]) -> None:
     runner = ClaudeCodeRunner(Settings().terminal, URL)
     asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go"))

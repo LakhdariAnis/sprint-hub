@@ -18,12 +18,14 @@ class FakeRunner:
         self.resumed: list[tuple[str, str]] = []  # (session_id, prompt) of each resume
         self.started: list[tuple[str, str]] = []  # (session_id, prompt) of each new chat
         self.focused: list[int] = []  # workspaces asked for; the fake never calls `hyprctl`
+        self.ended: set[str] = set()  # sessions whose fake run ended: their chat can reopen
 
     def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> None:
         return None  # it only writes a progress file, so the demo can run steps side by side
 
     def running(self, session_id: str) -> bool:
-        return True  # the demo's `doing` steps show a run in progress
+        # The demo's `doing` steps show a run in progress; a fake run that ended is gone.
+        return session_id not in self.ended
 
     async def focus(self, workspace: int) -> None:
         self.focused.append(workspace)
@@ -38,12 +40,14 @@ class FakeRunner:
         workspace: int | None = None,
     ) -> None:
         self.started.append((session_id, prompt))
+        self.ended.discard(session_id)
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
     async def resume(
         self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
     ) -> None:
         self.resumed.append((session_id, prompt))
+        self.ended.discard(session_id)
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
     async def _run(self, session_id: str, step_id: str, cwd: Path) -> None:
@@ -65,6 +69,7 @@ class FakeRunner:
             await write()
             marks[i] = "x"
             await write()
+        self.ended.add(session_id)
         await self.run_ended(session_id, step_id)
 
 
