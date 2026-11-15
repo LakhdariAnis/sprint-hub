@@ -1,9 +1,11 @@
 """Popups of a chat that answers or asks (612b), with FakeChat."""
 
+import pytest
 from conftest import Recorder
 from fastapi.testclient import TestClient
 from test_api_chats import NEW, asked, client, until
 
+from hubd import focus
 from hubd.daemon import WAIT_GAP, Hub
 
 
@@ -129,3 +131,24 @@ def test_presence_needs_a_window_and_focused(hub: Hub) -> None:
     c, _ = client(hub)
     assert c.post("/presence", json={"focused": True}).status_code == 422
     assert c.post("/presence", json={"window": "w"}).status_code == 422
+
+
+def test_a_click_opens_the_app_at_the_chat_and_tells_the_last_focused_window(
+    hub: Hub, notifier: Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr(focus, "open_chat", opened.append)
+    c, events = client(hub)
+    seen: list[dict] = []
+    with c:
+        chats = c.app.state.chats
+        emit = chats.emit
+        chats.emit = lambda e: (seen.append(e) if e["type"] == "goto" else None, emit(e))
+        chat_id = say(c, "say hi")
+        present(c, "w1", True, None)
+        present(c, "w2", False, None)  # a window that is not on top does not take the click
+        ended(events)
+        notifier.clicks[0]()  # notify-send's thread
+        until(lambda: seen)
+    assert opened == [chat_id]
+    assert seen == [{"type": "goto", "window": "w1", "hash": f"#/chat/{chat_id}"}]

@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from hubd import chatlog, permits
+from hubd import chatlog, focus, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
 from hubd.model import one_line
@@ -105,12 +105,15 @@ class Chats:
         self.clock = time.monotonic  # tests move it
         # Each page window's last report: window id -> (focused, chat it shows, when).
         self.windows: dict[str, tuple[bool, str | None, float]] = {}
+        self.last: str | None = None  # the window that had focus last: a click goes to it
 
     def present(self, window: str, focused: bool, chat: str | None) -> None:
         """A page says whether its window has focus and which chat it shows."""
         now = self.clock()
         kept = {w: r for w, r in self.windows.items() if now - r[2] < HEARD}
         self.windows = {**kept, window: (focused, chat, now)}
+        if focused:
+            self.last = window
 
     def watched(self, chat_id: str) -> bool:
         """Does a focused window, heard from lately, show this chat?"""
@@ -121,7 +124,18 @@ class Chats:
         """A desktop popup for `chat`: Claude waits and Anis is not looking at it."""
         if self.watched(chat.id):
             return
-        self.popup((chat.id, kind), title, body, lambda: None)
+        loop = asyncio.get_running_loop()  # a click comes from the notify-send thread
+        self.popup((chat.id, kind), title, body, lambda: self._clicked(chat.id, loop))
+
+    def _clicked(self, chat_id: str, loop: asyncio.AbstractEventLoop) -> None:
+        focus.open_chat(chat_id)  # opens or focuses a window, which keeps the screen it shows
+        with suppress(RuntimeError):  # hubd shut down while the popup was open
+            loop.call_soon_threadsafe(self._goto, chat_id)
+
+    def _goto(self, chat_id: str) -> None:
+        """Tell the window Anis used last to show the chat."""
+        if self.last:
+            self.emit({"type": "goto", "window": self.last, "hash": f"#/chat/{chat_id}"})
 
     def _label(self, chat: Chat) -> str:
         return chat.title or chat.project or "New chat"

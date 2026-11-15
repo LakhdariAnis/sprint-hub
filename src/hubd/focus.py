@@ -1,4 +1,7 @@
-"""A click on a "waits for you" popup: focus the run's terminal, else open the app at the step."""
+"""A click on a "waits for you" popup: focus the run's terminal, else open the app at the step.
+
+A chat popup opens the app at the chat.
+"""
 
 import json
 import subprocess
@@ -50,5 +53,12 @@ def open_run(session_id: str, project: str, step: str) -> None:
             subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], env=env, timeout=5)
         else:
             subprocess.Popen([str(APP), f"#/step/{project}/{step}"], env=env)
+    except (OSError, subprocess.SubprocessError):
+        pass  # a click that does nothing must never stop the hub
+
+
+def open_chat(chat_id: str) -> None:
+    try:
+        subprocess.run([str(APP), f"#/chat/{chat_id}"], env=session.env(), timeout=10)
     except (OSError, subprocess.SubprocessError):
         pass  # a click that does nothing must never stop the hub

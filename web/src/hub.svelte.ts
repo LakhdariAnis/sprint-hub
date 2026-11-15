@@ -1,4 +1,5 @@
 import { chats, loadChat, loadSaved, onChat } from './chat.svelte'
+import { windowId } from './presence'
 import { demo } from './demo'
 import { loadProjects, type FileError } from './projects'
 import { loadStep, loadSteps, type OpenQuestion, type Step } from './steps'
@@ -95,6 +96,11 @@ function connect() {
     Promise.all([load(), relist()]).then(() => delete steps[key(project, step)])
   })
   events.addEventListener('chat', (e) => onChat(JSON.parse(e.data)))
+  // A click on a chat popup: the window Anis used last shows that chat (the app script only focuses a window).
+  events.addEventListener('goto', (e) => {
+    const g = JSON.parse(e.data)
+    if (g.window === windowId) location.hash = g.hash
+  })
   events.addEventListener('chats', () => loadSaved().catch(() => {}))
   events.addEventListener('theme', (e) => applyTheme(JSON.parse(e.data)))
   // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
