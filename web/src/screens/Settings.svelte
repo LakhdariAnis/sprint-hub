@@ -30,7 +30,7 @@
   const hint: Record<Name, string> = {
     terminal: 'argv split on spaces, must contain {cwd}',
     reminder_hour: '0–23, local time',
-    notify_waiting: 'Notify when a run waits: its turn ended or it needs a permission',
+    notify_waiting: 'Notify when Claude waits: its turn ended or it needs a permission',
   }
   const shown = (n: Name) => (n === 'terminal' ? settings.terminal.join(' ') : String(settings.reminder_hour))
 
@@ -127,7 +127,7 @@
           {:else if r.kind === 'set'}
             <span class="nm mono">{r.name}</span>
             {#if r.name === 'notify_waiting'}
-              <button class="val mono tg" role="switch" aria-checked={settings.notify_waiting} aria-label="Notify when a run waits" disabled={busy}
+              <button class="val mono tg" role="switch" aria-checked={settings.notify_waiting} aria-label="Notify when Claude waits" disabled={busy}
                 onclick={(e) => { e.stopPropagation(); sel = i; toggle() }}>{settings.notify_waiting ? 'on' : 'off'}</button>
             {:else if editing === r.name}
               <input class="in mono" aria-label={r.name} bind:value={text} use:focus disabled={busy}

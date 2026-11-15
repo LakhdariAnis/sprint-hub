@@ -15,7 +15,7 @@ class Settings(BaseModel):
     terminal: list[str] = ["xdg-terminal-exec", "--dir={cwd}"]
     # Deadline reminders are sent from this hour on (local time), never earlier that day.
     reminder_hour: int = 9
-    # A popup when a step run ends its turn or waits for a permission (`POST /runs/waiting`).
+    # A popup when a step run or a chat ends its turn or waits for a permission.
     notify_waiting: bool = True
 
     @field_validator("terminal")

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from test_api_chats import until
 
 from hubd.api import create_app
 from hubd.daemon import Hub
@@ -81,3 +82,17 @@ def test_notify_waiting_off_sends_nothing(hub: Hub, notifier) -> None:
     assert notifier.sent == []
     client.put("/settings", json={**GOOD, "notify_waiting": True})
     assert client.post("/runs/waiting", json=body).json() == {"sent": True}
+
+
+def test_notify_waiting_off_also_silences_chats(hub: Hub, notifier) -> None:
+    client = TestClient(create_app(hub))
+    client.put("/settings", json={**GOOD, "notify_waiting": False})
+    with client:
+        chat_id = client.post("/chats", json={"model": "haiku", "effort": "low"}).json()["id"]
+        client.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        until(lambda: not client.get(f"/chats/{chat_id}").json()["busy"])
+        assert notifier.sent == []
+        client.put("/settings", json={**GOOD, "notify_waiting": True})
+        client.post(f"/chats/{chat_id}/message", json={"text": "again"})
+        until(lambda: notifier.sent)
+    assert notifier.sent == [("Claude answered", "say hi")]
