@@ -450,3 +450,23 @@ for (const [w, h] of [[1920, 1080], [960, 1080], [743, 730], [743, 540]]) {
     expect(await ai.evaluate((a) => a.scrollWidth <= a.clientWidth)).toBe(true)
   })
 }
+
+// Step 612b: hubd's popup (the demo records it) shows when no focused window shows the chat.
+test('Claude answered pops up when the window looks elsewhere, not when it shows the chat', async ({ page, request }) => {
+  const popups = async () => (await (await request.get('/demo/notifications')).json()) as { title: string; body: string }[]
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await page.goto('/#/chat')
+  const before = (await popups()).length
+
+  await box.fill('say quiet')
+  await box.press('Enter')
+  await expect(page.locator('.cost')).toHaveCount(1) // the turn ended
+  expect(await popups()).toHaveLength(before)
+
+  await page.goto('/#/chat')
+  await box.fill('stall away')
+  await box.press('Enter')
+  await expect(page).toHaveURL(/#\/chat\/[0-9a-f-]+$/)
+  await page.evaluate(() => (location.hash = '#/today')) // reports "no chat shown"
+  await expect.poll(async () => (await popups()).slice(before), { timeout: 20_000 }).toEqual([{ title: 'Claude answered', body: 'stall away' }])
+})

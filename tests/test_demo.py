@@ -3,7 +3,9 @@ import time
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
+from test_api_chats import until
 
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.demo import demo_app, demo_vault
 from hubd.notify import NullNotifier
@@ -94,3 +96,15 @@ def test_demo_has_a_work_and_a_personal_sprint_this_week() -> None:
     assert week["warnings"] == []
     assert hub.sprint_tables()[1] == []
     assert hub.eta("demo", date.today())["sprints"] == 2
+
+
+def test_demo_records_its_popups_and_only_the_demo_serves_them(hub: Hub) -> None:
+    with TestClient(demo_app()) as client:
+        assert client.get("/demo/notifications").json() == []
+        chat_id = client.post("/chats", json={"model": "haiku", "effort": "low"}).json()["id"]
+        client.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        until(lambda: client.get("/demo/notifications").json())
+        assert client.get("/demo/notifications").json() == [
+            {"title": "Claude answered", "body": "say hi"}
+        ]
+    assert TestClient(create_app(hub)).get("/demo/notifications").status_code == 404

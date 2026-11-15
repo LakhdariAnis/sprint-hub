@@ -308,6 +308,12 @@ def create_app(
     async def tick(project: str, step_id: str, n: int) -> dict:
         return step_json(await hub.tick(project, step_id, n))
 
+    if demo:
+
+        @app.get("/demo/notifications")
+        def demo_notifications() -> list[dict[str, str]]:
+            return hub.notifier.sent  # type: ignore[attr-defined]  # RecordingNotifier
+
     @app.post("/presence")
     async def presence(body: Presence) -> dict:  # on the loop: no race on `windows`
         chats.present(body.window, body.focused, body.chat)

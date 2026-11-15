@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from hubd.api import create_app
 from hubd.daemon import Hub
-from hubd.notify import NullNotifier
+from hubd.notify import Click, NullNotifier
 from hubd.runners.fake import FakeRunner
 from hubd.weeks import week_of
 
@@ -140,5 +140,16 @@ def git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True)
 
 
+class RecordingNotifier(NullNotifier):
+    """Shows nothing, keeps what it was asked to show: e2e reads it at `GET /demo/notifications`."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, str]] = []
+
+    def notify(self, title: str, body: str, on_click: Click | None = None) -> None:
+        self.sent.append({"title": title, "body": body})
+
+
 def demo_app() -> FastAPI:
-    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()), demo=True)
+    hub = Hub(demo_vault(), lambda ended: FakeRunner(ended), RecordingNotifier())
+    return create_app(hub, demo=True)
