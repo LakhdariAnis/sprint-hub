@@ -97,3 +97,9 @@ test('a project gone since the list was read is left out, Settings still shows',
   await expect(page.locator('.row.project', { hasText: 'demo' })).toBeVisible()
   await expect(page.locator('.row.project', { hasText: 'notes' })).toHaveCount(0)
 })
+
+test('Settings that cannot load shows a line, not a blank screen', async ({ page }) => {
+  await page.route('**/settings', (route) => route.abort())
+  await page.goto('/#/settings')
+  await expect(page.locator('main')).toContainText('Cannot load settings')
+})

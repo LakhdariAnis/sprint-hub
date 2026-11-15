@@ -3,6 +3,7 @@
   import { keys } from './keys.svelte'
   import { hub } from './hub.svelte'
   import { nav } from './nav.svelte'
+  import { sx } from './settings.svelte'
   import NewChat from './screens/NewChat.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
@@ -40,7 +41,7 @@
       {:else if r.name === 'chat'}<NewChat id={r.id} />
       {:else if r.name === 'today'}<Today />
       {:else if r.name === 'questions'}<Questions />
-      {:else if r.name === 'settings'}<Settings />
+      {:else if r.name === 'settings'}{#if sx.settings && sx.doctor}<Settings />{:else}<p style="padding: 12px 16px; margin: 0; color: var(--fgd)">Cannot load settings. Is hubd running?</p>{/if}
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
