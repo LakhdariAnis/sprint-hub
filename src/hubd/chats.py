@@ -21,6 +21,7 @@ from hubd.transcript import Transcript, no_transcript
 MAX_LIVE = 3  # claude processes at once
 IDLE = 15 * 60  # seconds without a message or an event before the process is closed
 EVERY = 60  # seconds between idle checks
+HEARD = 60  # seconds a window's last report counts: a window not heard from is not focused
 ALLOW = {"behavior": "allow"}
 # (chat, kind), title, body, click -> sent? Rate limit and Settings toggle live behind it.
 Popup = Callable[[tuple[str, str], str, str, Click], bool]
@@ -101,9 +102,25 @@ class Chats:
         self.chats: dict[str, Chat] = {}
         self.ask_wait = permits.ASK_WAIT
         self.popup = popup
+        self.clock = time.monotonic  # tests move it
+        # Each page window's last report: window id -> (focused, chat it shows, when).
+        self.windows: dict[str, tuple[bool, str | None, float]] = {}
+
+    def present(self, window: str, focused: bool, chat: str | None) -> None:
+        """A page says whether its window has focus and which chat it shows."""
+        now = self.clock()
+        kept = {w: r for w, r in self.windows.items() if now - r[2] < HEARD}
+        self.windows = {**kept, window: (focused, chat, now)}
+
+    def watched(self, chat_id: str) -> bool:
+        """Does a focused window, heard from lately, show this chat?"""
+        now = self.clock()
+        return any(f and c == chat_id and now - t < HEARD for f, c, t in self.windows.values())
 
     def _tell(self, chat: Chat, kind: str, title: str, body: str) -> None:
         """A desktop popup for `chat`: Claude waits and Anis is not looking at it."""
+        if self.watched(chat.id):
+            return
         self.popup((chat.id, kind), title, body, lambda: None)
 
     def _label(self, chat: Chat) -> str:

@@ -63,3 +63,69 @@ def test_one_popup_per_chat_and_kind_every_30_s(hub: Hub, notifier: Recorder) ->
         c.post(f"/chats/{chat_id}/message", json={"text": "three"})
         ended(events, 3)
     assert len(notifier.sent) == 2
+
+
+def present(c: TestClient, window: str, focused: bool, chat: str | None) -> None:
+    body = {"window": window, "focused": focused, "chat": chat}
+    assert c.post("/presence", json=body).status_code == 200
+
+
+def test_focused_window_on_the_chat_keeps_it_quiet(hub: Hub, notifier: Recorder) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        present(c, "w1", True, chat_id)
+        c.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        ended(events)
+    assert notifier.sent == []
+
+
+def test_focused_window_on_another_chat_still_notifies(hub: Hub, notifier: Recorder) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        present(c, "w1", True, "another")
+        present(c, "w2", False, chat_id)  # shows it, but without focus
+        c.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        ended(events)
+    assert notifier.sent == [("Claude answered", "say hi")]
+
+
+def test_a_window_not_heard_from_for_60_s_is_not_focused(hub: Hub, notifier: Recorder) -> None:
+    c, events = client(hub)
+    with c:
+        chats = c.app.state.chats
+        now = [100.0]
+        chats.clock = lambda: now[0]
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        present(c, "w1", True, chat_id)
+        now[0] += 59
+        assert chats.watched(chat_id)
+        now[0] += 1
+        assert not chats.watched(chat_id)
+        c.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        ended(events)
+    assert len(notifier.sent) == 1
+
+
+def test_a_blur_or_a_route_change_makes_it_notify(hub: Hub, notifier: Recorder) -> None:
+    c, events = client(hub)
+    with c:
+        chat_id = c.post("/chats", json=NEW).json()["id"]
+        present(c, "w1", True, chat_id)
+        present(c, "w1", True, None)  # the window went to another screen
+        c.post(f"/chats/{chat_id}/message", json={"text": "one"})
+        ended(events)
+        assert len(notifier.sent) == 1
+        present(c, "w1", True, chat_id)
+        present(c, "w1", False, chat_id)  # blur
+        hub.clock = lambda: hub.waited[(chat_id, "turn")] + 99
+        c.post(f"/chats/{chat_id}/message", json={"text": "two"})
+        ended(events, 2)
+    assert len(notifier.sent) == 2
+
+
+def test_presence_needs_a_window_and_focused(hub: Hub) -> None:
+    c, _ = client(hub)
+    assert c.post("/presence", json={"focused": True}).status_code == 422
+    assert c.post("/presence", json={"window": "w"}).status_code == 422

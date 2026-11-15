@@ -61,6 +61,12 @@ class RunWaiting(RunEnded):
     kind: Literal["turn", "permission", "idle"]
 
 
+class Presence(BaseModel):
+    window: str
+    focused: bool
+    chat: str | None = None  # the chat the window shows, if any
+
+
 class NewChat(BaseModel):
     project: str | None = None  # none: a plain chat in `chats/scratch/` of the vault
     sprint: int | None = None  # with a project: its context is told to Claude (606)
@@ -301,6 +307,11 @@ def create_app(
     @app.post("/steps/{project}/{step_id}/tasks/{n}/tick")
     async def tick(project: str, step_id: str, n: int) -> dict:
         return step_json(await hub.tick(project, step_id, n))
+
+    @app.post("/presence")
+    async def presence(body: Presence) -> dict:  # on the loop: no race on `windows`
+        chats.present(body.window, body.focused, body.chat)
+        return {"ok": True}
 
     @app.post("/chats", response_model=None)
     async def new_chat(body: NewChat) -> JSONResponse | dict:
