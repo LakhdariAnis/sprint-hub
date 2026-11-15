@@ -51,11 +51,19 @@ def open_run(session_id: str, project: str, step: str, workspace: int | None = N
     try:
         windows = _windows(env)
         if pid := window_pid(session_id, windows):
-            subprocess.run(["hyprctl", "dispatch", "focuswindow", f"pid:{pid}"], env=env, timeout=5)
+            subprocess.run(
+                ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "pid:{pid}" }})'],
+                env=env,
+                timeout=5,
+            )
         elif (
             workspace and windows
         ):  # terminal not found (a server terminal?): at least its workspace
-            subprocess.run(["hyprctl", "dispatch", "workspace", str(workspace)], env=env, timeout=5)
+            subprocess.run(
+                ["hyprctl", "dispatch", f'hl.dsp.focus({{ workspace = "{workspace}" }})'],
+                env=env,
+                timeout=5,
+            )
         else:
             subprocess.Popen([str(APP), f"#/step/{project}/{step}"], env=env)
     except (OSError, subprocess.SubprocessError):

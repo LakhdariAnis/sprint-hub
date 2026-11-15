@@ -1,6 +1,7 @@
 """Run a real Claude Code session in a new terminal. Documented CLI flags only (ROADMAP rule 4)."""
 
 import asyncio
+import json
 import shlex
 import shutil
 import subprocess
@@ -53,7 +54,7 @@ class ClaudeCodeRunner:
     ) -> list[str]:
         """The terminal argv with `{cwd}` filled in, then `claude` and its args.
 
-        With a workspace and `hyprctl` on PATH: `hyprctl dispatch exec` opens it there, without
+        With a workspace and `hyprctl` on PATH: `hl.dsp.exec_cmd` opens it there, without
         switching to it. Hyprland starts that process, not hubd, so the hook's env goes on it.
         """
         argv = [arg.replace("{cwd}", str(cwd)) for arg in self.terminal] + ["claude", *claude_args]
@@ -61,7 +62,9 @@ class ClaudeCodeRunner:
             return argv
         env = [f"HUB_RUN={step.step}", f"HUB_URL={self.hub_url}"]
         line = shlex.join(["env", *env, *argv])  # run by `sh -c`: a path with spaces needs quotes
-        return ["hyprctl", "dispatch", "exec", f"[workspace {workspace} silent] {line}"]
+        # Hyprland's Lua dispatch; a JSON string is also a valid Lua string here.
+        rules = f'{{ workspace = "{workspace} silent" }}'
+        return ["hyprctl", "dispatch", f"hl.dsp.exec_cmd({json.dumps(line)}, {rules})"]
 
     def env(self, step: Step) -> dict[str, str]:
         return {**session.env(), "HUB_RUN": step.step, "HUB_URL": self.hub_url}
@@ -97,7 +100,7 @@ class ClaudeCodeRunner:
     async def focus(self, workspace: int) -> None:
         if shutil.which("hyprctl") is None:
             raise Unavailable("hyprctl not on PATH of hubd: workspaces need Hyprland")
-        argv = ["hyprctl", "dispatch", "workspace", str(workspace)]
+        argv = ["hyprctl", "dispatch", f'hl.dsp.focus({{ workspace = "{workspace}" }})']
         try:
             done = await asyncio.to_thread(
                 subprocess.run,

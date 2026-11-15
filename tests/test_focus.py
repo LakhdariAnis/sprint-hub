@@ -30,7 +30,7 @@ def test_open_run_focuses_the_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(focus, "window_pid", lambda session, windows: 10)
     monkeypatch.setattr(subprocess, "run", lambda argv, **_: calls.append(argv))
     focus.open_run(SESSION, "demo", "102")
-    assert calls == [["hyprctl", "dispatch", "focuswindow", "pid:10"]]
+    assert calls == [["hyprctl", "dispatch", 'hl.dsp.focus({ window = "pid:10" })']]
 
 
 def test_open_run_without_terminal_opens_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -48,7 +48,7 @@ def test_open_run_falls_back_to_the_workspace(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(focus, "window_pid", lambda session, windows: None)
     monkeypatch.setattr(subprocess, "run", lambda argv, **_: calls.append(argv))
     focus.open_run(SESSION, "demo", "102", 3)
-    assert calls == [["hyprctl", "dispatch", "workspace", "3"]]
+    assert calls == [["hyprctl", "dispatch", 'hl.dsp.focus({ workspace = "3" })']]
 
 
 def test_open_run_without_hyprland_opens_the_app_even_with_a_workspace(

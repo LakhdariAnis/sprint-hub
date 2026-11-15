@@ -57,7 +57,7 @@ def test_focus_runs_hyprctl(vault: Path, notifier, monkeypatch: pytest.MonkeyPat
     )
     hub = Hub(vault, lambda ended: ClaudeCodeRunner(["foot"], "http://hub"), notifier)
     assert TestClient(create_app(hub)).post("/projects/demo/focus").status_code == 200
-    assert calls == [["hyprctl", "dispatch", "workspace", "3"]]
+    assert calls == [["hyprctl", "dispatch", 'hl.dsp.focus({ workspace = "3" })']]
 
 
 def test_patch_sets_and_clears_the_workspace(vault: Path, hub: Hub) -> None:

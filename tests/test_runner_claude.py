@@ -1,4 +1,5 @@
 import asyncio
+import json
 import shlex
 import subprocess
 from pathlib import Path
@@ -113,17 +114,17 @@ def test_command_with_workspace_goes_through_hyprctl(hypr: Hypr) -> None:
     assert runner.command(STEP, Path("/repo"), ["go"], 3) == [
         "hyprctl",
         "dispatch",
-        "exec",
-        f"[workspace 3 silent] env HUB_RUN=106 HUB_URL={URL} foot -D /repo claude go",
+        f'hl.dsp.exec_cmd("env HUB_RUN=106 HUB_URL={URL} foot -D /repo claude go", '
+        '{ workspace = "3 silent" })',
     ]
 
 
 def test_command_quotes_a_path_with_spaces(hypr: Hypr) -> None:
     runner = ClaudeCodeRunner(["xdg-terminal-exec", "--dir={cwd}"], URL)
-    line = runner.command(STEP, Path("/my repo/it's"), ["a b"], 4)[3]
-    rule, _, rest = line.partition("] ")
-    assert rule == "[workspace 4 silent"
-    assert shlex.split(rest)[3:] == ["xdg-terminal-exec", "--dir=/my repo/it's", "claude", "a b"]
+    lua = runner.command(STEP, Path("/my repo/it's"), ["a b"], 4)[2]
+    assert lua.endswith(', { workspace = "4 silent" })')
+    line = json.loads(lua.removeprefix("hl.dsp.exec_cmd(").rpartition(", {")[0])
+    assert shlex.split(line)[3:] == ["xdg-terminal-exec", "--dir=/my repo/it's", "claude", "a b"]
 
 
 def test_no_hyprctl_on_path_launches_directly(
@@ -139,9 +140,9 @@ def test_start_and_resume_use_hyprctl(hypr: Hypr, monkeypatch: pytest.MonkeyPatc
     runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
     asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
     asyncio.run(runner.resume(STEP, SESSION, Path("/repo"), "fix", 3))
-    assert [c[:3] for c in hypr] == [["hyprctl", "dispatch", "exec"]] * 2
-    assert f"--session-id {SESSION}" in hypr[0][3]
-    assert f"--resume {SESSION}" in hypr[1][3]
+    assert [c[2].startswith("hl.dsp.exec_cmd(") for c in hypr] == [True, True]
+    assert f"--session-id {SESSION}" in hypr[0][2]
+    assert f"--resume {SESSION}" in hypr[1][2]
 
 
 def test_hyprctl_error_output_raises(hypr: Hypr) -> None:
@@ -163,7 +164,7 @@ def test_missing_terminal_raises_with_workspace(
 
 def test_focus_dispatches_the_workspace(hypr: Hypr) -> None:
     asyncio.run(ClaudeCodeRunner(["foot"], URL).focus(3))
-    assert hypr == [["hyprctl", "dispatch", "workspace", "3"]]
+    assert hypr == [["hyprctl", "dispatch", 'hl.dsp.focus({ workspace = "3" })']]
 
 
 def test_focus_without_hyprctl_is_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
