@@ -24,11 +24,21 @@ class FakeRunner:
     def running(self, session_id: str) -> bool:
         return True  # the demo's `doing` steps show a run in progress
 
-    async def start(self, step: Step, session_id: str, model: str, cwd: Path, prompt: str) -> None:
+    async def start(
+        self,
+        step: Step,
+        session_id: str,
+        model: str,
+        cwd: Path,
+        prompt: str,
+        workspace: int | None = None,
+    ) -> None:
         self.started.append((session_id, prompt))
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 
-    async def resume(self, step: Step, session_id: str, cwd: Path, prompt: str) -> None:
+    async def resume(
+        self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
+    ) -> None:
         self.resumed.append((session_id, prompt))
         self.tasks[session_id] = asyncio.create_task(self._run(session_id, step.step, cwd))
 

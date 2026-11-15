@@ -1,4 +1,5 @@
 import asyncio
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from hubd.model import Step
 from hubd.runners import claude
 from hubd.runners.claude import ClaudeCodeRunner
 from hubd.settings import Settings
+from hubd.states import InvalidTransition
 
 STEP = Step(step="106", title="State table", state="todo")
 SESSION = "550e8400-e29b-41d4-a716-446655440000"
@@ -71,3 +73,74 @@ def test_never_skips_permissions(spawned: list[dict]) -> None:
     asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go"))
     asyncio.run(runner.resume(STEP, SESSION, Path("/repo"), "go"))
     assert not any("dangerously" in arg for call in spawned for arg in call["argv"])
+
+
+class Hypr(list):
+    """The `hyprctl` calls; `out` is what it prints."""
+
+    out = "ok\n"
+
+
+@pytest.fixture
+def hypr(monkeypatch: pytest.MonkeyPatch) -> Hypr:
+    """`hyprctl` on PATH (so is the terminal); stdout is `ok` unless a test says otherwise."""
+    calls = Hypr()
+    monkeypatch.setattr(claude.shutil, "which", lambda exe: f"/usr/bin/{exe}")
+
+    def run(argv: list[str], **kw: object) -> subprocess.CompletedProcess:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 0, calls.out, "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    return calls
+
+
+def test_command_without_workspace_is_unchanged(hypr: Hypr) -> None:
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    assert runner.command(STEP, Path("/repo"), ["go"]) == ["foot", "-D", "/repo", "claude", "go"]
+
+
+def test_command_with_workspace_goes_through_hyprctl(hypr: Hypr) -> None:
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    assert runner.command(STEP, Path("/repo"), ["go"], 3) == [
+        "hyprctl",
+        "dispatch",
+        "exec",
+        f"[workspace 3 silent] env HUB_RUN=106 HUB_URL={URL} foot -D /repo claude go",
+    ]
+
+
+def test_command_quotes_a_path_with_spaces(hypr: Hypr) -> None:
+    runner = ClaudeCodeRunner(["xdg-terminal-exec", "--dir={cwd}"], URL)
+    line = runner.command(STEP, Path("/my repo/it's"), ["a b"], 4)[3]
+    rule, _, rest = line.partition("] ")
+    assert rule == "[workspace 4 silent"
+    assert shlex.split(rest)[3:] == ["xdg-terminal-exec", "--dir=/my repo/it's", "claude", "a b"]
+
+
+def test_no_hyprctl_on_path_launches_directly(
+    spawned: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(claude.shutil, "which", lambda exe: None)
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
+    assert spawned[0]["argv"][0] == "foot"
+
+
+def test_start_and_resume_use_hyprctl(hypr: Hypr, monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
+    asyncio.run(runner.resume(STEP, SESSION, Path("/repo"), "fix", 3))
+    assert [c[:3] for c in hypr] == [["hyprctl", "dispatch", "exec"]] * 2
+    assert f"--session-id {SESSION}" in hypr[0][3]
+    assert f"--resume {SESSION}" in hypr[1][3]
+
+
+def test_missing_terminal_raises_with_workspace(
+    hypr: Hypr, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(claude.shutil, "which", lambda exe: None if exe == "nope" else "/bin/x")
+    runner = ClaudeCodeRunner(["nope", "{cwd}"], URL)
+    with pytest.raises(InvalidTransition, match="nope not on PATH"):
+        asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
+    assert hypr == []

@@ -480,14 +480,20 @@ class Hub:
             save_step(entry.path, new)
             old, entry.step = entry.step, new
             entry.run_gone = False
+            workspace = self.index.projects[project].workspace
             try:
                 if resume:
-                    await self.runner.resume(new, session, repo, comment)
+                    await self.runner.resume(new, session, repo, comment, workspace)
                 else:
                     # The command file gets the comment as its arguments (`ARGUMENTS: ...`).
                     prompt = f"/sprint-{step_id} Changes requested on the earlier run: {comment}"
                     await self.runner.start(
-                        new, session, model, repo, prompt if comment else f"/sprint-{step_id}"
+                        new,
+                        session,
+                        model,
+                        repo,
+                        prompt if comment else f"/sprint-{step_id}",
+                        workspace,
                     )
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too

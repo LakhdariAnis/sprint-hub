@@ -26,7 +26,17 @@ class AgentRunner(Protocol):
         ...
 
     async def start(
-        self, step: Step, session_id: str, model: str, cwd: Path, prompt: str
-    ) -> None: ...
+        self,
+        step: Step,
+        session_id: str,
+        model: str,
+        cwd: Path,
+        prompt: str,
+        workspace: int | None = None,
+    ) -> None:
+        """`workspace`: the project's Hyprland workspace for the run's terminal; None = anywhere."""
+        ...
 
-    async def resume(self, step: Step, session_id: str, cwd: Path, prompt: str) -> None: ...
+    async def resume(
+        self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
+    ) -> None: ...
