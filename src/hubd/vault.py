@@ -363,7 +363,8 @@ def _write_atomic(path: Path, data: bytes) -> None:
             f.write(data)
             f.flush()
             os.fsync(f.fileno())
-        shutil.copymode(path, tmp)
+        if path.exists():
+            shutil.copymode(path, tmp)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

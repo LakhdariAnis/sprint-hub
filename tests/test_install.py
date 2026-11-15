@@ -11,31 +11,34 @@ OTHER = {"type": "command", "command": "notify-send bye"}
 def test_install_twice_gives_one_entry() -> None:
     once = install.with_hook({})
     assert install.with_hook(once) == once
-    assert once == {
-        "hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": install.COMMAND}]}]}
-    }
+    ours = [{"hooks": [{"type": "command", "command": install.COMMAND}]}]
+    assert once == {"hooks": {"SessionEnd": ours, "Stop": ours, "Notification": ours}}
 
 
 def test_install_keeps_other_settings_and_hooks() -> None:
-    settings = {"model": "opus", "hooks": {"SessionEnd": [{"hooks": [OTHER]}], "Stop": []}}
+    hooks = {"SessionEnd": [{"hooks": [OTHER]}], "Stop": [{"hooks": [OTHER]}], "PreToolUse": []}
+    settings = {"model": "opus", "hooks": hooks}
     new = install.with_hook(settings)
     assert new["model"] == "opus"
-    assert new["hooks"]["Stop"] == []
+    assert new["hooks"]["PreToolUse"] == []
     assert new["hooks"]["SessionEnd"][0] == {"hooks": [OTHER]}
-    assert install.installed(new)
+    assert new["hooks"]["Stop"][0] == {"hooks": [OTHER]}
+    assert all(install.installed(new, event) for event in install.EVENTS)
     assert settings["hooks"]["SessionEnd"] == [{"hooks": [OTHER]}]  # input not changed
 
 
 def test_install_replaces_entry_from_another_venv() -> None:
     old = {"type": "command", "command": "/old/venv/bin/python -m hubd.hook"}
     new = install.with_hook({"hooks": {"SessionEnd": [{"hooks": [old]}]}})
-    commands = [h["command"] for g in new["hooks"]["SessionEnd"] for h in g["hooks"]]
-    assert commands == [install.COMMAND]
+    for event in install.EVENTS:
+        commands = [h["command"] for g in new["hooks"][event] for h in g["hooks"]]
+        assert commands == [install.COMMAND]
 
 
 def test_uninstall_removes_only_ours() -> None:
-    settings = install.with_hook({"hooks": {"SessionEnd": [{"hooks": [OTHER]}]}})
-    assert install.uninstalled(settings) == {"hooks": {"SessionEnd": [{"hooks": [OTHER]}]}}
+    mine = {"SessionEnd": [{"hooks": [OTHER]}], "Notification": [{"hooks": [OTHER]}]}
+    settings = install.with_hook({"hooks": mine})
+    assert install.uninstalled(settings) == {"hooks": mine}
     assert install.uninstalled(install.with_hook({})) == {}
     assert install.uninstalled({}) == {}
 

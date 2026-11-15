@@ -1,0 +1,13 @@
+{"type":"queue-operation","operation":"enqueue","sessionId":"s","content":"what files are here?"}
+{"type":"attachment","isSidechain":false,"attachment":{"type":"skill_listing"},"uuid":"a1"}
+{"type":"user","isSidechain":false,"cwd":"/work/repo","message":{"role":"user","content":"what files are here?"},"uuid":"u1"}
+{"type":"last-prompt","lastPrompt":"what files are here?","sessionId":"s"}
+{"type":"assistant","isSidechain":false,"cwd":"/work/repo","message":{"role":"assistant","model":"claude-sonnet-5-5","content":[{"type":"text","text":"Let me look."}]},"uuid":"b1"}
+{"type":"assistant","isSidechain":false,"cwd":"/work/repo","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/work/repo/README.md"}}]},"uuid":"b2"}
+{"type":"user","isSidechain":false,"cwd":"/work/repo","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"# Repo\nhello","is_error":false}]},"uuid":"u2"}
+{"type":"user","isSidechain":true,"message":{"role":"user","content":"a subagent's prompt"},"uuid":"u3"}
+not json at all
+{"type":"assistant","isSidechain":false,"cwd":"/work/repo","message":{"role":"assistant","content":[{"type":"text","text":"One file: README.md."},{"type":"text","text":" It says hello."}]},"uuid":"b3"}
+{"type":"cost-state","sessionId":"s","totalCostUSD":0.02}
+{"type":"user","isSidechain":false,"cwd":"/work/repo","message":{"role":"user","content":[{"type":"text","text":"what did I ask first?"}]},"uuid":"u4"}
+{"type":"assistant","isSidechain":false,"cwd":"/work/repo","message":{"role":"assistant","content":[{"type":"text","text":"You asked what files are here."}]},"uuid":"b4"}

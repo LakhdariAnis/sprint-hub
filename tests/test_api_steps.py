@@ -2,6 +2,7 @@ import shutil
 import time
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from hubd.api import create_app
@@ -28,6 +29,20 @@ def test_invalid_start_is_409_with_reason(hub: Hub) -> None:
     assert response.status_code == 409
     assert response.json() == {"detail": "step 103: no 'start' from 'done'"}
     assert client.post("/steps/demo/999/start").status_code == 404
+
+
+def test_reopen(vault: Path, hub: Hub) -> None:
+    (vault / "demo-repo" / "sprint" / "103-ui.md").write_text("# Step 103\n\n## Tasks\n- Show it\n")
+    client = TestClient(create_app(hub))
+    response = client.post("/steps/demo/103/reopen")
+    assert response.status_code == 409
+    assert response.json() == {"detail": "step 103: the chat is still open"}
+    hub.runner.ended.add("7b1e…a04")
+    response = client.post("/steps/demo/103/reopen")
+    assert response.status_code == 200
+    assert response.json()["state"] == "doing"
+    assert len(response.json()["runs"]) == 2
+    assert client.post("/steps/demo/999/reopen").status_code == 404
 
 
 def test_run_ended_from_the_hook(hub: Hub) -> None:
@@ -84,3 +99,56 @@ def test_start_refuses_a_repo_that_is_gone(vault: Path, hub: Hub) -> None:
     assert response.status_code == 409
     assert "does not exist" in response.json()["detail"]
     assert hub.entry("demo", "104").step.state == before
+
+
+@pytest.mark.parametrize(
+    ("kind", "popup"),
+    [
+        ("turn", ("Claude answered", "demo 102 Serve the API")),
+        ("permission", ("Claude needs permission", "demo 102")),
+        ("idle", ("Claude waits for you", "demo 102")),
+    ],
+)
+def test_run_waiting_per_kind(hub: Hub, notifier, kind: str, popup: tuple[str, str]) -> None:
+    client = TestClient(create_app(hub))
+    body = {"session_id": "3f2a…c91", "step": "102", "kind": kind}
+    response = client.post("/runs/waiting", json=body)
+    assert response.json() == {"sent": True}
+    assert notifier.sent == [popup]
+    assert callable(notifier.clicks[0])  # a click opens the run
+    assert client.get("/steps/demo/102").json()["state"] == "doing"  # no state change
+
+
+def test_run_waiting_unknown_session_or_kind(hub: Hub, notifier) -> None:
+    client = TestClient(create_app(hub))
+    unknown = {"session_id": "nope", "step": "102", "kind": "turn"}
+    assert client.post("/runs/waiting", json=unknown).status_code == 404
+    odd = {"session_id": "3f2a…c91", "step": "102", "kind": "auth"}
+    assert client.post("/runs/waiting", json=odd).status_code == 422
+    assert notifier.sent == []
+
+
+def test_run_waiting_once_per_30_s_per_kind(hub: Hub, notifier) -> None:
+    now = [100.0]
+    hub.clock = lambda: now[0]
+    client = TestClient(create_app(hub))
+
+    def wait(kind: str) -> bool:
+        body = {"session_id": "3f2a…c91", "step": "102", "kind": kind}
+        return client.post("/runs/waiting", json=body).json()["sent"]
+
+    assert wait("turn")
+    now[0] += 10
+    assert not wait("turn")
+    assert wait("permission")  # another kind has its own 30 s
+    now[0] += 20
+    assert wait("turn")
+    assert len(notifier.sent) == 3
+
+
+def test_run_waiting_after_the_run_ended(hub: Hub, notifier) -> None:
+    client = TestClient(create_app(hub))
+    client.post("/runs/ended", json={"session_id": "3f2a…c91", "step": "102"})
+    body = {"session_id": "3f2a…c91", "step": "102", "kind": "turn"}
+    assert client.post("/runs/waiting", json=body).json() == {"sent": False}
+    assert [t for t, _ in notifier.sent] == ["Run ended"]

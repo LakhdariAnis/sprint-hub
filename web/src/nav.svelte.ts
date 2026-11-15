@@ -23,17 +23,17 @@ export const loadProject = (p: string) =>
 // Cached data shows at once and refreshes behind it; SSE keeps it fresh after that.
 const cached = (have: unknown, load: () => Promise<unknown>) => (have ? (load().catch(() => {}), Promise.resolve()) : load())
 
+const projects = () => cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
+
 function data(r: Route): Promise<unknown> {
-  if (r.name === 'projects' || r.name === 'today') return cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
-  if (r.name === 'project') return cached(lists.steps[r.project], () => loadProject(r.project))
+  if (r.name === 'projects' || r.name === 'today') return projects()
+  // The workspace chip of a project and of its steps comes from the project rows.
+  if (r.name === 'project') return Promise.all([cached(lists.steps[r.project], () => loadProject(r.project)), projects()])
   if (r.name === 'step') {
     const s = steps[key(r.project, r.id)]
-    return cached(s && 'spec' in s, () => loadStep(r.project, r.id).then((d) => put(r.project, d)))
+    return Promise.all([cached(s && 'spec' in s, () => loadStep(r.project, r.id).then((d) => put(r.project, d))), projects()])
   }
-  if (r.name === 'settings') {
-    const projects = () => cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
-    return cached(sx.settings && sx.doctor, () => Promise.all([loadSettings(), projects()]))
-  }
+  if (r.name === 'settings') return cached(sx.settings && sx.doctor, () => Promise.all([loadSettings(), projects()]))
   // The review queue spans every project. j/k there only change the URL's selection.
   if (r.name === 'review') {
     if (nav.route?.name === 'review') return Promise.resolve()

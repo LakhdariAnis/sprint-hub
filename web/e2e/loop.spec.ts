@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 // The core loop on the demo vault: Today → start notes/301 → FakeRunner ticks it to done → approve.
 test('start a step, wait for done, approve it', async ({ page }) => {
   await page.goto('/')
-  await expect(page).toHaveURL(/#\/projects$|\/$/)
+  await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible() // the app opens on New chat
   await page.goto('/#/today')
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Anis$/ })).toBeVisible()
 
@@ -11,7 +11,7 @@ test('start a step, wait for done, approve it', async ({ page }) => {
   await next.getByRole('link', { name: /301\s+Parse the notes/ }).click()
 
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
-  const chip = page.locator('.hd .chip')
+  const chip = page.locator('.hd .chip:not(.ws)')
   await expect(chip).toHaveText(/todo/)
   await page.getByRole('button', { name: /Start/ }).click()
   await expect(chip).toHaveText(/running/)
@@ -45,22 +45,27 @@ test('start a step, wait for done, approve it', async ({ page }) => {
 })
 
 test('plain keys switch tabs, open steps and the sidebar rail', async ({ page }) => {
+  // chat.spec runs alongside: its new chats would sort above the step in OPEN and move its digit.
+  await page.route('**/chats', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: [] }) : route.continue()))
   await page.goto('/#/steps/notes/301')
   const open = page.getByRole('link', { name: 'notes 301' })
   await expect(open).toBeVisible()
   await page.keyboard.press('1')
   await expect(page).toHaveURL(/#\/projects$/)
-  await page.keyboard.press('6')
+  // The step's own digit is in its row.
+  const digit = (await open.locator('.k').innerText()).trim()
+  await page.keyboard.press(digit)
   await expect(page).toHaveURL(/#\/steps\/notes\/301$/)
   await page.keyboard.press('b')
   await expect(page.locator('nav.sb.rail')).toBeVisible()
-  await expect(open).toContainText('6')
+  await expect(open).toContainText(digit)
 })
 
 test('Enter opens the selected row after a sidebar click', async ({ page }) => {
   await page.goto('/#/today')
   await page.getByRole('link', { name: 'Projects' }).click()
-  await expect(page).toHaveURL(/#\/projects$/)
+  // The URL changes before `hashchange` blurs the clicked link: wait for the screen.
+  await expect(page.locator('main')).toHaveAttribute('data-shown', '#/projects')
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/#\/projects\/demo$/)
 })
@@ -164,7 +169,7 @@ test('x ticks the tasks of a manual step: todo, doing, done', async ({ page }) =
   await page.goto('/#/today')
   await expect(page.locator('.pn', { hasText: 'Now' }).getByRole('link', { name: /101/ })).toContainText('demo · me')
   await page.goto('/#/steps/demo/101')
-  const chip = page.locator('.hd .chip').first()
+  const chip = page.locator('.hd .chip:not(.ws)').first()
   await expect(chip).toHaveText(/todo/)
   await expect(page.locator('.hd .chip', { hasText: 'manual' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Start/ })).toHaveCount(0)
@@ -456,8 +461,8 @@ for (const [w, h] of [[743, 730], [960, 1080]]) {
   })
 }
 
-const SCREENS = ['today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions', 'settings']
-for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
+const SCREENS = ['chat', 'today', 'projects', 'projects/demo', 'steps/demo/102', 'review/demo/103', 'questions', 'settings']
+for (const [w, h] of [[743, 730], [743, 540], [960, 540], [960, 1080], [1920, 1080]]) {
   for (const rail of [false, true]) {
     test(`every screen at ${w}x${h}${rail ? ' rail' : ''}: no overlap, no row cut, no page scroll`, async ({ page }) => {
       await page.setViewportSize({ width: w, height: h })
@@ -466,7 +471,7 @@ for (const [w, h] of [[743, 730], [743, 540], [960, 540], [1920, 1080]]) {
       if (rail) await page.keyboard.press('b')
       for (const s of SCREENS) {
         await page.goto(`/#/${s}`)
-        await expect(page.locator('main .body')).toBeVisible()
+        await expect(page.locator('main')).toHaveAttribute('data-shown', `#/${s}`) // not the screen before
         await expect(page.locator('main .ph').first()).toBeVisible()
         expect(await layoutFaults(page), s).toEqual([])
         expect(await noPageScroll(page), s).toBe(true)

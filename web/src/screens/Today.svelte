@@ -39,20 +39,20 @@
 
   const projects = $derived(lists.projects ?? [])
 
-  // p / n / m / w / q / d focus a pane; j/k walk the rows of the Projects or Now pane.
-  let focus = $state<'p' | 'n' | 'm' | 'w' | 'q' | 'd'>('p')
+  // p / o / m / w / q / d focus a pane; j/k walk the rows of the Projects or Now pane.
+  let focus = $state<'p' | 'o' | 'm' | 'w' | 'q' | 'd'>('p')
   const keysAll = $derived(groups.flatMap((g) => hub.today[g.id].filter((k) => steps[k])))
   let sel = $state('')
   const at = $derived(keysAll.includes(sel) ? sel : keysAll[0])
   let psel = $state(0)
   const move = (n: number) => {
-    if (focus === 'n') sel = keysAll[Math.max(0, Math.min(keysAll.length - 1, keysAll.indexOf(at) + n))] ?? ''
+    if (focus === 'o') sel = keysAll[Math.max(0, Math.min(keysAll.length - 1, keysAll.indexOf(at) + n))] ?? ''
     else if (focus === 'p') psel = Math.max(0, Math.min(projects.length - 1, psel + n))
   }
   const openProject = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   useKeys({
-    p: () => (focus = 'p'), n: () => (focus = 'n'), m: () => (focus = 'm'), q: () => (focus = 'q'), w: () => (focus = 'w'), d: () => (focus = 'd'), j: () => move(1), k: () => move(-1),
-    Enter: () => (focus === 'q' ? (location.hash = '#/questions') : focus === 'n' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
+    p: () => (focus = 'p'), o: () => (focus = 'o'), m: () => (focus = 'm'), q: () => (focus = 'q'), w: () => (focus = 'w'), d: () => (focus = 'd'), j: () => move(1), k: () => move(-1),
+    Enter: () => (focus === 'q' ? (location.hash = '#/questions') : focus === 'o' ? at && open(at) : focus === 'p' && projects[psel] && openProject(projects[psel].id)),
   })
 
   // Whole days from today (local) to the deadline: negative = late. UTC math, so a DST change never skews it.
@@ -96,9 +96,9 @@
   </section>
 
   <div class="side" style="grid-column: span 4; grid-row: span 2">
-  <section class="pn" class:f={focus === 'n'}>
+  <section class="pn" class:f={focus === 'o'}>
     <div class="ph">
-      <span class="hk">n</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
+      <span class="hk">o</span>Now<span class="n">{hub.running} running · {hub.review} to review</span>
     </div>
     {#each groups as g}
       {@const list = hub.today[g.id].map((k) => steps[k]).filter(Boolean)}
@@ -109,7 +109,7 @@
         {@const cur = s.tasks.find((t) => t.state === 'doing') ?? s.tasks.find((t) => t.state === 'todo')}
         {@const extra = hub.demo?.steps[k]}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <div class="cols lr" class:f={focus === 'n' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
+        <div class="cols lr" class:f={focus === 'o' && k === at} role="link" tabindex="0" onclick={() => open(k)} onfocus={() => (sel = k)}>
           <span class="dot s-{g.state}"></span>
           <span class="id">{s.step}</span>
           <span>{s.title}{#if g.id === 'running' && cur}<span class="s">now: <Inline text={cur.text} /></span>{/if}</span>

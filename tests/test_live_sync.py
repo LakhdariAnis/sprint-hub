@@ -204,7 +204,8 @@ def test_bad_projects_toml_is_an_error_not_a_crash(
         await until(lambda: any(e.path == hub.projects_file for e in hub.index.errors))
 
     events = asyncio.run(watching(hub, body))
-    assert [e["type"] for e in events] == ["error"]
+    # `reload`: the watch's first read of the vault (611a)
+    assert [e["type"] for e in events if e["type"] != "reload"] == ["error"]
 
 
 def test_repo_that_gets_sprint_later(vault: Path, notifier: Recorder, tmp_path: Path) -> None:
@@ -224,6 +225,51 @@ def test_repo_that_gets_sprint_later(vault: Path, notifier: Recorder, tmp_path: 
         # and it is watched from now on
         (repo / "sprint" / "102-second.md").write_text("# Step 102 — Second\n")
         await until(lambda: len([e for e in hub.index.steps if e.project == "late"]) == 2)
+
+    asyncio.run(watching(hub, body))
+
+
+def test_project_written_while_watching_restarts(
+    vault: Path, notifier: Recorder, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Step 611a: two projects added at once (parallel e2e); the second lands in the gap."""
+    repo = tmp_path / "first"
+    repo.mkdir()
+    hub = Hub(vault, lambda ended: FakeRunner(ended, delay=0), notifier)
+    imported = hub._import_projects
+
+    async def import_then_write(sprints: set[Path]) -> None:
+        await imported(sprints)
+        folder = vault / "projects" / "second"
+        (folder / "steps").mkdir(parents=True)
+        (folder / "project.md").write_text(
+            f"---\nname: second\nrepo: {repo}\nmodel: sonnet\nmerge: manual\n---\n"
+        )
+
+    monkeypatch.setattr(hub, "_import_projects", import_then_write)
+
+    async def body() -> None:
+        (repo / "sprint").mkdir()
+        folder = vault / "projects" / "first"
+        (folder / "steps").mkdir(parents=True)
+        (folder / "project.md").write_text(
+            f"---\nname: first\nrepo: {repo}\nmodel: sonnet\nmerge: manual\n---\n"
+        )
+        await until(lambda: "second" in hub.index.projects)
+
+    asyncio.run(watching(hub, body))
+
+
+def test_project_written_before_watching_starts(vault: Path, hub: Hub, tmp_path: Path) -> None:
+    """Step 611a: hubd read the vault at start; a project written before the watch has no event."""
+    folder = vault / "projects" / "early"
+    (folder / "steps").mkdir(parents=True)
+    (folder / "project.md").write_text(
+        f"---\nname: early\nrepo: {tmp_path}\nmodel: sonnet\nmerge: manual\n---\n"
+    )
+
+    async def body() -> None:
+        await until(lambda: "early" in hub.index.projects)
 
     asyncio.run(watching(hub, body))
 

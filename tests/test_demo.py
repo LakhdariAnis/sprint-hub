@@ -2,8 +2,11 @@ import subprocess
 import time
 from datetime import date, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
+from test_api_chats import until
 
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.demo import demo_app, demo_vault
 from hubd.notify import NullNotifier
@@ -94,3 +97,29 @@ def test_demo_has_a_work_and_a_personal_sprint_this_week() -> None:
     assert week["warnings"] == []
     assert hub.sprint_tables()[1] == []
     assert hub.eta("demo", date.today())["sprints"] == 2
+
+
+def test_demo_records_its_popups_and_only_the_demo_serves_them(hub: Hub) -> None:
+    with TestClient(demo_app()) as client:
+        assert client.get("/demo/notifications").json() == []
+        chat_id = client.post("/chats", json={"model": "haiku", "effort": "low"}).json()["id"]
+        client.post(f"/chats/{chat_id}/message", json={"text": "say hi"})
+        until(lambda: client.get("/demo/notifications").json())
+        assert client.get("/demo/notifications").json() == [
+            {"title": "Claude answered", "body": "say hi"}
+        ]
+    assert TestClient(create_app(hub)).get("/demo/notifications").status_code == 404
+
+
+def test_demo_focus_and_start_never_call_hyprctl(monkeypatch: pytest.MonkeyPatch) -> None:
+    def no_process(*a: object, **kw: object) -> None:
+        raise AssertionError("demo mode started a process")
+
+    with TestClient(demo_app()) as client:
+        projects = {p["id"]: p["workspace"] for p in client.get("/projects").json()}
+        assert projects == {"demo": None, "notes": 2}
+        monkeypatch.setattr(subprocess, "run", no_process)
+        monkeypatch.setattr(subprocess, "Popen", no_process)
+        assert client.post("/projects/notes/focus").json() == {"workspace": 2}
+        assert client.post("/projects/demo/focus").status_code == 404
+        assert client.post("/steps/notes/301/start").status_code == 200

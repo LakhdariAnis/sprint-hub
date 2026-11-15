@@ -1,12 +1,14 @@
 <script lang="ts">
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
+  import Workspace from '../Workspace.svelte'
   import { hub } from '../hub.svelte'
-  import { useKeys } from '../keys.svelte'
+  import { chatAbout } from '../chat.svelte'
+  import { jump, newChat, say, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
-  import { ago, finishStep, goal, startStep, tickTask } from '../steps'
+  import { ago, finishStep, goal, reopenStep, startedOn, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
-  import { key, put, steps } from '../store.svelte'
+  import { key, put, steps, workspaceOf } from '../store.svelte'
 
   let { project, id }: { project: string; id: string } = $props()
   let error = $state('')
@@ -24,7 +26,7 @@
     busy = true
     error = ''
     startStep(project, id, fresh)
-      .then((d) => put(project, d), (e: Error) => (error = `Start failed: ${e.message}`))
+      .then((d) => (put(project, d), say(startedOn(workspaceOf(project)))), (e: Error) => (error = `Start failed: ${e.message}`))
       .finally(() => (busy = false))
   }
 
@@ -40,6 +42,17 @@
       .finally(() => ((busy = false), (confirming = false)))
   }
   const finishKey = () => canFinish && !busy && (confirming ? finish() : (confirming = true))
+
+  // The terminal was closed: the last run's chat opens again. hubd says why when it cannot (chat still open…).
+  const canReopen = $derived(!!s?.runs.length && !manual && (s.state === 'done' || (s.state === 'doing' && !!s.run_gone)))
+  const reopen = () => {
+    if (!canReopen || busy) return
+    busy = true
+    error = ''
+    reopenStep(project, id)
+      .then((d) => (put(project, d), say(startedOn(workspaceOf(project)))), (e: Error) => say(e.message, true))
+      .finally(() => (busy = false))
+  }
   const back = () => (location.hash = `#/projects/${encodeURIComponent(project)}`)
 
   // The cursor starts on the current task: the one doing, else the first todo.
@@ -59,7 +72,7 @@
   const walk = (d: number) => manual && s && (pick = Math.max(0, Math.min(s.tasks.length - 1, sel + d)))
 
   // Close the tab (the sidebar's OPEN entry) and fall back to Today.
-  let focus = $state<'c' | 't'>('c')
+  let focus = $state<'p' | 't'>('p') // p: checklist (from sprint/progress), t: chat or spec
   const chat = $derived(hub.demo && hub.demo.chat.step === key(project, id) ? hub.demo.chat : null)
   // Open questions first, answered ones after (stable sort keeps file order).
   const qs = $derived([...(s?.questions ?? [])].sort((a, b) => +a.answered - +b.answered))
@@ -76,7 +89,7 @@
   // First paragraph under `## Goal`, else the first paragraph of the spec.
   const lead = $derived((goal(s?.spec) || s?.spec || '').split(/\n\s*\n/)[0].replace(/^#+\s.*\n?/, '').trim())
 
-  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), c: () => (focus = 'c'), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => canFresh && !busy && start(true), f: finishKey, y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
+  useKeys({ j: () => walk(1), k: () => walk(-1), x: () => manual && s?.tasks.length && tick(sel), p: () => (focus = 'p'), c: () => chatAbout(project, id), t: () => (focus = 't'), s: () => canStart && !busy && start(), n: () => (canFresh ? !busy && start(true) : newChat()), f: finishKey, o: reopen, w: () => jump(project), y: () => confirming && finishKey(), Escape: () => (confirming ? (confirming = false) : back()) })
 
   // Ticked tasks show the clock time, the current one its minutes so far (re-read every 30 s).
   let now = $state(Date.now())
@@ -113,7 +126,7 @@
 <div class="page">
 <div class="hd">
   <div class="crumb"><a href="#/projects/{encodeURIComponent(project)}">{project}</a> › <span class="cur">{id}</span></div>
-  {#if s}<span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
+  {#if s}<Workspace n={workspaceOf(project)} /><span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
   <span class="acts">
     {#if canStart}
       <button class="btn pri" type="button" disabled={busy} onclick={() => start()}>{s?.state === 'changes' ? 'Continue chat' : 'Start'} <span class="kb">s</span></button>
@@ -124,10 +137,13 @@
       <!-- hubd has no stop API yet -->
       <button class="btn" type="button" disabled title="Stopping a run comes in a later sprint">Stop <span class="kb">s</span></button>
     {/if}
-    {#if canFinish}
-      <button class="btn" type="button" disabled={busy} onclick={finishKey}>Finish <span class="kb">f</span></button>
+    {#if canReopen}
+      <button class="btn" type="button" disabled={busy} onclick={reopen}><span class="t">Reopen chat</span> <span class="kb">o</span></button>
     {/if}
-    <button class="btn dim" type="button" onclick={close}>Close tab <span class="kb">^W</span></button>
+    {#if canFinish}
+      <button class="btn" type="button" disabled={busy} onclick={finishKey}><span class="t">Finish</span> <span class="kb">f</span></button>
+    {/if}
+    <button class="btn dim" type="button" onclick={close}><span class="t">Close tab</span> <span class="kb">^W</span></button>
   </span>
 </div>
 {#if error || loadError}
@@ -136,7 +152,7 @@
 {#if confirming && canFinish}
   <p class="note ask">Finish this run? {id} goes to done, even if Claude is still working. <span class="kb">f</span> or <span class="kb">y</span> finish, <span class="kb">Esc</span> cancel.</p>
 {:else if s?.run_gone && canFinish}
-  <p class="note ask">The run is gone: no Claude session for it is running, and its end never arrived. Press <span class="kb">f</span> to finish it.</p>
+  <p class="note ask">The run is gone: no Claude session for it is running, and its end never arrived. <span class="kb">o</span> reopens the chat, <span class="kb">f</span> finishes it.</p>
 {:else if ticked}
   <p class="note">All tasks ticked. Exit Claude (<code>/exit</code>) to send it to review.</p>
 {/if}
@@ -154,12 +170,14 @@
       </div>
       {#if lastRun}
         <div class="last">{s.runs.length} {s.runs.length === 1 ? 'run' : 'runs'} · last started {lastRun.started?.slice(0, 16).replace('T', ' ')} · {lastRun.model}</div>
+        <!-- For the times hubd is down: the same chat by hand, from the repo. -->
+        {#if lastRun.session && !manual}<div class="last cm resume" title="Session {lastRun.session}: run this in the repo to open the chat without hubd"><span>SESSION</span> <code>claude --resume {lastRun.session}</code></div>{/if}
       {/if}
       {#if s.review?.comment}<div class="last cm"><span>YOUR LAST COMMENT</span> {s.review.comment}</div>{/if}
     </section>
 
-    <section class="pn ck" class:f={focus === 'c'} class:short={!s.tasks.length && !qs.length}>
-      <div class="ph"><span class="hk">c</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
+    <section class="pn ck" class:f={focus === 'p'} class:short={!s.tasks.length && !qs.length}>
+      <div class="ph"><span class="hk">p</span>Checklist<span class="n">from sprint/progress/{s.step}.md</span><span class="r">live</span></div>
       {#if s.tasks.length}
         <div class="big">
           <b>{done}<span class="of"> / {s.tasks.length}</span></b>
@@ -250,14 +268,19 @@
   .note { flex: none; margin: 14px 20px 0; padding: 8px 12px; border: 1px solid var(--g); border-radius: 6px; color: var(--g); }
   .note.ask { border-color: var(--y); color: var(--y); }
   .hd { height: 60px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--sel); }
-  .crumb { font: 12.5px var(--mono); color: var(--fg2); }
+  .crumb { font: 12.5px var(--mono); color: var(--fg2); white-space: nowrap; }
   .crumb a { color: var(--fg2); text-decoration: none; }
   .crumb a:hover, .crumb .cur { color: var(--fg); }
-  .acts { margin-left: auto; display: flex; gap: 8px; }
+  .acts { margin-left: auto; display: flex; gap: 8px; min-width: 0; }
   .btn {
     height: 34px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
     border: 1px solid var(--sel); color: var(--fg); background: var(--dk); cursor: pointer;
   }
+  /* Too narrow for every button (a gone run has three): labels cut with …, the keys stay. */
+  .btn { min-width: 0; }
+  .btn .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn .kb { flex: none; }
+  .btn.dim { flex-shrink: 100; } /* Close tab goes first: ^W does the same */
   .btn.pri { border-color: var(--ac); background: var(--ac); color: var(--bg); font-weight: 500; }
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
   .btn.dim { color: var(--fg2); }
@@ -272,6 +295,8 @@
   .over { font-style: normal; color: var(--y); }
   .last { font: 12px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
   .cm span { color: var(--fgd); }
+  .resume { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
+  .resume code { color: var(--fg); }
   .ck { grid-column: 1; grid-row: 2; }
   /* No checklist yet: the pane hugs its one line instead of filling the column. */
   .ck.short { align-self: start; }
@@ -339,7 +364,8 @@
   /* A half tile at 1.25 scale with the sidebar (~500 px): the head spans the width so the facts fit in one row,
      Checklist and Spec share the row below. A long branch wraps instead of being cut. */
   @container (max-width: 600px) {
-    .btn { white-space: nowrap; }
+    .btn { white-space: nowrap; padding: 0 8px; gap: 6px; }
+    .hd, .acts { gap: 6px; }
     .btn:disabled { display: none; } /* the dead Stop gives its room to Finish and Close tab */
     .body { grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); }
     .head { grid-column: 1 / -1; }

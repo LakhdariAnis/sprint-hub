@@ -11,6 +11,10 @@ npm run build        # writes web/dist
 uv run hubd --demo   # then open http://127.0.0.1:8765/
 ```
 
+## Keys
+
+`?` lists every key. `w` on a Project or Step screen jumps to the project's Hyprland workspace (`workspace:` in its `project.md`); the status line says why when it cannot.
+
 ## Develop
 
 Start hubd (`uv run hubd --demo`), then `npm run dev` in `web/` and open http://localhost:5173/.

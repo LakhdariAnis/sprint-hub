@@ -12,6 +12,7 @@ class Event(StrEnum):
     request_changes = "request_changes"
     tick = "tick"  # a `by: me` step: a task was ticked or unticked
     all_ticked = "all_ticked"
+    reopen = "reopen"  # the run's chat opens again after its terminal closed
 
 
 class Actor(StrEnum):
@@ -26,6 +27,7 @@ TABLE: dict[tuple[State, Event], tuple[State, frozenset[Actor]]] = {
     (State.doing, Event.run_ended): (State.done, frozenset({Actor.daemon})),
     (State.done, Event.approve): (State.approved, frozenset({Actor.me})),
     (State.done, Event.request_changes): (State.changes, frozenset({Actor.me})),
+    (State.done, Event.reopen): (State.doing, frozenset({Actor.daemon})),
     # `by: me` steps: hubd never runs them, I tick their tasks.
     (State.todo, Event.tick): (State.doing, frozenset({Actor.me})),
     (State.changes, Event.tick): (State.doing, frozenset({Actor.me})),

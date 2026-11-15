@@ -15,6 +15,8 @@ class Settings(BaseModel):
     terminal: list[str] = ["xdg-terminal-exec", "--dir={cwd}"]
     # Deadline reminders are sent from this hour on (local time), never earlier that day.
     reminder_hour: int = 9
+    # A popup when a step run or a chat ends its turn or waits for a permission.
+    notify_waiting: bool = True
 
     @field_validator("terminal")
     @classmethod
@@ -64,7 +66,7 @@ def load_current(path: Path) -> Current:
 
 
 def has_comments(path: Path) -> bool:
-    """A save rewrites the file from the two settings: comments and other keys go."""
+    """A save rewrites the file from the settings: comments and other keys go."""
     try:
         return "#" in path.read_text()
     except OSError:
@@ -73,7 +75,11 @@ def has_comments(path: Path) -> bool:
 
 def save_settings(path: Path, settings: Settings) -> None:
     # JSON strings are TOML strings for what a terminal argv holds.
-    text = f"terminal = {json.dumps(settings.terminal)}\nreminder_hour = {settings.reminder_hour}\n"
+    text = (
+        f"terminal = {json.dumps(settings.terminal)}\n"
+        f"reminder_hour = {settings.reminder_hour}\n"
+        f"notify_waiting = {json.dumps(settings.notify_waiting)}\n"
+    )
     if path.exists():
         _write_atomic(path, text.encode())
     else:

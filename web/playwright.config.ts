@@ -13,6 +13,8 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${port}`,
     video: 'retain-on-failure',
     trace: 'retain-on-failure',
+    // Google Fonts sometimes never answers, so `load` never fires and page.goto times out: tests use the fallback fonts.
+    launchOptions: { args: ['--host-resolver-rules=MAP fonts.googleapis.com ~NOTFOUND, MAP fonts.gstatic.com ~NOTFOUND'] },
   },
   // hubd serves web/dist, so build first (`npm run build`). Fails if 8765 is taken: never test against a real hubd.
   webServer: {

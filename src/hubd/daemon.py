@@ -2,18 +2,20 @@
 
 import asyncio
 import subprocess
+import time
 from collections.abc import Callable, Iterator
-from contextlib import aclosing, contextmanager
+from contextlib import aclosing, contextmanager, suppress
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd import importer, init, weeks
+from hubd import focus, importer, init, weeks
+from hubd.context import Context, build
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
-from hubd.notify import Notifier
+from hubd.notify import Click, Notifier
 from hubd.runners.base import AgentRunner, RunEnded
 from hubd.states import Actor, Event, InvalidTransition, transition
 from hubd.vault import (
@@ -39,6 +41,7 @@ from hubd.vault import (
 from hubd.weeks import Sprint, parse_sprints
 
 COMMANDS = Path(".claude/commands")
+WAIT_GAP = 30.0  # seconds between two "waits for you" popups of one session and kind
 
 
 class NotFound(Exception):
@@ -88,11 +91,22 @@ class Hub:
         self.queues: set[asyncio.Queue[dict]] = set()
         self.runner = runner(self.run_ended)
         self.notifier = notifier
+        self.clock = time.monotonic  # tests move it
+        self.waited: dict[tuple[str, str], float] = {}  # (session, kind) -> last popup
         self.lock = asyncio.Lock()
         for entry in self.index.steps:  # a hook sent while hubd was down never arrived
             if entry.step.state == State.doing and entry.step.by == "claude":
                 runs = entry.step.runs
                 entry.run_gone = not (runs and self.runner.running(runs[-1].session))
+
+    async def focus(self, project: str) -> int:
+        """Switch the desktop to the project's workspace; returns its number."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        if (workspace := self.index.projects[project].workspace) is None:
+            raise NotFound(f"{project} has no workspace: set `workspace:` in its project.md")
+        await self.runner.focus(workspace)
+        return workspace
 
     def emit(self, event: dict) -> None:
         for queue in self.queues:
@@ -132,6 +146,7 @@ class Hub:
         """
         known = self._repo_dirs()
         loaded = self.vault.is_dir()
+        fresh = True  # read at start, before any watch: what came since has no event
         while not stop.is_set():
             if not loaded and self.vault.is_dir():
                 # `hubd init` made the vault: read it. Nothing is imported, `hubd import` does that.
@@ -154,9 +169,12 @@ class Hub:
             try:
                 async with aclosing(watching):
                     async for changes in watching:
+                        if fresh:  # a file written while watching (re)started had no event
+                            fresh = False
+                            async with self.lock:
+                                self._reload_all()
                         for path in sorted({p for _, p in changes}):
                             await self.reload(Path(path))
-                        # shortcut: a file written while watching restarts shows at its next change.
                         if (now := self._repo_dirs()) != known:
                             await self._import_projects(now - known)
                             known = now
@@ -168,6 +186,7 @@ class Hub:
             except OSError:  # a watched folder vanished between the check and the watch
                 known = self._repo_dirs()
                 await asyncio.sleep(1)
+            fresh = True
 
     def _roots(self, sprints: set[Path]) -> list[Path]:
         """The folders to watch that exist now; a missing vault is watched once it appears."""
@@ -432,11 +451,7 @@ class Hub:
             if entry.step.by == "me":
                 raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
             settings = self.index.projects[project]
-            repo = self.repo(project)
-            if repo is None:
-                raise InvalidTransition(f"project {project}: no repo to run in")
-            if not repo.is_dir():
-                raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
+            repo = self._run_repo(project)
             new = transition(entry.step, Event.start, Actor.daemon)
             # Changes requested: continue the last run's chat, the review comment is the prompt.
             changes = entry.step.state == State.changes
@@ -450,16 +465,7 @@ class Hub:
             else:
                 model = new.model or self.command_model(entry) or settings.model
                 session = str(uuid4())
-            running = next(
-                (
-                    e.step.step
-                    for e in self.index.steps
-                    if e.step.state == State.doing
-                    and e.step.by == "claude"
-                    and self.repo(e.project) == repo
-                ),
-                None,
-            )
+            running = self._running_in(repo, step_id)
             if reason := self.runner.refusal(step_id, repo, resume is None, running):
                 raise InvalidTransition(f"step {step_id}: {reason}")
             if not new.branch and entry.spec:
@@ -470,18 +476,88 @@ class Hub:
             save_step(entry.path, new)
             old, entry.step = entry.step, new
             entry.run_gone = False
+            workspace = self.index.projects[project].workspace
             try:
                 if resume:
-                    await self.runner.resume(new, session, repo, comment)
+                    await self.runner.resume(new, session, repo, comment, workspace)
                 else:
                     # The command file gets the comment as its arguments (`ARGUMENTS: ...`).
                     prompt = f"/sprint-{step_id} Changes requested on the earlier run: {comment}"
                     await self.runner.start(
-                        new, session, model, repo, prompt if comment else f"/sprint-{step_id}"
+                        new,
+                        session,
+                        model,
+                        repo,
+                        prompt if comment else f"/sprint-{step_id}",
+                        workspace,
                     )
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too
                 entry.step = old
+                raise
+            self.emit({"type": "step", **step_json(entry)})
+            return new
+
+    def _run_repo(self, project: str) -> Path:
+        repo = self.repo(project)
+        if repo is None:
+            raise InvalidTransition(f"project {project}: no repo to run in")
+        if not repo.is_dir():
+            raise InvalidTransition(f"project {project}: the repo {repo} does not exist")
+        return repo
+
+    def _running_in(self, repo: Path, step_id: str) -> str | None:
+        """Another `by: claude` step `doing` in this repo, if any."""
+        return next(
+            (
+                e.step.step
+                for e in self.index.steps
+                if e.step.state == State.doing
+                and e.step.by == "claude"
+                and e.step.step != step_id
+                and self.repo(e.project) == repo
+            ),
+            None,
+        )
+
+    async def reopen(self, project: str, step_id: str) -> Step:
+        """Open the last run's chat again after its terminal closed: `done` -> `doing`.
+
+        A `doing` step whose run is gone reopens too and stays `doing`. Each open is its own run
+        line with the same session, so `run_ended` and `finish` match it and its minutes count.
+        """
+        async with self.lock:
+            entry = self.entry(project, step_id)
+            if entry.step.by == "me":
+                raise InvalidTransition(f"step {step_id}: manual step, tick its tasks")
+            if not entry.step.runs:
+                raise InvalidTransition(f"step {step_id}: no run yet, nothing to reopen")
+            last = entry.step.runs[-1]
+            if self.runner.running(last.session):
+                raise InvalidTransition(f"step {step_id}: the chat is still open")
+            gone = entry.step.state == State.doing and entry.run_gone
+            new = (
+                entry.step.model_copy()
+                if gone
+                else transition(entry.step, Event.reopen, Actor.daemon)
+            )
+            repo = self._run_repo(project)
+            running = self._running_in(repo, step_id)
+            if reason := self.runner.refusal(step_id, repo, False, running):
+                raise InvalidTransition(f"step {step_id}: {reason}")
+            started = datetime.now().replace(second=0, microsecond=0)
+            new.runs = [*new.runs, Run(started=started, model=last.model, session=last.session)]
+            before = entry.path.read_bytes()
+            save_step(entry.path, new)
+            old, entry.step = entry.step, new
+            entry.run_gone = False
+            try:
+                await self.runner.resume(
+                    new, last.session, repo, "", self.index.projects[project].workspace
+                )
+            except BaseException:
+                _write_atomic(entry.path, before)  # no terminal: the file says so too
+                entry.step, entry.run_gone = old, gone
                 raise
             self.emit({"type": "step", **step_json(entry)})
             return new
@@ -514,20 +590,59 @@ class Hub:
             self.emit({"type": "step", **step_json(entry)})
             return entry
 
+    def _run_entry(self, session_id: str, step_id: str) -> StepEntry:
+        entry = next(
+            (e for e in self.index.steps if any(r.session == session_id for r in e.step.runs)),
+            None,
+        )
+        if entry is None or entry.step.step != step_id:
+            raise NotFound(f"no run {session_id} for step {step_id}")
+        return entry
+
+    def run_waiting(self, session_id: str, step_id: str, kind: str, notify: bool = True) -> bool:
+        """Claude ended its turn or wants Anis (`hubd.hook`): a popup, no state change.
+
+        At most one per session and kind every `WAIT_GAP` s. True = a popup was sent.
+        """
+        entry = self._run_entry(session_id, step_id)
+        if not notify or entry.step.state != State.doing:
+            return False  # off in Settings, or a late hook after the run ended
+        where = f"{entry.project} {step_id}"
+        title, body = {
+            "turn": ("Claude answered", f"{where} {entry.step.title}"),
+            "permission": ("Claude needs permission", where),
+            "idle": ("Claude waits for you", where),
+        }[kind]
+        project = entry.project
+        workspace = self.index.projects[project].workspace
+        return self.popup(
+            (session_id, kind),
+            title,
+            body,
+            lambda: focus.open_run(session_id, project, step_id, workspace),
+        )
+
+    def popup(self, key: tuple[str, str], title: str, body: str, on_click: Click) -> bool:
+        """A "waits for you" popup, at most one per `key` (session or chat, kind) per `WAIT_GAP`."""
+        now = self.clock()
+        if now - self.waited.get(key, -WAIT_GAP) < WAIT_GAP:
+            return False
+        self.waited[key] = now
+        self.notifier.notify(title, body, on_click)
+        return True
+
     async def run_ended(self, session_id: str, step_id: str) -> Step:
         async with self.lock:
-            entry = next(
-                (e for e in self.index.steps if any(r.session == session_id for r in e.step.runs)),
-                None,
-            )
-            if entry is None or entry.step.step != step_id:
-                raise NotFound(f"no run {session_id} for step {step_id}")
+            entry = self._run_entry(session_id, step_id)
             if entry.step.runs[-1].session != session_id:
                 raise InvalidTransition(f"step {step_id}: {session_id} is not the latest run")
             if entry.step.state != State.doing:
                 return entry.step  # a late hook: `f` already ended this run
             new = self._end_run(entry)
-            self.notifier.notify("Run ended", f"{entry.project} {step_id} {new.title}: review it")
+            self.notifier.notify(
+                "Run ended",
+                f"{entry.project} {step_id} {new.title}: review it, or o reopens the chat",
+            )
             return new
 
     async def finish(self, project: str, step_id: str) -> Step:
@@ -622,6 +737,19 @@ class Hub:
             return ""
         base = self.index.projects[project].base
         return await asyncio.to_thread(_git, repo, "diff", "--stat", f"{base}...{branch}")
+
+    async def context(self, project: str, sprint: int | None, step_id: str | None) -> Context:
+        """What a chat about the project (and its sprint or step) is told; the repo must exist."""
+        repo = self.repo(project)
+        if project not in self.index.projects or repo is None:
+            raise NotFound(f"no project {project} with a repo")
+        spec = diff = None
+        if step_id:
+            spec = spec_text(self.entry(project, step_id))
+            with suppress(InvalidTransition):  # a branch gone or never made: a note says so
+                diff = await self.diffstat(project, step_id)
+        name = self.index.projects[project].name
+        return await asyncio.to_thread(build, repo, name, sprint, step_id, spec, diff)
 
 
 def _git(repo: Path, *args: str) -> str:

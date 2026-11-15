@@ -19,6 +19,17 @@ def test_project_parses() -> None:
     )
 
 
+@pytest.mark.parametrize("workspace", [2, 9, None])
+def test_project_workspace_accepted(workspace: int | None) -> None:
+    assert Project(name="p", model="sonnet", merge=Merge.manual, workspace=workspace)
+
+
+@pytest.mark.parametrize("workspace", [1, 10, "x"])
+def test_project_workspace_rejected(workspace: object) -> None:
+    with pytest.raises(ValidationError):
+        Project(name="p", model="sonnet", merge=Merge.manual, workspace=workspace)
+
+
 def test_one_step_file_per_state() -> None:
     paths = sorted((DEMO / "steps").glob("*.md"))
     steps = [Step.model_validate(frontmatter.load(p).metadata) for p in paths]

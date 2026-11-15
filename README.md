@@ -19,6 +19,13 @@ the command palette, `e` shows the errors. On the Step screen `s` starts a step 
 arrived; on Review `a` approves and `c` requests changes. `?` shows all keys. A project opens on the step that needs
 work, a step on its current task.
 
+The app opens on New chat. In the demo it talks to a fake Claude; with `uv run hubd` and `claude` installed it runs the
+real one in the page (`claude -p`, stream-json). Chat keys: `n` opens New chat from anywhere, `c` or `i` puts the cursor
+in the message box, `Enter` sends, and `/` in the box opens the menu (`/model`, `/effort`, `/project`, `/sprint`, `/step`, `/clear`). When
+Claude wants to edit a file or run a command, `a` allows it, `d` denies it, `A` allows it for the rest of the chat. `Esc Esc`
+stops a running answer, `x` closes the chat, `R` renames it. Open chats stay in the sidebar under OPEN, also after a hubd
+restart.
+
 ### Set it up on your own projects
 
 In this order, from this repo:
@@ -36,7 +43,7 @@ In this order, from this repo:
    project). It reads the repos and writes only in the vault. A step from a closed sprint (`sprint/archive/`), or
    whose branch is already in a remote branch (pushed = reviewed), imports as `approved`; running it again also moves
    such a step from `todo` or `done` to `approved` and leaves every other step file as it is.
-4. `uv run hubd install-hook` adds the SessionEnd hook to `~/.claude/settings.json`, so hubd hears when a run ends.
+4. `uv run hubd install-hook` adds the SessionEnd, Stop and Notification hooks to `~/.claude/settings.json`, so hubd hears when a run ends or waits for you.
 5. `uv run hubd install-service` runs hubd from login on (see below).
 6. `uv run hubd doctor` checks all of the above; every line should be `✔`.
 
@@ -55,6 +62,12 @@ After that, a project added to `projects.toml` and a new spec in a repo's `sprin
 (no tabs, no URL bar), or focuses it if it is already open. On Omarchy (Hyprland), bind it in `~/.config/hypr/bindings.lua`:
 
     o.bind("SUPER + SHIFT + P", "Sprint hub", "/path/to/sprint-hub/bin/sprint-hub-app")
+
+`bin/sprint-hub-app --new` always opens one more window (same `hubd`, own screen and cursor); bind it too if you want:
+
+    o.bind("SUPER + SHIFT + ALT + P", "Sprint hub (new window)", "/path/to/sprint-hub/bin/sprint-hub-app --new")
+
+Ctrl+W, Alt+F4 and the close button ask "Leave site?" first. Chromium keeps Ctrl+W, Ctrl+N and Ctrl+T for itself in an app window.
 
 This runs the real `hubd` on your vault, not the demo. Closing the window leaves `hubd` running.
 
@@ -86,6 +99,9 @@ starts it. hubd then runs from login on (reminders need that), restarts after a 
 >    What would go wrong if Claude could mark its own step `approved`?
 > 2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
 > 3. What is the review gate for, in one sentence?
+>
+> **TODO(Anis): step 614 added `reopen` (daemon, `done` to `doing`).** Say in your words why a closed terminal may
+> bring a `done` step back to `doing` without your review, and why only the daemon may do it.
 
 ## Tests and CI
 
@@ -100,5 +116,5 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push and pull req
 ## Roadmap
 
 Versions and scope: [docs/ROADMAP.md](docs/ROADMAP.md). Long-term design: [docs/HUB-DESIGN.md](docs/HUB-DESIGN.md).
-Current version: 0.3.0 (daily use: theme, deadlines, questions, palette, service, weekly planning). Next: 0.4.0,
-chat in the app, then 0.5.0, away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).
+Current version: 0.4.0 (chat in the app: New chat home screen, pills and `/` menu, project / sprint / step context,
+permission prompts, tool lines, open chats). Next: 0.5.0, away from the laptop. The v1 Textual app is on `main` (tag `v0.1.0`).

@@ -129,12 +129,16 @@ Out of scope: habits, streaks, generic personal todos, time blocking, calendar s
 ### Step states
 ```
 todo ──start──▶ doing ──run ends──▶ done ──approve──▶ approved (merged)
-                  ▲                   │
-                  └── changes ◀───────┘ request changes (comment)
+                 ▲ ▲                 │ │
+                 │ └───── reopen ────┘ │ terminal closed, same chat again
+                 └── changes ◀─────────┘ request changes (comment)
 ```
 - `blocked` is not stored. It is computed when a `needs:` step is not approved.
 - Task states: `[ ]` todo, `[~]` doing, `[x]` done (same as the current checklist format).
 - Only the daemon moves a step to `doing` and `done`. Only I move it to `approved` or `changes`.
+- `reopen` (daemon): the step's terminal was closed, so the run ended; the last run's chat opens again
+  (`claude --resume <session>`) and the step goes back to `doing` with a new run line, same session.
+  A `doing` step whose run is gone (hubd found no session) reopens too and stays `doing`.
 
 ### Vault layout
 ```

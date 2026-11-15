@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from hubd.api import create_app
 from hubd.daemon import Hub
-from hubd.notify import NullNotifier
+from hubd.notify import Click, NullNotifier
 from hubd.runners.fake import FakeRunner
 from hubd.weeks import week_of
 
@@ -41,7 +41,7 @@ EXTRA = {
     "by: claude\nmodel: sonnet\nsprint: 2\n---\n\n## Runs\n\n## Review\nverdict: approve\n"
     "comment:\n",
     "projects/notes/project.md": "---\nname: notes\nrepo: notes-repo\nmodel: sonnet\n"
-    "merge: manual\n---\nSecond demo project.\n",
+    "workspace: 2\nmerge: manual\n---\nSecond demo project.\n",
     "projects/notes/steps/301.md": "---\nstep: 301\ntitle: Parse the notes\nstate: todo\n"
     "by: claude\nmodel: sonnet\nbranch: step/301-parse\ndue: 2026-10-25\n---\n\n## Runs\n\n"
     "## Review\nverdict:\ncomment:\n\n## Questions\n",
@@ -140,5 +140,16 @@ def git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True)
 
 
+class RecordingNotifier(NullNotifier):
+    """Shows nothing, keeps what it was asked to show: e2e reads it at `GET /demo/notifications`."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, str]] = []
+
+    def notify(self, title: str, body: str, on_click: Click | None = None) -> None:
+        self.sent.append({"title": title, "body": body})
+
+
 def demo_app() -> FastAPI:
-    return create_app(Hub(demo_vault(), lambda ended: FakeRunner(ended), NullNotifier()), demo=True)
+    hub = Hub(demo_vault(), lambda ended: FakeRunner(ended), RecordingNotifier())
+    return create_app(hub, demo=True)

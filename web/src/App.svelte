@@ -1,8 +1,10 @@
 <script lang="ts">
   import './theme.css'
-  import './keys.svelte'
+  import { keys } from './keys.svelte'
   import { hub } from './hub.svelte'
   import { nav } from './nav.svelte'
+  import { sx } from './settings.svelte'
+  import NewChat from './screens/NewChat.svelte'
   import Project from './screens/Project.svelte'
   import Review from './screens/Review.svelte'
   import Questions from './screens/Questions.svelte'
@@ -31,13 +33,15 @@
     {#if hub.live === false}
       <div class="down" role="alert">hubd is not running, so this screen may be out of date. Start it with <code>uv run hubd</code>; this goes away by itself when it is back.</div>
     {/if}
-    <main>
+    <!-- data-shown: the hash whose screen is on show (it lags the URL while data loads), for e2e. -->
+    <main data-shown={keys.shown}>
       <!-- A plain line, no motion: the next screen is still loading. -->
       {#if nav.slow}<div class="slow"></div>{/if}
       {#if !r}<!-- first load: nothing to keep on show -->
+      {:else if r.name === 'chat'}<NewChat id={r.id} />
       {:else if r.name === 'today'}<Today />
       {:else if r.name === 'questions'}<Questions />
-      {:else if r.name === 'settings'}<Settings />
+      {:else if r.name === 'settings'}{#if sx.settings && sx.doctor}<Settings />{:else}<p style="padding: 12px 16px; margin: 0; color: var(--fgd)">Cannot load settings. Is hubd running?</p>{/if}
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />

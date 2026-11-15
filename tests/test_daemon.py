@@ -29,7 +29,9 @@ def test_start_ticks_then_done_saved(vault: Path, hub: Hub, notifier: Recorder) 
     assert _load_step(step_file).state == State.done
     progress = vault / "demo-repo" / "sprint" / "progress" / "104.md"
     assert progress.read_text() == "# Step 104\n- [x] Find the bug\n- [x] Fix it\n"
-    assert notifier.sent == [("Run ended", "demo 104 Write the docs: review it")]
+    assert notifier.sent == [
+        ("Run ended", "demo 104 Write the docs: review it, or o reopens the chat")
+    ]
 
 
 def test_invalid_starts(hub: Hub) -> None:

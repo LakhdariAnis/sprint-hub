@@ -12,7 +12,7 @@ export type Step = {
   model: string | null
   branch: string | null
   sprint: number | null
-  runs: { started?: string; minutes: number | null; model?: string }[]
+  runs: { started?: string; minutes: number | null; model?: string; session?: string }[]
   tasks: Task[]
   questions: Question[]
   review?: { verdict: 'approve' | 'changes' | null; comment: string } | null
@@ -49,6 +49,8 @@ async function post(project: string, id: string, move: string, body?: object): P
 // `fresh`: from `changes`, a new chat with the comment in its prompt instead of resuming the last one.
 export const startStep = (project: string, id: string, fresh = false) => post(project, id, fresh ? 'start?fresh=true' : 'start')
 export const finishStep = (project: string, id: string) => post(project, id, 'finish')
+// The last run's chat again (`claude --resume`), after its terminal closed.
+export const reopenStep = (project: string, id: string) => post(project, id, 'reopen')
 // `commit`: what the base branch is on after the merge; null when there was nothing to merge.
 export const approveStep = (project: string, id: string, own_hours: number | null) => post(project, id, 'approve', { own_hours }) as Promise<Step & { commit: string | null }>
 export const tickTask = (project: string, id: string, n: number) => post(project, id, `tasks/${n}/tick`)
@@ -126,4 +128,20 @@ export function needsWork(steps: Step[]): Step | undefined {
     if (s) return s
   }
   return g?.steps[0]
+}
+
+// The chip's hover text; null (no chip) when the project has no workspace.
+export const workspaceTitle = (n: number | null | undefined) => (n ? `Workspace ${n}` : null)
+export const startedOn = (n: number | null | undefined) => (n ? `Started on workspace ${n}` : null)
+
+// Switches the desktop to the project's workspace. Resolves to hubd's reason when it did not, else null.
+export async function focusProject(project: string): Promise<string | null> {
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(project)}/focus`, { method: 'POST' })
+    if (r.ok) return null
+    const reply = await r.json().catch(() => null)
+    return typeof reply?.detail === 'string' ? reply.detail : `hubd answered ${r.status}`
+  } catch {
+    return 'Cannot reach hubd'
+  }
 }

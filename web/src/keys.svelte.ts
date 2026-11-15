@@ -1,33 +1,49 @@
 import { onMount } from 'svelte'
-import { router } from './route.svelte'
+import { hashOf, rows } from './open.svelte'
+import { focusProject } from './steps'
 
 // The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
-export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null })
+export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null, notice: null as { text: string; bad: boolean } | null })
 export function toggleRail() {
   keys.rail = !keys.rail
   try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
 }
 
+// One line in the status line (a toast): a result or a reason, gone after a few seconds.
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+export function say(text: string | null, bad = false) {
+  if (!text) return
+  keys.notice = { text, bad }
+  clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => (keys.notice = null), 6000)
+}
+// `w`: the project's workspace; the status line says why when hubd cannot.
+export const jump = (project: string) => focusProject(project).then((why) => why && say(why, true))
+
 export const openPalette = () => (keys.palette = true)
+// `n`: a screen with its own `n` (the Step screen's fresh chat) wins; elsewhere it opens New chat.
+export const newChat = () => (location.hash = '#/chat')
 
 type Handlers = Record<string, () => void>
 let current: Handlers = {}
 // Screen keys pressed while the URL is ahead of the screen (hashchange fires late, then the data loads): they belong to the next screen.
 let held: string[] = []
+// The handler of a screen key; `n` falls back on New chat.
+const screenKey = (key: string) => current[key] ?? current[alias[key] ?? key] ?? (key === 'n' ? newChat : undefined)
 
 // The screen of `hash` is on show: run what was typed meanwhile on it.
 export function release(hash: string) {
   keys.shown = hash
   if (location.hash !== hash) return
-  for (const key of held.splice(0)) (current[key] ?? current[alias[key] ?? key])?.()
+  for (const key of held.splice(0)) screenKey(key)?.()
 }
 
 // Runs a key of the screen at `hash` (a palette action): at once if it is on show, else when it shows.
 export function press(hash: string, key: string) {
-  if (keys.shown === hash && location.hash === hash) return void (current[key] ?? current[alias[key] ?? key])?.()
+  if (keys.shown === hash && location.hash === hash) return void screenKey(key)?.()
   held.push(key)
   location.hash = hash
 }
@@ -47,15 +63,13 @@ const go: Handlers = {
   r: () => (location.hash = '#/review'),
   q: () => (location.hash = '#/questions'),
 }
-// Plain digits, `b` and `e`: 1–5 tabs, 6–9 the OPEN steps, b the icon rail, e the broken-files list. Ctrl+1–5 (app window only, see below) = the tabs too.
-const openStep = (n: number) => {
-  const k = router.open[n]
-  if (!k) return
-  const i = k.lastIndexOf('/')
-  location.hash = `#/steps/${encodeURIComponent(k.slice(0, i))}/${encodeURIComponent(k.slice(i + 1))}`
+// Plain digits, `b` and `e`: 1–5 tabs, 6–9 the OPEN steps and chats, b the icon rail, e the broken-files list. Ctrl+1–5 (app window only, see below) = the tabs too.
+const openRow = (n: number) => {
+  const row = rows()[n]
+  if (row) location.hash = hashOf(row)
 }
 const plain: Handlers = { '/': openPalette, '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s, b: toggleRail, e: () => (keys.errors = true) }
-for (const n of [6, 7, 8, 9]) plain[n] = () => openStep(n - 6)
+for (const n of [6, 7, 8, 9]) plain[n] = () => openRow(n - 6)
 // A normal Chrome tab keeps Ctrl+1…9 for its own tabs; the `--app` window (bin/sprint-hub-app) has none, so the page gets them.
 const ctrl: Handlers = { '1': go.p, '2': go.t, '3': go.r, '4': go.q, '5': go.s }
 const alias: Record<string, string> = { ArrowDown: 'j', ArrowUp: 'k', ArrowRight: 'Enter', ArrowLeft: 'Escape' }
@@ -101,7 +115,7 @@ addEventListener('keydown', (e) => {
   } else if (k === '?') {
     keys.help = true
   } else {
-    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? current[k])
+    run = plain[k] ?? (location.hash !== keys.shown ? () => held.push(e.key) : current[e.key] ?? screenKey(k))
   }
   if (keys.pending && k !== 'g') keys.pending = false
   if (run) run()

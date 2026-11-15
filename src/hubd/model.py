@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class State(StrEnum):
@@ -35,6 +35,7 @@ class Project(BaseModel):
     name: str
     repo: Path | None = None
     base: str = "main"  # the branch approve merges into
+    workspace: int | None = Field(None, ge=2, le=9)  # Hyprland workspace of its runs
     model: str
     merge: Merge
 
