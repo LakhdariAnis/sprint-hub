@@ -5,6 +5,7 @@
 
 <script lang="ts">
   import Header from '../Header.svelte'
+  import Workspace from '../Workspace.svelte'
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
@@ -12,7 +13,7 @@
   import { useKeys } from '../keys.svelte'
   import { untrack } from 'svelte'
   import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, type Step } from '../steps'
-  import { etas, key, lists, put, steps as store } from '../store.svelte'
+  import { etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
   import { watchEta } from '../hub.svelte'
   import { etaLine, factorNote } from '../week'
 
@@ -115,7 +116,7 @@
 <div class="page">
 <Header>
   {#snippet crumb()}<a href="#/projects">Projects</a> › {project}{/snippet}
-  {project}
+  {project} <Workspace n={workspaceOf(project)} />
 </Header>
 
 {#if gone}

@@ -5,7 +5,8 @@
   import { nav } from './nav.svelte'
   import { hashOf, rows } from './open.svelte'
   import { router } from './route.svelte'
-  import { steps } from './store.svelte'
+  import { steps, workspaceOf } from './store.svelte'
+  import Workspace from './Workspace.svelte'
 
   // Icons from the canvas. The Chats screen comes in a later sprint. `key`: the digit that opens the tab.
   const tabs = [
@@ -51,6 +52,7 @@
       {#if row.kind === 'step'}
         <a class="tb" class:on={here === row.key} href={hashOf(row)} aria-label="{row.project} {row.id}">
           <span class="dot s-{steps[row.key]?.state}"></span><b class="mono">{row.id}</b><span class="lbl">{steps[row.key]?.title ?? row.project}</span>
+          <Workspace n={workspaceOf(row.project)} />
           {#if i < 4}<span class="k">{i + 6}</span>{/if}
         </a>
       {:else}
@@ -114,7 +116,7 @@
   .sb { transition: width 0.16s ease; white-space: nowrap; }
   @media (prefers-reduced-motion: reduce) { .sb { transition: none; } }
   .rail { width: 56px; }
-  .rail .lbl, .rail .k { display: none; }
+  .rail .lbl, .rail .k, .rail :global(.ws) { display: none; }
   .rail .sl { margin: 0 -10px; }
   .rail .sg { font-size: 0; height: 1px; padding: 0; margin: 10px 8px; background: var(--sel); }
   .rail .brand { padding-left: 0; padding-right: 0; justify-content: center; }

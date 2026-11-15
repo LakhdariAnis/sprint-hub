@@ -1,6 +1,7 @@
 <script lang="ts">
   import Copy from '../Copy.svelte'
   import Header from '../Header.svelte'
+  import Workspace from '../Workspace.svelte'
   import { hub } from '../hub.svelte'
   import { useKeys } from '../keys.svelte'
   import { lists } from '../store.svelte'
@@ -38,7 +39,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => open(r.id)} onfocus={() => (sel = i)}>
           <span class="ic" style="background: var(--{tile[i % tile.length]})">{initials(r.name)}</span>
-          <span class="nm"><b>{r.name}</b>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if r.repoMissing}<span class="t2 hint">repo not found: {r.path}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
+          <span class="nm"><span class="n1"><b>{r.name}</b><Workspace n={r.workspace} /></span>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if r.repoMissing}<span class="t2 hint">repo not found: {r.path}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
           <span class="id where">{r.path || 'vault only'}</span>
           <span class="prog"><span class="pbar"><i style="width: {r.total ? (r.approved / r.total) * 100 : 0}%"></i></span><span class="id">{r.approved}/{r.total}</span></span>
           <!-- State colours as everywhere else; a zero steps back. -->
@@ -84,6 +85,7 @@
   .ic { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font: 700 11px var(--mono); color: var(--bg); }
   .nm { min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
   /* A name is never cut: it wraps when the column is narrow. */
+  .n1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .nm b { font-weight: 500; overflow-wrap: anywhere; }
   .t2 { font-size: 12.5px; color: var(--fg2); }
   .id { font: 12.5px var(--mono); color: var(--fg2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

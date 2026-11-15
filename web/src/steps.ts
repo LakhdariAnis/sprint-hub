@@ -127,3 +127,7 @@ export function needsWork(steps: Step[]): Step | undefined {
   }
   return g?.steps[0]
 }
+
+// The chip's hover text; null (no chip) when the project has no workspace.
+export const workspaceTitle = (n: number | null | undefined) => (n ? `Workspace ${n}` : null)
+export const startedOn = (n: number | null | undefined) => (n ? `Started on workspace ${n}` : null)

@@ -1,13 +1,14 @@
 <script lang="ts">
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
+  import Workspace from '../Workspace.svelte'
   import { hub } from '../hub.svelte'
   import { chatAbout } from '../chat.svelte'
   import { newChat, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
   import { ago, finishStep, goal, startStep, tickTask } from '../steps'
   import { router } from '../route.svelte'
-  import { key, put, steps } from '../store.svelte'
+  import { key, put, steps, workspaceOf } from '../store.svelte'
 
   let { project, id }: { project: string; id: string } = $props()
   let error = $state('')
@@ -114,7 +115,7 @@
 <div class="page">
 <div class="hd">
   <div class="crumb"><a href="#/projects/{encodeURIComponent(project)}">{project}</a> › <span class="cur">{id}</span></div>
-  {#if s}<span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
+  {#if s}<Workspace n={workspaceOf(project)} /><span class="chip s-{s.state}">● {label}</span>{#if manual}<span class="chip">manual</span>{/if}{/if}
   <span class="acts">
     {#if canStart}
       <button class="btn pri" type="button" disabled={busy} onclick={() => start()}>{s?.state === 'changes' ? 'Continue chat' : 'Start'} <span class="kb">s</span></button>

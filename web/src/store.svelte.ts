@@ -18,3 +18,6 @@ export const lists = $state({ projects: null as Row[] | null, steps: {} as Recor
 
 // The ETA of each project a screen asked for, by project id; hub.svelte.ts keeps them fresh.
 export const etas = $state<Record<string, Eta | null>>({})
+
+// The Hyprland workspace of a project's runs; null when it has none or the rows are not loaded.
+export const workspaceOf = (project: string) => lists.projects?.find((p) => p.id === project)?.workspace ?? null
