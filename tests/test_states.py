@@ -12,6 +12,7 @@ ALLOWED = {
     (State.doing, Event.run_ended, Actor.daemon): State.done,
     (State.done, Event.approve, Actor.me): State.approved,
     (State.done, Event.request_changes, Actor.me): State.changes,
+    (State.done, Event.reopen, Actor.daemon): State.doing,
     (State.todo, Event.tick, Actor.me): State.doing,
     (State.changes, Event.tick, Actor.me): State.doing,
     (State.done, Event.tick, Actor.me): State.doing,

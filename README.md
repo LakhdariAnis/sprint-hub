@@ -99,6 +99,9 @@ starts it. hubd then runs from login on (reminders need that), restarts after a 
 >    What would go wrong if Claude could mark its own step `approved`?
 > 2. Where does the source of truth live (the markdown files), and what happens to the state when hubd restarts?
 > 3. What is the review gate for, in one sentence?
+>
+> **TODO(Anis): step 614 added `reopen` (daemon, `done` to `doing`).** Say in your words why a closed terminal may
+> bring a `done` step back to `doing` without your review, and why only the daemon may do it.
 
 ## Tests and CI
 
