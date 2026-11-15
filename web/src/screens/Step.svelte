@@ -138,12 +138,12 @@
       <button class="btn" type="button" disabled title="Stopping a run comes in a later sprint">Stop <span class="kb">s</span></button>
     {/if}
     {#if canReopen}
-      <button class="btn" type="button" disabled={busy} onclick={reopen}>Reopen chat <span class="kb">o</span></button>
+      <button class="btn" type="button" disabled={busy} onclick={reopen}><span class="t">Reopen chat</span> <span class="kb">o</span></button>
     {/if}
     {#if canFinish}
-      <button class="btn" type="button" disabled={busy} onclick={finishKey}>Finish <span class="kb">f</span></button>
+      <button class="btn" type="button" disabled={busy} onclick={finishKey}><span class="t">Finish</span> <span class="kb">f</span></button>
     {/if}
-    <button class="btn dim" type="button" onclick={close}>Close tab <span class="kb">^W</span></button>
+    <button class="btn dim" type="button" onclick={close}><span class="t">Close tab</span> <span class="kb">^W</span></button>
   </span>
 </div>
 {#if error || loadError}
@@ -268,14 +268,19 @@
   .note { flex: none; margin: 14px 20px 0; padding: 8px 12px; border: 1px solid var(--g); border-radius: 6px; color: var(--g); }
   .note.ask { border-color: var(--y); color: var(--y); }
   .hd { height: 60px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid var(--sel); }
-  .crumb { font: 12.5px var(--mono); color: var(--fg2); }
+  .crumb { font: 12.5px var(--mono); color: var(--fg2); white-space: nowrap; }
   .crumb a { color: var(--fg2); text-decoration: none; }
   .crumb a:hover, .crumb .cur { color: var(--fg); }
-  .acts { margin-left: auto; display: flex; gap: 8px; }
+  .acts { margin-left: auto; display: flex; gap: 8px; min-width: 0; }
   .btn {
     height: 34px; padding: 0 12px; border-radius: 7px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px;
     border: 1px solid var(--sel); color: var(--fg); background: var(--dk); cursor: pointer;
   }
+  /* Too narrow for every button (a gone run has three): labels cut with …, the keys stay. */
+  .btn { min-width: 0; }
+  .btn .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn .kb { flex: none; }
+  .btn.dim { flex-shrink: 100; } /* Close tab goes first: ^W does the same */
   .btn.pri { border-color: var(--ac); background: var(--ac); color: var(--bg); font-weight: 500; }
   .btn.pri .kb { background: var(--bg); color: var(--ac); }
   .btn.dim { color: var(--fg2); }
@@ -359,7 +364,8 @@
   /* A half tile at 1.25 scale with the sidebar (~500 px): the head spans the width so the facts fit in one row,
      Checklist and Spec share the row below. A long branch wraps instead of being cut. */
   @container (max-width: 600px) {
-    .btn { white-space: nowrap; }
+    .btn { white-space: nowrap; padding: 0 8px; gap: 6px; }
+    .hd, .acts { gap: 6px; }
     .btn:disabled { display: none; } /* the dead Stop gives its room to Finish and Close tab */
     .body { grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); }
     .head { grid-column: 1 / -1; }
