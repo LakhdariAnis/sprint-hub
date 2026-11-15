@@ -136,6 +136,13 @@ def test_start_and_resume_use_hyprctl(hypr: Hypr, monkeypatch: pytest.MonkeyPatc
     assert f"--resume {SESSION}" in hypr[1][3]
 
 
+def test_hyprctl_error_output_raises(hypr: Hypr) -> None:
+    hypr.out = "Invalid dispatcher\n"
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    with pytest.raises(InvalidTransition, match="hyprctl said Invalid dispatcher"):
+        asyncio.run(runner.start(STEP, SESSION, "opus", Path("/repo"), "go", 3))
+
+
 def test_missing_terminal_raises_with_workspace(
     hypr: Hypr, monkeypatch: pytest.MonkeyPatch
 ) -> None:

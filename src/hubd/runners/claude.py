@@ -104,7 +104,10 @@ class ClaudeCodeRunner:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             raise InvalidTransition(f"terminal did not launch: {exc}; see hub.toml") from exc
-        del done
+        if (out := done.stdout.strip()) != "ok":
+            raise InvalidTransition(
+                f"terminal did not launch: hyprctl said {out or done.stderr.strip() or 'nothing'}"
+            )
 
     async def _spawn(self, argv: list[str], cwd: Path, env: dict[str, str]) -> None:
         # Own session: the terminal outlives hubd; the run's end comes back through the hook.
