@@ -4,7 +4,7 @@
   import Copy from '../Copy.svelte'
   import Inline from '../Inline.svelte'
   import Spec from '../Spec.svelte'
-  import { useKeys } from '../keys.svelte'
+  import { say, useKeys } from '../keys.svelte'
   import { nav } from '../nav.svelte'
   import { approveStep, loadDiffstat, loadStep, requestChanges, type Step } from '../steps'
   import { put, steps } from '../store.svelte'
@@ -69,6 +69,28 @@
       }),
     )
   }
+  // `A`: every waiting step, oldest id first per project so stacked branches merge in order.
+  // Stops at the first refusal (e.g. a conflict); the rest stay waiting.
+  let confirmingAll = $state(false)
+  const approveAll = async () => {
+    const list = [...waiting].sort((a, b) => a.project.localeCompare(b.project) || a.step.localeCompare(b.step, undefined, { numeric: true }))
+    confirmingAll = false
+    busy = true
+    merged = ''
+    let n = 0
+    for (const s of list) {
+      try {
+        const { commit, ...d } = await approveStep(s.project, s.step, null)
+        put(s.project, d)
+        merged = `${++n}/${list.length} approved` + (commit ? `, ${s.step} merged as ${commit}, not pushed.` : '.')
+      } catch (e) {
+        open(s.project, s.step)
+        say(`${s.project} ${s.step} not approved: ${(e as Error).message}`, true)
+        break
+      }
+    }
+    busy = false
+  }
   const changesRequested = () => {
     if (!sel) return
     if (!comment.trim()) return void (moveError = 'Write what should change first.')
@@ -90,14 +112,15 @@
     if (n) open(n.project, n.step)
   }
   let box = $state<HTMLInputElement>()
-  const confirmKey = () => confirming && !busy && approve()
+  const confirmKey = () => (busy ? undefined : confirmingAll ? approveAll() : confirming && approve())
   useKeys({
     j: () => step(1),
     k: () => step(-1),
     a: () => (sel?.state !== 'done' ? undefined : confirming ? confirmKey() : (confirming = true)),
     y: confirmKey,
     c: () => sel?.state === 'done' && box?.focus(),
-    Escape: () => (confirming = false),
+    A: () => !busy && waiting.length && (confirmingAll = true),
+    Escape: () => ((confirming = false), (confirmingAll = false)),
   })
 
   let stat = $state<string | null>(null)
@@ -127,6 +150,13 @@
 <NoProjects />
 {#if error}<p class="err">{error}</p>{/if}
 {#if merged}<p class="merged" role="status">{merged}</p>{/if}
+{#if confirmingAll}
+  <div class="all">
+    <span>Approve and merge all {waiting.length} waiting steps, own hours not recorded?</span>
+    <button class="btn" type="button" onclick={approveAll}>Yes, all <span class="kb">y</span></button>
+    <button class="btn ghost" type="button" onclick={() => (confirmingAll = false)}>Cancel <span class="kb">Esc</span></button>
+  </div>
+{/if}
 <div class="grid">
   <section class="pn queue">
     {#each groups as g}
@@ -226,6 +256,7 @@
   .id { font: 12.5px var(--mono); color: var(--fg2); }
   .err { margin: 0 20px 14px; padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); }
   .err.in { margin: 12px 16px; }
+  .all { flex: none; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 28px 6px; }
   .merged { flex: none; margin: 0 28px 6px; color: var(--g); font: 13px var(--mono); overflow-wrap: anywhere; }
   /* Fills the window: no page scroll. The queue, Report, Diffstat and Checklist scroll inside their panes; the head with the action bar stays. */
   .page { height: 100%; display: flex; flex-direction: column; container-type: size; }

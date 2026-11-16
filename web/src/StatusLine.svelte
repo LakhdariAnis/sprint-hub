@@ -25,7 +25,7 @@
     step: [...when(canStart, [['s', cur?.state === 'changes' ? 'continue chat' : 'start']]), ...when(cur?.state === 'changes' && cur.by !== 'me', [['n', 'new chat']]), ...when(!!cur?.runs.length && cur.by !== 'me' && (cur.state === 'done' || (cur.state === 'doing' && !!cur.run_gone)), [['o', 'reopen chat']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'step' ? r.project : ''), [['w', 'workspace']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
     settings: [['j k', 'move'], ['↵', 'edit / copy']],
-    review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['c', 'request changes'], ['Esc', 'cancel']])],
+    review: [['j k', 'move'], ...when(canReview, [['a', 'approve'], ['A', 'approve all'], ['c', 'request changes'], ['Esc', 'cancel']])],
   })
   // Last = first to drop when the line is full: tab keys go before b and ?.
   const common: [string, string][] = [['b', 'sidebar'], ['?', 'help'], ['1 … 5', 'tab']]

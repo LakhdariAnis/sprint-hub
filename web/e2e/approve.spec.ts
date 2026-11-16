@@ -18,3 +18,19 @@ for (const [name, reply] of [
     await expect(page.getByRole('status')).toHaveCount(0)
   })
 }
+
+test('A approves every waiting step in id order and stops at the first refusal', async ({ page }) => {
+  const asked: string[] = []
+  await page.route('**/approve', (route) => {
+    asked.push(new URL(route.request().url()).pathname)
+    return route.fulfill({ status: 409, json: { detail: 'merge step/x: conflict in a.txt; nothing merged' } })
+  })
+  await page.goto('/#/review/demo/103')
+  await expect(page.locator('.head .chip')).toHaveText(/done/)
+  await page.keyboard.press('Shift+A')
+  await expect(page.getByText(/^Approve and merge all \d+ waiting steps/)).toBeVisible()
+  await page.keyboard.press('y')
+  await expect(page.getByText(/not approved: merge step\/x: conflict in a\.txt/)).toBeVisible()
+  expect(asked).toHaveLength(1) // stopped at the first refusal
+  await expect(page.locator('.head .chip')).toHaveText(/done/)
+})
