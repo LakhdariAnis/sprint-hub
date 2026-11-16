@@ -23,6 +23,7 @@
     ['o', 'reopen the chat of a run whose terminal closed: the same Claude chat in a new terminal, the step back to doing (Step)'],
     ['j k  x', 'manual step: pick a task, tick / untick it (Step)'],
     ['a', 'approve: your hours if any, then a, y or Enter merges (Review)'],
+    ['A', 'approve all waiting, oldest first; stops at a refusal (Review)'],
     ['c', 'request changes: type the comment, Enter sends, Esc leaves the box (Review)'],
     ['c', 'chat about this: New chat with the project, or the step, already set (Project, Step)'],
     ['p  t', 'Step: focus the Checklist / the Chat or Spec pane'],

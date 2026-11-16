@@ -79,10 +79,25 @@ def test_staged_changes_are_refused(hub: Hub, repo: Path) -> None:
     refused(hub, repo, "uncommitted changes in notes.txt")
 
 
-def test_tracked_changes_on_the_step_branch_are_refused(hub: Hub, repo: Path) -> None:
+def merged_elsewhere(hub: Hub, repo: Path) -> None:
+    """Approved while base is not checked out: base moves, HEAD and the tree do not."""
+    tracked = ("branch", "--show-current"), ("rev-parse", "HEAD"), ("status", "-s", "-uno")
+    before = [git(repo, *a) for a in tracked]
+    old = git(repo, "rev-parse", "main")
+    step, commit = asyncio.run(hub.approve("demo", "103"))
+    assert step.state == State.approved
+    assert [git(repo, *a) for a in tracked] == before
+    assert git(repo, "rev-parse", "--short", "main") == commit
+    assert git(repo, "log", "-1", "--format=%s", "main") == "Merge branch 'step/103-ui'"
+    parents = git(repo, "log", "-1", "--format=%P", "main").split()
+    assert parents == [old, git(repo, "rev-parse", "step/103-ui")]
+    assert git(repo, "show", "main:ui.txt") == "ui"
+
+
+def test_tracked_changes_on_the_step_branch_stay(hub: Hub, repo: Path) -> None:
     git(repo, "checkout", "-q", "step/103-ui")
     (repo / "ui.txt").write_text("edited\n")
-    refused(hub, repo, "uncommitted changes in ui.txt")
+    merged_elsewhere(hub, repo)
     assert (repo / "ui.txt").read_text() == "edited\n"
 
 
@@ -92,21 +107,28 @@ def test_untracked_files_do_not_block_and_stay(hub: Hub, repo: Path) -> None:
     assert (repo / "scratch.txt").read_text() == "mine\n"
 
 
-def test_other_branch_is_refused_and_named(hub: Hub, repo: Path) -> None:
+def test_other_branch_merges_without_touching_it(hub: Hub, repo: Path) -> None:
     git(repo, "checkout", "-q", "-b", "other")
-    refused(hub, repo, "on branch 'other'")
+    (repo / "notes.txt").write_text("edited\n")
+    merged_elsewhere(hub, repo)
 
 
-def test_detached_head_is_refused(hub: Hub, repo: Path) -> None:
+def test_detached_head_merges_too(hub: Hub, repo: Path) -> None:
     git(repo, "checkout", "-q", "--detach")
-    refused(hub, repo, "not on a branch")
+    merged_elsewhere(hub, repo)
 
 
-def test_from_the_step_branch_it_switches_to_base(hub: Hub, repo: Path) -> None:
+def test_from_the_step_branch_it_stays_there(hub: Hub, repo: Path) -> None:
     git(repo, "checkout", "-q", "step/103-ui")
-    assert approve(hub).state == State.approved
-    assert git(repo, "branch", "--show-current") == "main"
-    assert git(repo, "log", "-1", "--format=%s").startswith("Merge branch 'step/103-ui'")
+    merged_elsewhere(hub, repo)
+
+
+def test_base_in_another_worktree_is_refused(hub: Hub, repo: Path, tmp_path: Path) -> None:
+    git(repo, "checkout", "-q", "step/103-ui")
+    git(repo, "worktree", "add", "-q", str(tmp_path / "wt"), "main")
+    head = git(repo, "rev-parse", "main")
+    refused(hub, repo, "checked out in another worktree")
+    assert git(repo, "rev-parse", "main") == head
 
 
 def set_step(hub: Hub, step_id: str, old: str, new: str) -> Hub:
@@ -170,15 +192,17 @@ def clash(repo: Path) -> None:
     git(repo, "commit", "-q", "-m", "clash")
 
 
-def test_conflict_from_the_step_branch_goes_back_to_it(
+def test_conflict_from_the_step_branch_changes_nothing(
     vault: Path, hub: Hub, repo: Path, notifier: Recorder
 ) -> None:
     clash(repo)
     git(repo, "checkout", "-q", "step/103-ui")
     before = repo_state(repo)
+    main = git(repo, "rev-parse", "main")
     with pytest.raises(MergeConflict, match="conflict in ui.txt"):
         approve(hub)
     assert repo_state(repo) == before
+    assert git(repo, "rev-parse", "main") == main
     assert not (repo / ".git/MERGE_HEAD").exists()
     assert hub.entry("demo", "103").step.state == State.done
     assert notifier.sent == [("Merge conflict", "demo 103: ui.txt")]
@@ -198,22 +222,10 @@ def test_untracked_file_in_the_way_changes_nothing(hub: Hub, repo: Path) -> None
     assert (repo / "ui.txt").read_text() == "mine\n"
 
 
-def test_untracked_file_in_the_way_of_the_switch_changes_nothing(hub: Hub, repo: Path) -> None:
-    git(repo, "checkout", "-q", "main")
-    (repo / "base.txt").write_text("base\n")
-    git(repo, "add", ".")
-    git(repo, "commit", "-q", "-m", "base")
-    git(repo, "checkout", "-q", "step/103-ui")
-    (repo / "base.txt").write_text("mine\n")
-    refused(hub, repo, "would be overwritten")
-    assert (repo / "base.txt").read_text() == "mine\n"
-
-
 def test_merge_stopped_by_a_hook_changes_nothing(hub: Hub, repo: Path) -> None:
     hook = repo / ".git/hooks/pre-merge-commit"
     hook.write_text("#!/bin/sh\necho no merges today\nexit 1\n")
     hook.chmod(0o755)
-    git(repo, "checkout", "-q", "step/103-ui")
     refused(hub, repo, "no merges today")
     assert not (repo / ".git/MERGE_HEAD").exists()
 
