@@ -770,22 +770,19 @@ def _git(repo: Path, *args: str) -> str:
 
 
 def _merge(repo: Path, base: str, branch: str) -> str:
-    """`git merge --no-ff branch` into `base`, starting on `base` or on `branch`.
+    """`git merge --no-ff branch` into `base`, locally.
 
-    Any other branch, or tracked changes: refuse. A failed merge puts the repo back as it was.
+    On `base`: a normal merge, refused with tracked changes; a failed one puts the repo back.
+    Anywhere else: the merge commit is made without touching the working tree or HEAD.
     """
     for name in (base, branch):
         if not git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{name}"):
             raise InvalidTransition(f"{repo}: branch '{name}' does not exist")
-    head = _git(repo, "branch", "--show-current")
-    if head not in (base, branch):
-        where = f"on branch '{head}'" if head else "not on a branch"
-        raise InvalidTransition(f"{repo}: {where}, not '{base}' or '{branch}'; switch first")
+    if _git(repo, "branch", "--show-current") != base:
+        return _merge_in_memory(repo, base, branch)
     # Untracked files are not changes; git itself refuses if one would be overwritten.
     if changed := _git(repo, "diff", "--name-only", "HEAD").splitlines():
         raise InvalidTransition(f"{repo}: uncommitted changes in {', '.join(changed)}")
-    if head != base:
-        _git(repo, "switch", "-q", base)
     try:
         _git(repo, "merge", "--no-ff", "--no-edit", branch)
     except InvalidTransition as exc:
@@ -793,11 +790,39 @@ def _merge(repo: Path, base: str, branch: str) -> str:
         # A hook or a missing git identity also stops a merge halfway, with no conflict.
         if git(repo, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"):
             _git(repo, "merge", "--abort")
-        if head != base:
-            _git(repo, "switch", "-q", head)
         if not files:
             raise  # not a conflict: git's own message says why
         raise MergeConflict(
             f"merge {branch}: conflict in {', '.join(files)}; merge aborted", files
         ) from exc
     return _git(repo, "rev-parse", "--short", "HEAD")
+
+
+def _merge_in_memory(repo: Path, base: str, branch: str) -> str:
+    """`base` is not checked out here: merge-tree + commit-tree, then move `base` only.
+
+    No hooks run, as with any commit made without a working tree.
+    """
+    worktrees = _git(repo, "worktree", "list", "--porcelain").splitlines()
+    if f"branch refs/heads/{base}" in worktrees:
+        raise InvalidTransition(f"{repo}: '{base}' is checked out in another worktree; merge there")
+    old = _git(repo, "rev-parse", f"refs/heads/{base}")
+    result = subprocess.run(
+        ["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, branch],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    lines = result.stdout.splitlines()
+    if result.returncode == 1:
+        files = list(dict.fromkeys(f for f in lines[1:] if f))
+        raise MergeConflict(
+            f"merge {branch}: conflict in {', '.join(files)}; nothing merged", files
+        )
+    if result.returncode:
+        raise InvalidTransition(f"git merge-tree: {(result.stderr or result.stdout).strip()}")
+    into = "" if base in ("main", "master") else f" into {base}"
+    message = f"Merge branch '{branch}'{into}"
+    commit = _git(repo, "commit-tree", lines[0], "-p", old, "-p", branch, "-m", message)
+    _git(repo, "update-ref", "-m", f"merge {branch}", f"refs/heads/{base}", commit, old)
+    return commit[:7]
