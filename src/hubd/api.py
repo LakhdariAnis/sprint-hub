@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, ValidationError
 
-from hubd import doctor, reminders, service
+from hubd import doctor, reminders, service, windows
 from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
 from hubd.init import PROJECTS
@@ -120,7 +120,12 @@ def create_app(
     def popup(key: tuple[str, str], title: str, body: str, on_click: Click) -> bool:
         return current.settings.notify_waiting and hub.popup(key, title, body, on_click)
 
-    chats = Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup) if hub else None
+    def workspace(project: str) -> int | None:
+        return p.workspace if (p := hub.index.projects.get(project)) else None
+
+    chats = (
+        Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup, workspace) if hub else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -132,6 +137,7 @@ def create_app(
         tasks = [asyncio.create_task(hub.watch(stop)), asyncio.create_task(chats.loop(stop))]
         if isinstance(theme, OmarchyTheme):  # FakeTheme (demo, tests) never changes
             tasks.append(asyncio.create_task(watch_theme(theme, hub.emit, stop)))
+            tasks.append(asyncio.create_task(windows.loop(stop)))  # the real desktop only
         if reminder_hour is not None:
             path = reminders.state_path()
             tasks.append(asyncio.create_task(reminders.loop(hub, path, lambda: hour[0], stop)))
