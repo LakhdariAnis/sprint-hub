@@ -3,10 +3,13 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from hubd import close
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.states import InvalidTransition
+from hubd.vault import _load_step
 
 TODAY = date(2026, 11, 17)
 HEAD = (
@@ -106,9 +109,12 @@ def test_plan_writes_nothing(hub: Hub, repo: Path) -> None:
 def test_write_changes_only_the_cells(hub: Hub, repo: Path) -> None:
     close.write(repo, plan(hub, own=2), TODAY)
     text = (repo / "sprint" / "README.md").read_text()
-    assert text == HEAD + ROWS.replace("| | current |", "| 12.5 h | closed |").replace(
-        "| planned |", "| current |"
-    ) + TAIL
+    assert (
+        text
+        == HEAD
+        + ROWS.replace("| | current |", "| 12.5 h | closed |").replace("| planned |", "| current |")
+        + TAIL
+    )
 
 
 def test_next_row_not_right_after_stays_planned(hub: Hub, repo: Path) -> None:
@@ -141,6 +147,42 @@ def test_progress_file_missing_is_made(hub: Hub, repo: Path) -> None:
     c = plan(hub)
     assert (c.hours, c.actual) == ({}, 0)
     close.write(repo, c, TODAY)
-    assert (repo / "sprint" / "PROGRESS.md").read_text().startswith(
-        "# Progress\n\n## 2026-11-17 — Sprint 1 closed\n"
+    assert (
+        (repo / "sprint" / "PROGRESS.md")
+        .read_text()
+        .startswith("# Progress\n\n## 2026-11-17 — Sprint 1 closed\n")
     )
+
+
+def test_api_preview_writes_nothing(hub: Hub, repo: Path) -> None:
+    files = [*repo.rglob("*"), *(hub.vault / "projects").rglob("*")]
+    before = {p: p.read_bytes() for p in files if p.is_file()}
+    client = TestClient(create_app(hub))
+    for _ in range(2):
+        r = client.get("/projects/demo/sprints/1/close", params={"own_hours": 2})
+        assert r.status_code == 200
+        assert (r.json()["actual"], r.json()["moved"]) == (12.5, ["101", "102", "103", "104"])
+    assert {p: p.read_bytes() for p in files if p.is_file()} == before
+
+
+def test_api_close_moves_the_steps(hub: Hub, repo: Path) -> None:
+    client = TestClient(create_app(hub))
+    r = client.post("/projects/demo/sprints/1/close", json={"own_hours": 2})
+    assert (r.status_code, r.json()["actual"], r.json()["factor"]) == (200, 12.5, 1.25)
+    steps = hub.vault / "projects" / "demo" / "steps"
+    for step_id in ("101", "102", "103", "104"):
+        assert _load_step(steps / f"{step_id}.md").sprint == 2
+        assert "\nsprint: 2\n" in (steps / f"{step_id}.md").read_text()
+    assert _load_step(steps / "105.md").sprint is None  # approved: stays, nothing written
+    assert {e.step.step for e in hub.index.steps if e.step.sprint == 2} >= {"101", "104"}
+    again = client.post("/projects/demo/sprints/1/close", json={"own_hours": 2})
+    assert (again.status_code, again.json()["detail"]) == (409, "Sprint 1 is already closed")
+
+
+def test_api_refusals(hub: Hub, repo: Path) -> None:
+    client = TestClient(create_app(hub))
+    assert client.post("/projects/nope/sprints/1/close").status_code == 404
+    assert client.post("/projects/demo/sprints/1/close", json={"own_hours": -1}).status_code == 422
+    (repo / "sprint" / "README.md").write_text(HEAD + ROWS.split("\n")[0] + "\n")
+    r = client.post("/projects/demo/sprints/1/close")
+    assert r.status_code == 409 and "Sprint 2 has no row" in r.json()["detail"]
