@@ -224,12 +224,21 @@ def _load_project(path: Path) -> Project:
 
 def save_workspace(path: Path, workspace: int | None) -> None:
     """Set or remove `workspace:` in a `project.md` frontmatter; every other byte stays."""
+    _save_field(path, "workspace", None if workspace is None else str(workspace))
+
+
+def save_sprint(path: Path, sprint: int) -> None:
+    """Set `sprint:` in a step file (`save_step` never writes it); every other byte stays."""
+    _save_field(path, "sprint", str(sprint))
+
+
+def _save_field(path: Path, name: str, value: str | None) -> None:
     lines = path.read_bytes().decode().split("\n")
     if lines[0].rstrip() != "---":
         raise ValueError(f"{path}: no frontmatter")
     end = next(i for i, line in enumerate(lines[1:], 1) if line.rstrip() == "---")
     eol = "\r" if lines[0].endswith("\r") else ""
-    _set_fields(lines, 1, end, {"workspace": None if workspace is None else str(workspace)}, eol)
+    _set_fields(lines, 1, end, {name: value}, eol)
     _write_atomic(path, "\n".join(lines).encode())
 
 
@@ -465,13 +474,7 @@ def save_time(path: Path, step: Step, merged: str | None, today: date) -> None:
         entry = [f"## {today} — Step {step.step} approved{branch}", ""]
         entry += [merged, ""] if merged else []
         entry += [line, ""]
-        top = next((i for i, text in enumerate(lines) if text.startswith("## ")), None)
-        if top is None:  # no entry at all: after what the file has, with one blank line between
-            while lines and not lines[-1].strip():
-                lines.pop()
-            lines += ["", *entry] if lines else ["# Progress", "", *entry]
-        else:
-            lines[top:top] = entry
+        add_on_top(lines, entry)
     else:
         end = next((i for i in range(at + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
         old = next((i for i in range(at + 1, end) if lines[i].startswith("Time: ")), None)
@@ -481,6 +484,17 @@ def save_time(path: Path, step: Step, merged: str | None, today: date) -> None:
             gap = [""] if at + 1 < len(lines) and lines[at + 1].strip() else []
             lines[at + 1 : at + 1] = ["", line, *gap]
     _write_atomic(path, "\n".join(lines).encode())
+
+
+def add_on_top(lines: list[str], entry: list[str]) -> None:
+    """Put a PROGRESS entry (its lines, ending with a blank one) above the newest one."""
+    top = next((i for i, text in enumerate(lines) if text.startswith("## ")), None)
+    if top is None:  # no entry at all: after what the file has, with one blank line between
+        while lines and not lines[-1].strip():
+            lines.pop()
+        lines += ["", *entry] if lines else ["# Progress", "", *entry]
+    else:
+        lines[top:top] = entry
 
 
 def _join(project: str, path: Path, step: Step, repo: Path | None) -> StepEntry:
