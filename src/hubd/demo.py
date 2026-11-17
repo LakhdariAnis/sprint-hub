@@ -89,6 +89,7 @@ def demo_vault() -> Path:
         git(cwd, "init", "-q", "-b", "main")
         git(cwd, "config", "user.name", "hubd demo")  # approve's merge commit needs a name too
         git(cwd, "config", "user.email", "demo@hubd.invalid")
+        (cwd / ".gitignore").write_text("sprint/\n")  # as in sprint-hub: close refuses it tracked
         git(cwd, "add", ".")
         git(cwd, "commit", "-q", "-m", "demo")
         for branch in branches:  # one commit per step branch, so approve has something to merge

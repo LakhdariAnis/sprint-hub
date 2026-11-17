@@ -11,7 +11,8 @@ from uuid import uuid4
 
 from watchfiles import awatch
 
-from hubd import focus, importer, init, weeks
+from hubd import close, focus, importer, init, weeks
+from hubd.close import Closed
 from hubd.context import Context, build
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
@@ -32,6 +33,7 @@ from hubd.vault import (
     parse_questions,
     parse_tasks,
     planned_hours,
+    save_sprint,
     save_step,
     save_time,
     save_workspace,
@@ -316,6 +318,29 @@ class Hub:
             raise NotFound(f"no project {project}")
         tables, _ = self.sprint_tables()
         return weeks.eta(project, tables, self.index.steps, today or date.today())
+
+    async def close_sprint(
+        self, project: str, number: int, own_hours: float | None = None, write: bool = False
+    ) -> Closed:
+        """Flow E of the `new-sprint` skill; `write=False` is the preview and changes nothing."""
+        async with self.lock:
+            repo = self.repo(project)
+            if project not in self.index.projects or repo is None:
+                raise NotFound(f"no project {project} with a repo")
+            tables, _ = self.sprint_tables()
+            steps = self.index.steps
+            closed = await asyncio.to_thread(
+                close.plan, repo, project, number, own_hours, steps, tables
+            )
+            if not write:
+                return closed
+            await asyncio.to_thread(close.write, repo, closed, date.today())
+            for entry in steps:
+                if entry.project == project and entry.step.step in closed.moved:
+                    save_sprint(entry.path, closed.next)
+                    entry.step.sprint = closed.next
+                    self.emit({"type": "step", **step_json(entry)})
+            return closed
 
     def _spec_project(self, path: Path) -> str | None:
         """The project whose repo has `path` as a `sprint/<id>-*.md` spec."""

@@ -3,6 +3,7 @@ import json
 import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from datetime import date
 from importlib.metadata import version
 from pathlib import Path
@@ -51,6 +52,10 @@ class Changes(BaseModel):
 
 class Approve(BaseModel):
     own_hours: float | None = Field(None, ge=0, allow_inf_nan=False)
+
+
+class Close(Approve):
+    """Anis's own hours of the sprint, not tied to a step."""
 
 
 class RunEnded(BaseModel):
@@ -231,6 +236,17 @@ def create_app(
     @app.get("/projects/{project}/eta")
     def project_eta(project: str) -> dict:
         return hub.eta(project)
+
+    @app.get("/projects/{project}/sprints/{number}/close")
+    async def close_preview(
+        project: str, number: int, own_hours: float | None = Query(None, ge=0, allow_inf_nan=False)
+    ) -> dict:
+        return asdict(await hub.close_sprint(project, number, own_hours))
+
+    @app.post("/projects/{project}/sprints/{number}/close")
+    async def close_sprint(project: str, number: int, body: Close | None = None) -> dict:
+        own = body.own_hours if body else None
+        return asdict(await hub.close_sprint(project, number, own, write=True))
 
     @app.get("/questions")
     def questions() -> list[dict]:

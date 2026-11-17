@@ -123,3 +123,19 @@ def test_demo_focus_and_start_never_call_hyprctl(monkeypatch: pytest.MonkeyPatch
         assert client.post("/projects/notes/focus").json() == {"workspace": 2}
         assert client.post("/projects/demo/focus").status_code == 404
         assert client.post("/steps/notes/301/start").status_code == 200
+
+
+def test_demo_closes_a_sprint() -> None:
+    with TestClient(demo_app()) as client:
+        r = client.post("/projects/notes/sprints/3/close", json={"own_hours": 2})
+        assert (r.status_code, r.json()["moved"], r.json()["next_status"]) == (
+            200,
+            ["301", "302"],
+            "current",
+        )
+        assert {s["step"]: s["sprint"] for s in client.get("/projects/notes/steps").json()} == {
+            "301": 4,
+            "302": 4,
+        }
+        r = client.post("/projects/notes/sprints/4/close")
+        assert r.status_code == 409 and "Sprint 5 has no row" in r.json()["detail"]
