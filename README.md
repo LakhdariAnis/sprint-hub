@@ -86,10 +86,12 @@ starts it. hubd then runs from login on (reminders need that), restarts after a 
 
 ## Screenshots
 
-> **TODO(Anis): retake these from the 0.2.0 build before the release, or drop them.**
+Taken from `uv run hubd --demo` (built-in data, fake runner).
 
-![Today](docs/screens/213c-today.png)
-![Step spec](docs/screens/213d-step-spec.png)
+![New chat](docs/screens/chat.png)
+![Today](docs/screens/today.png)
+![Projects](docs/screens/projects.png)
+![Step with its checklist and Claude chat](docs/screens/step.png)
 
 ## How it works
 
