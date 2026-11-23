@@ -70,7 +70,8 @@ def _row(project: str, head: list[str], cells: list[str]) -> Sprint:
     row = dict(zip(head, cells, strict=True))
     if not row["sprint"].isdecimal():
         raise ValueError(f"sprint {row['sprint']!r} is not a number")
-    track, week = row["track"] or None, row["week"] or None
+    known = {k: None if row[k] in ("", "TBD") else row[k] for k in ("track", "week", "planned")}
+    track, week, planned_cell = known["track"], known["week"], known["planned"]
     if track is not None and track not in TRACKS:
         raise ValueError(f"track {track!r} is not work or personal")
     if week is not None and not _valid_week(week):
@@ -78,9 +79,9 @@ def _row(project: str, head: list[str], cells: list[str]) -> Sprint:
     if row["status"] not in STATUSES:
         raise ValueError(f"status {row['status']!r} is not one of {', '.join(STATUSES)}")
     planned = None
-    if row["planned"]:
-        if not (m := _HOURS.fullmatch(row["planned"])):
-            raise ValueError(f"planned {row['planned']!r} is not like 14 h")
+    if planned_cell:
+        if not (m := _HOURS.fullmatch(planned_cell)):
+            raise ValueError(f"planned {planned_cell!r} is not like 14 h")
         planned = float(m[1])
     m = _HOURS.fullmatch(row.get("actual", ""))
     return Sprint(
