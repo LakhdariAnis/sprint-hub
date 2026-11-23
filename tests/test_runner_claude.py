@@ -119,6 +119,14 @@ def test_command_with_workspace_goes_through_hyprctl(hypr: Hypr) -> None:
     ]
 
 
+def test_personal_account_sets_the_config_dir(hypr: Hypr) -> None:
+    runner = ClaudeCodeRunner(["foot", "-D", "{cwd}"], URL)
+    line = runner.command(STEP, Path("/repo"), ["go"], 3, "personal")[2]
+    assert "CLAUDE_CONFIG_DIR=" in line and ".claude-personal" in line
+    assert "CLAUDE_CONFIG_DIR" not in runner.command(STEP, Path("/repo"), ["go"], 3)[2]
+    assert runner.env(STEP, "personal")["CLAUDE_CONFIG_DIR"].endswith(".claude-personal")
+
+
 def test_command_quotes_a_path_with_spaces(hypr: Hypr) -> None:
     runner = ClaudeCodeRunner(["xdg-terminal-exec", "--dir={cwd}"], URL)
     lua = runner.command(STEP, Path("/my repo/it's"), ["a b"], 4)[2]

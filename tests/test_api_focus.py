@@ -64,12 +64,26 @@ def test_patch_sets_and_clears_the_workspace(vault: Path, hub: Hub) -> None:
     path = vault / "projects" / "demo" / "project.md"
     client = TestClient(create_app(hub))
     response = client.patch("/projects/demo", json={"workspace": 4})
-    assert (response.status_code, response.json()) == (200, {"workspace": 4})
+    assert (response.status_code, response.json()) == (200, {"workspace": 4, "account": "claude"})
     assert "workspace: 4" in path.read_text()
-    assert client.patch("/projects/demo", json={"workspace": 5}).json() == {"workspace": 5}
+    assert client.patch("/projects/demo", json={"workspace": 5}).json()["workspace"] == 5
     assert path.read_text().count("workspace:") == 1
-    assert client.patch("/projects/demo", json={"workspace": None}).json() == {"workspace": None}
+    assert client.patch("/projects/demo", json={"workspace": None}).json()["workspace"] is None
     assert "workspace" not in path.read_text()
+
+
+def test_patch_sets_the_account_and_keeps_the_workspace(vault: Path, hub: Hub) -> None:
+    path = vault / "projects" / "demo" / "project.md"
+    client = TestClient(create_app(hub))
+    client.patch("/projects/demo", json={"workspace": 4})
+    assert client.patch("/projects/demo", json={"account": "personal"}).json() == {
+        "workspace": 4,
+        "account": "personal",
+    }
+    assert "account: personal" in path.read_text()
+    assert client.patch("/projects/demo", json={"account": "claude"}).json()["account"] == "claude"
+    assert "account" not in path.read_text()
+    assert client.patch("/projects/demo", json={"account": "x"}).status_code == 422
 
 
 @pytest.mark.parametrize("bad", [1, 10, "x"])

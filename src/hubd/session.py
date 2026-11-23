@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+from pathlib import Path
 
 # systemd starts hubd at login, before the compositor exists. Once it runs, the user manager
 # holds WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE and the rest (uwsm exports them there).
@@ -28,3 +29,11 @@ def env() -> dict[str, str]:
         if sep and key not in merged:
             merged[key] = value
     return merged
+
+
+PERSONAL = Path.home() / ".claude-personal"
+
+
+def account_env(account: str) -> dict[str, str]:
+    """What a Claude process of this project's account needs on top of its environment."""
+    return {"CLAUDE_CONFIG_DIR": str(PERSONAL)} if account == "personal" else {}

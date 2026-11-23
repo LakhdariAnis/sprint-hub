@@ -27,7 +27,9 @@ class ClaudeCodeRunner:
         self.hub_url = hub_url
         self.settings = settings  # Claude's settings.json, where the hook must be
 
-    def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> str | None:
+    def refusal(
+        self, step_id: str, cwd: Path, fresh: bool, running: str | None, account: str = "claude"
+    ) -> str | None:
         # Two sessions in one work tree would switch branches under each other.
         if running:
             return f"step {running} is running in this repo, wait for it to end"
@@ -37,7 +39,9 @@ class ClaudeCodeRunner:
             return f"no {command}: without it, /sprint-{step_id} is not a command"
         if shutil.which("claude") is None:
             return "claude not on PATH of hubd: install it, then restart hubd"
-        return install.hook_problem(self.settings)
+        # The personal login keeps its own settings.json: the hook must be there too.
+        settings = session.PERSONAL / "settings.json" if account == "personal" else self.settings
+        return install.hook_problem(settings)
 
     def running(self, session_id: str) -> bool:
         # `--session-id` or `--resume` holds it: on the argv of `claude` and of its terminal.
@@ -50,7 +54,12 @@ class ClaudeCodeRunner:
         return False
 
     def command(
-        self, step: Step, cwd: Path, claude_args: list[str], workspace: int | None = None
+        self,
+        step: Step,
+        cwd: Path,
+        claude_args: list[str],
+        workspace: int | None = None,
+        account: str = "claude",
     ) -> list[str]:
         """The terminal argv with `{cwd}` filled in, then `claude` and its args.
 
@@ -62,13 +71,19 @@ class ClaudeCodeRunner:
         if workspace is None or shutil.which("hyprctl") is None:
             return argv
         env = [f"HUB_RUN={step.step}", f"HUB_URL={self.hub_url}", f"HUB_WORKSPACE={workspace}"]
+        env += [f"{k}={v}" for k, v in session.account_env(account).items()]
         line = shlex.join(["env", *env, *argv])  # run by `sh -c`: a path with spaces needs quotes
         # Hyprland's Lua dispatch; a JSON string is also a valid Lua string here.
         rules = f'{{ workspace = "{workspace} silent" }}'
         return ["hyprctl", "dispatch", f"hl.dsp.exec_cmd({json.dumps(line)}, {rules})"]
 
-    def env(self, step: Step) -> dict[str, str]:
-        return {**session.env(), "HUB_RUN": step.step, "HUB_URL": self.hub_url}
+    def env(self, step: Step, account: str = "claude") -> dict[str, str]:
+        return {
+            **session.env(),
+            "HUB_RUN": step.step,
+            "HUB_URL": self.hub_url,
+            **session.account_env(account),
+        }
 
     async def start(
         self,
@@ -78,25 +93,37 @@ class ClaudeCodeRunner:
         cwd: Path,
         prompt: str,
         workspace: int | None = None,
+        account: str = "claude",
     ) -> None:
         args = [MODEL, model, SESSION_ID, session_id, prompt]
-        await self._launch(step, cwd, args, workspace)
+        await self._launch(step, cwd, args, workspace, account)
 
     async def resume(
-        self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
+        self,
+        step: Step,
+        session_id: str,
+        cwd: Path,
+        prompt: str,
+        workspace: int | None = None,
+        account: str = "claude",
     ) -> None:
         # No prompt (a reopen): the chat opens as it was left, waiting for Anis.
         args = [RESUME, session_id, *([prompt] if prompt else [])]
-        await self._launch(step, cwd, args, workspace)
+        await self._launch(step, cwd, args, workspace, account)
 
     async def _launch(
-        self, step: Step, cwd: Path, claude_args: list[str], workspace: int | None
+        self,
+        step: Step,
+        cwd: Path,
+        claude_args: list[str],
+        workspace: int | None,
+        account: str,
     ) -> None:
-        argv = self.command(step, cwd, claude_args, workspace)
+        argv = self.command(step, cwd, claude_args, workspace, account)
         if argv[0] == "hyprctl":
-            await self._hypr(argv, self.env(step))
+            await self._hypr(argv, self.env(step, account))
         else:
-            await self._spawn(argv, cwd, self.env(step))
+            await self._spawn(argv, cwd, self.env(step, account))
 
     async def focus(self, workspace: int) -> None:
         if shutil.which("hyprctl") is None:

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from hubd import permits
+from hubd import permits, session
 from hubd.runners import permit
 from hubd.runners.claude import MODEL, RESUME, SESSION_ID
 
@@ -40,6 +40,12 @@ STDERR_LINES = 50  # kept for the error event of a bad exit
 STOP_WAIT = 5.0  # seconds claude gets to end on stdin EOF before it is terminated
 LINE_LIMIT = 64 * 2**20  # a tool result can be one long stdout line; asyncio's default is 64 KiB
 PROJECTS = Path.home() / ".claude" / "projects"  # where Claude keeps its transcripts
+
+
+def transcript_roots(projects: Path) -> list[Path]:
+    """The default root also holds the personal login's transcripts (`Project.account`)."""
+    return [projects, session.PERSONAL / "projects"] if projects == PROJECTS else [projects]
+
 
 # Called for every hubd chat event: (chat_id, event). Event types: text, tool, tool_result,
 # turn_end, error. The page gets them as they are (603).
@@ -71,12 +77,13 @@ class ChatRunner(Protocol):
         system: str | None = None,
         scratch: bool = False,
         workspace: int | None = None,
+        account: str = "claude",
     ) -> None:
         """Start the chat in `cwd`, or resume it when `chat_id` was opened before.
 
         `system` is appended to Claude's system prompt; a resume needs it again. `scratch`: a
         chat with no project, which gets no command tools (`hubd.permits`). `workspace`: where
-        the windows it opens go.
+        the windows it opens go. `account`: which Claude login it uses (`Project.account`).
         """
         ...
 
@@ -293,7 +300,9 @@ class ClaudeChat:
     def exists(self, chat_id: str) -> bool:
         # shortcut: Claude's transcript path is undocumented; if it moves, `--session-id` on an
         # old id fails as an `error` event. Upgrade when 609 records the chats it opened.
-        return any(self.projects.glob(f"*/{chat_id}.jsonl"))
+        return any(
+            p for root in transcript_roots(self.projects) for p in root.glob(f"*/{chat_id}.jsonl")
+        )
 
     def args(
         self,
@@ -329,6 +338,7 @@ class ClaudeChat:
         system: str | None = None,
         scratch: bool = False,
         workspace: int | None = None,
+        account: str = "claude",
     ) -> None:
         chat_id = str(uuid.UUID(chat_id))  # ValueError: not a session id
         if chat_id in self.chats:
@@ -340,6 +350,7 @@ class ClaudeChat:
         )
         # Claude gives up on an MCP tool after MCP_TOOL_TIMEOUT ms: hubd must deny first.
         env = os.environ | {"MCP_TOOL_TIMEOUT": str((permits.ASK_WAIT + 60) * 1000)}
+        env |= session.account_env(account)
         if workspace is not None:  # the windows it opens go there (`hubd.windows`)
             env["HUB_WORKSPACE"] = str(workspace)
         try:

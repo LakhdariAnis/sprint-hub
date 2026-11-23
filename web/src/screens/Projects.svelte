@@ -12,6 +12,10 @@
   const open = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   let sel = $state(0)
   const move = (d: number) => (sel = Math.max(0, Math.min(rows.length - 1, sel + d)))
+  $effect(() => {
+    void sel
+    document.querySelector('.body .lr.f')?.scrollIntoView({ block: 'nearest' })
+  })
   useKeys({ j: () => move(1), k: () => move(-1), Enter: () => rows[sel] && open(rows[sel].id) })
 
   // The canvas tile: two letters from the name, one colour per row so projects tell apart at a glance.
@@ -39,7 +43,7 @@
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <div class="lr grid row" class:f={i === sel} role="link" tabindex="0" onclick={() => open(r.id)} onfocus={() => (sel = i)}>
           <span class="ic" style="background: var(--{tile[i % tile.length]})">{initials(r.name)}</span>
-          <span class="nm"><span class="n1"><b>{r.name}</b><Workspace n={r.workspace} /></span>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if r.repoMissing}<span class="t2 hint">repo not found: {r.path}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
+          <span class="nm"><span class="n1"><b>{r.name}</b><Workspace n={r.workspace} />{#if r.account === 'personal'}<span class="chip" title="Uses claude-personal">personal</span>{/if}</span>{#if r.model}<span class="t2">{r.model}</span>{/if}{#if r.repoMissing}<span class="t2 hint">repo not found: {r.path}</span>{/if}{#if !r.total}<span class="t2 hint">no steps: uv run hubd import</span>{/if}</span>
           <span class="id where">{r.path || 'vault only'}</span>
           <span class="prog"><span class="pbar"><i style="width: {r.total ? (r.approved / r.total) * 100 : 0}%"></i></span><span class="id">{r.approved}/{r.total}</span></span>
           <!-- State colours as everywhere else; a zero steps back. -->

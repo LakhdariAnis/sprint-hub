@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from hubd.runners.chat import PROJECTS, _result_text, _tool_input, tool_line
+from hubd.runners.chat import PROJECTS, _result_text, _tool_input, tool_line, transcript_roots
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +25,9 @@ def no_transcript(chat_id: str) -> None:
 def read_claude(chat_id: str, projects: Path = PROJECTS) -> list[dict[str, Any]] | None:
     """`~/.claude/projects/<folder>/<chat id>.jsonl`; the folder is named after the chat's cwd."""
     try:
-        path = next(projects.glob(f"*/{chat_id}.jsonl"), None)
+        path = next(
+            (p for r in transcript_roots(projects) for p in r.glob(f"*/{chat_id}.jsonl")), None
+        )
         lines = path.read_text(errors="replace").splitlines() if path else []
     except OSError as exc:
         log.warning("chat %s: session file not read (%s)", chat_id, exc)

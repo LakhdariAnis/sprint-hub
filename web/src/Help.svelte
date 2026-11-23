@@ -17,6 +17,7 @@
     ['h  l  ← →', 'Project: focus the Sprints / Steps column; Enter on a step opens it'],
     ['s', 'start the step (Step screen)'],
     ['w', 'jump to the Hyprland workspace of this project (Project, Step); `W` on Project sets it (2 to 9, empty = none), its number shows as a chip'],
+    ['A', 'switch the Claude login of this project (Project): claude or claude-personal, for its runs and chats'],
     ['W', 'set the Hyprland workspace of this project (Project): ↵ saves, empty clears, Esc leaves'],
     ['n', 'New chat; on a Step in changes: a fresh run with your comment in its prompt, when the old chat cannot be resumed'],
     ['f', 'finish a doing run; press f or y again to send it to review, for a run whose end never arrived (Step)'],

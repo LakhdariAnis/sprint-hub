@@ -227,6 +227,11 @@ def save_workspace(path: Path, workspace: int | None) -> None:
     _save_field(path, "workspace", None if workspace is None else str(workspace))
 
 
+def save_account(path: Path, account: str) -> None:
+    """Set `account:` in a `project.md` frontmatter (`claude`, the default, removes it)."""
+    _save_field(path, "account", None if account == "claude" else account)
+
+
 def save_sprint(path: Path, sprint: int) -> None:
     """Set `sprint:` in a step file (`save_step` never writes it); every other byte stays."""
     _save_field(path, "sprint", str(sprint))

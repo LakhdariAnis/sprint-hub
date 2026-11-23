@@ -93,6 +93,7 @@ class Chats:
         transcript: Transcript = no_transcript,
         popup: Popup = lambda *_: False,
         workspace: Callable[[str], int | None] = lambda _: None,
+        account: Callable[[str], str] = lambda _: "claude",
     ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
@@ -104,6 +105,7 @@ class Chats:
         self.ask_wait = permits.ASK_WAIT
         self.popup = popup
         self.workspace = workspace  # a project's Hyprland workspace, read at each open
+        self.account = account  # and its Claude login
         self.clock = time.monotonic  # tests move it
         # Each page window's last report: window id -> (focused, chat it shows, when).
         self.windows: dict[str, tuple[bool, str | None, float]] = {}
@@ -199,8 +201,16 @@ class Chats:
 
     async def _start(self, chat: Chat) -> None:
         workspace = self.workspace(chat.project) if chat.project else None
+        account = self.account(chat.project) if chat.project else "claude"
         await self.runner.open(
-            chat.id, chat.cwd, chat.model, chat.effort, chat.system, chat.scratch, workspace
+            chat.id,
+            chat.cwd,
+            chat.model,
+            chat.effort,
+            chat.system,
+            chat.scratch,
+            workspace,
+            account,
         )
 
     async def send(self, chat_id: str, text: str) -> None:

@@ -17,7 +17,9 @@ class Unavailable(Exception):
 class AgentRunner(Protocol):
     """`start` and `resume` return once the run is launched. The end comes later: `RunEnded`."""
 
-    def refusal(self, step_id: str, cwd: Path, fresh: bool, running: str | None) -> str | None:
+    def refusal(
+        self, step_id: str, cwd: Path, fresh: bool, running: str | None, account: str = "claude"
+    ) -> str | None:
         """Why this run must not start, checked before any file changes; None = go.
 
         `fresh`: a new chat with the step's command, not a resumed one.
@@ -41,10 +43,20 @@ class AgentRunner(Protocol):
         cwd: Path,
         prompt: str,
         workspace: int | None = None,
+        account: str = "claude",
     ) -> None:
-        """`workspace`: the project's Hyprland workspace for the run's terminal; None = anywhere."""
+        """`workspace`: the project's Hyprland workspace for the run's terminal; None = anywhere.
+
+        `account`: which Claude login the run uses (`Project.account`).
+        """
         ...
 
     async def resume(
-        self, step: Step, session_id: str, cwd: Path, prompt: str, workspace: int | None = None
+        self,
+        step: Step,
+        session_id: str,
+        cwd: Path,
+        prompt: str,
+        workspace: int | None = None,
+        account: str = "claude",
     ) -> None: ...

@@ -12,8 +12,8 @@
   import { chatAbout } from '../chat.svelte'
   import { jump, say, useKeys } from '../keys.svelte'
   import { tick, untrack } from 'svelte'
-  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setWorkspace, type Step } from '../steps'
-  import { etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
+  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setAccount, setWorkspace, type Step } from '../steps'
+  import { accountOf, etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
   import { watchEta } from '../hub.svelte'
   import { etaLine, factorNote } from '../week'
 
@@ -67,8 +67,14 @@
     const why = await setWorkspace(project, n)
     say(why ?? (n ? `Runs of ${project} open on workspace ${n}` : `Runs of ${project} open anywhere`), !!why)
   }
+  async function toggleAccount() {
+    const next = accountOf(project) === 'personal' ? 'claude' : 'personal'
+    const why = await setAccount(project, next)
+    say(why ?? `Runs and chats of ${project} use ${next === 'personal' ? 'claude-personal' : 'claude'}`, !!why)
+  }
   useKeys({
     W: editWorkspace,
+    A: toggleAccount,
     j: () => move(1),
     k: () => move(-1),
     h: left,
@@ -140,6 +146,7 @@
     <input class="wsin" inputmode="numeric" maxlength="1" placeholder="none" aria-label="Workspace, 2 to 9, empty for none" bind:this={wsBox} bind:value={wsDraft} onblur={() => (wsEdit = false)}
       onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveWorkspace() : e.key === 'Escape' && (wsEdit = false))} />
   {:else}<Workspace n={workspaceOf(project)} />{/if}
+  {#if accountOf(project) === 'personal'}<span class="chip" title="Uses claude-personal">personal</span>{/if}
 </Header>
 
 {#if gone}

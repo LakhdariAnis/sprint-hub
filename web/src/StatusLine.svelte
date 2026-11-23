@@ -21,7 +21,7 @@
     chat: [['c i', 'compose'], ['n', 'new chat']],
     today: [['p o m w q d', 'pane'], ['j k', 'move'], ['↵', 'open']],
     projects: [['↑ ↓', 'move'], ['→ ↵', 'open project']],
-    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'project' ? r.project : ''), [['w', 'workspace']]), ['Esc', 'back']],
+    project: [['j k', 'move'], ['h l', 'column'], ['↵', 'open step'], ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'project' ? r.project : ''), [['w', 'workspace']]), ['A', 'account'], ['Esc', 'back']],
     step: [...when(canStart, [['s', cur?.state === 'changes' ? 'continue chat' : 'start']]), ...when(cur?.state === 'changes' && cur.by !== 'me', [['n', 'new chat']]), ...when(!!cur?.runs.length && cur.by !== 'me' && (cur.state === 'done' || (cur.state === 'doing' && !!cur.run_gone)), [['o', 'reopen chat']]), ...when(cur?.state === 'doing' && cur.by !== 'me', [['f', 'finish']]), ...when(cur?.by === 'me', [['x', 'tick']]), ['c', 'chat about this'], ...when(!!workspaceOf(r.name === 'step' ? r.project : ''), [['w', 'workspace']]), ['Esc', 'back']],
     questions: [['j k', 'move'], ['↵', 'open step']],
     settings: [['j k', 'move'], ['↵', 'edit / copy']],

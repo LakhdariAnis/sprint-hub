@@ -36,6 +36,9 @@ class Project(BaseModel):
     repo: Path | None = None
     base: str = "main"  # the branch approve merges into
     workspace: int | None = Field(None, ge=2, le=9)  # Hyprland workspace of its runs
+    account: Literal["claude", "personal"] = (
+        "claude"  # personal: `CLAUDE_CONFIG_DIR=~/.claude-personal`
+    )
     model: str
     merge: Merge
 

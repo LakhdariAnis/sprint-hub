@@ -72,7 +72,9 @@ def test_reopen_refusals(closed: Hub, monkeypatch: pytest.MonkeyPatch) -> None:
 
     asked: list[tuple[bool, str | None]] = []
 
-    def refusal(step_id: str, cwd: Path, fresh: bool, running: str | None) -> str | None:
+    def refusal(
+        step_id: str, cwd: Path, fresh: bool, running: str | None, account: str
+    ) -> str | None:
         asked.append((fresh, running))
         return running and f"step {running} is running in this repo, wait for it to end"
 

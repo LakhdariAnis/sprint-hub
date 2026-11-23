@@ -33,6 +33,7 @@ from hubd.vault import (
     parse_questions,
     parse_tasks,
     planned_hours,
+    save_account,
     save_sprint,
     save_step,
     save_time,
@@ -118,6 +119,15 @@ class Hub:
         path = self.vault / "projects" / project / "project.md"
         async with self.lock:
             await asyncio.to_thread(save_workspace, path, workspace)
+            self._reload_all()
+
+    async def set_account(self, project: str, account: str) -> None:
+        """Write the Claude login of the project's runs and chats to its project.md."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        path = self.vault / "projects" / project / "project.md"
+        async with self.lock:
+            await asyncio.to_thread(save_account, path, account)
             self._reload_all()
 
     def emit(self, event: dict) -> None:
@@ -501,7 +511,9 @@ class Hub:
                 model = new.model or self.command_model(entry) or settings.model
                 session = str(uuid4())
             running = self._running_in(repo, step_id)
-            if reason := self.runner.refusal(step_id, repo, resume is None, running):
+            if reason := self.runner.refusal(
+                step_id, repo, resume is None, running, self.index.projects[project].account
+            ):
                 raise InvalidTransition(f"step {step_id}: {reason}")
             if not new.branch and entry.spec:
                 new.branch = f"step/{entry.spec.stem}"
@@ -512,9 +524,10 @@ class Hub:
             old, entry.step = entry.step, new
             entry.run_gone = False
             workspace = self.index.projects[project].workspace
+            account = self.index.projects[project].account
             try:
                 if resume:
-                    await self.runner.resume(new, session, repo, comment, workspace)
+                    await self.runner.resume(new, session, repo, comment, workspace, account)
                 else:
                     # The command file gets the comment as its arguments (`ARGUMENTS: ...`).
                     prompt = f"/sprint-{step_id} Changes requested on the earlier run: {comment}"
@@ -525,6 +538,7 @@ class Hub:
                         repo,
                         prompt if comment else f"/sprint-{step_id}",
                         workspace,
+                        account,
                     )
             except BaseException:
                 _write_atomic(entry.path, before)  # no run started: the file says so too
@@ -578,7 +592,9 @@ class Hub:
             )
             repo = self._run_repo(project)
             running = self._running_in(repo, step_id)
-            if reason := self.runner.refusal(step_id, repo, False, running):
+            if reason := self.runner.refusal(
+                step_id, repo, False, running, self.index.projects[project].account
+            ):
                 raise InvalidTransition(f"step {step_id}: {reason}")
             started = datetime.now().replace(second=0, microsecond=0)
             new.runs = [*new.runs, Run(started=started, model=last.model, session=last.session)]
@@ -588,7 +604,12 @@ class Hub:
             entry.run_gone = False
             try:
                 await self.runner.resume(
-                    new, last.session, repo, "", self.index.projects[project].workspace
+                    new,
+                    last.session,
+                    repo,
+                    "",
+                    self.index.projects[project].workspace,
+                    self.index.projects[project].account,
                 )
             except BaseException:
                 _write_atomic(entry.path, before)  # no terminal: the file says so too

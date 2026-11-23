@@ -147,6 +147,18 @@ export async function setWorkspace(project: string, workspace: number | null): P
   }
 }
 
+// `A`: switch the project's Claude login (`claude` or `personal`); the reason when hubd refuses.
+export async function setAccount(project: string, account: string): Promise<string | null> {
+  try {
+    const r = await fetch(`/projects/${encodeURIComponent(project)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ account }) })
+    if (r.ok) return null
+    const reply = await r.json().catch(() => null)
+    return typeof reply?.detail === 'string' ? reply.detail : `hubd answered ${r.status}`
+  } catch {
+    return 'Cannot reach hubd'
+  }
+}
+
 export async function focusProject(project: string): Promise<string | null> {
   try {
     const r = await fetch(`/projects/${encodeURIComponent(project)}/focus`, { method: 'POST' })

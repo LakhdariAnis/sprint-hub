@@ -92,7 +92,8 @@ class ChatChange(BaseModel):
 
 
 class ProjectChange(BaseModel):
-    workspace: int | None = Field(ge=2, le=9)  # None: its runs open anywhere
+    workspace: int | None = Field(None, ge=2, le=9)  # None: its runs open anywhere
+    account: Literal["claude", "personal"] | None = None  # only the fields sent are changed
 
 
 class PermissionAnswer(BaseModel):
@@ -128,8 +129,13 @@ def create_app(
     def workspace(project: str) -> int | None:
         return p.workspace if (p := hub.index.projects.get(project)) else None
 
+    def account(project: str) -> str:
+        return p.account if (p := hub.index.projects.get(project)) else "claude"
+
     chats = (
-        Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup, workspace) if hub else None
+        Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup, workspace, account)
+        if hub
+        else None
     )
 
     @asynccontextmanager
@@ -201,8 +207,12 @@ def create_app(
 
     @app.patch("/projects/{project}")
     async def change_project(project: str, body: ProjectChange) -> dict:
-        await hub.set_workspace(project, body.workspace)
-        return {"workspace": hub.index.projects[project].workspace}
+        if "workspace" in body.model_fields_set:
+            await hub.set_workspace(project, body.workspace)
+        if body.account:
+            await hub.set_account(project, body.account)
+        p = hub.index.projects[project]
+        return {"workspace": p.workspace, "account": p.account}
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
