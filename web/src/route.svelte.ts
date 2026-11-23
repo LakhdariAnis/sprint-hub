@@ -11,7 +11,8 @@ export type Route =
 
 export function parse(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent)
-  if (!a || a === 'chat') return { name: 'chat', id: b || undefined }
+  if (!a) return { name: 'projects' }  // the app opens on Projects
+  if (a === 'chat') return { name: 'chat', id: b || undefined }
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
   if (a === 'archived') return { name: 'archived' }

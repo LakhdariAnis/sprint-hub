@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 // The core loop on the demo vault: Today → start notes/301 → FakeRunner ticks it to done → approve.
 test('start a step, wait for done, approve it', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible() // the app opens on New chat
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible() // the app opens on Projects
   await page.goto('/#/today')
   await expect(page.getByRole('heading', { name: /^Good (morning|afternoon|evening), Anis$/ })).toBeVisible()
 

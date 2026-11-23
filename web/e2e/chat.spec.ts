@@ -12,9 +12,9 @@ test.afterEach(async ({ request }) => {
   for (const id of await Promise.all(opened)) await request.post(`/chats/${id}/stop`)
 })
 
-// Step 604: the app opens on New chat; hubd --demo answers with FakeChat.
-test('opens on New chat, a message gets an answer', async ({ page }) => {
-  await page.goto('/')
+// hubd --demo answers with FakeChat.
+test('New chat: a message gets an answer', async ({ page }) => {
+  await page.goto('/#/chat')
   await expect(page.getByRole('heading', { name: 'New chat' })).toBeVisible()
   await expect(page.getByText('What are we working on?')).toBeVisible()
   const box = page.getByRole('textbox', { name: 'Message' })
