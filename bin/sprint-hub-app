@@ -20,5 +20,5 @@ fi
 
 [ "$1" = --new ] && exec omarchy-launch-webapp "$url/?w=$RANDOM"
 case $1 in "#"*) target="$url/$1" ;; *) target=$url ;; esac
-# Pattern = Hyprland window class of a Chrome --app window on this URL (`hyprctl clients`); \b in the matcher needs it to end on a letter.
-exec omarchy-launch-or-focus-webapp chrome-127.0.0.1__-Default "$target"
+# Pattern = Hyprland window class of a Chrome --app window on this URL (`hyprctl clients`), any Chromium profile (Default, Profile_2...).
+exec omarchy-launch-or-focus-webapp 'chrome-127\.0\.0\.1__-\w+' "$target"
