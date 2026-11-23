@@ -34,6 +34,7 @@ from hubd.vault import (
     parse_tasks,
     planned_hours,
     save_account,
+    save_archived,
     save_sprint,
     save_step,
     save_time,
@@ -128,6 +129,15 @@ class Hub:
         path = self.vault / "projects" / project / "project.md"
         async with self.lock:
             await asyncio.to_thread(save_account, path, account)
+            self._reload_all()
+
+    async def set_archived(self, project: str, archived: bool) -> None:
+        """Archive or unarchive the project in its project.md."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        path = self.vault / "projects" / project / "project.md"
+        async with self.lock:
+            await asyncio.to_thread(save_archived, path, archived)
             self._reload_all()
 
     def emit(self, event: dict) -> None:

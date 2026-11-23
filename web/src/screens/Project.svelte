@@ -10,10 +10,10 @@
   import Inline from '../Inline.svelte'
   import { hub } from '../hub.svelte'
   import { chatAbout } from '../chat.svelte'
-  import { jump, say, useKeys } from '../keys.svelte'
+  import { ask, jump, say, useKeys } from '../keys.svelte'
   import { tick, untrack } from 'svelte'
-  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setAccount, setWorkspace, type Step } from '../steps'
-  import { accountOf, etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
+  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setAccount, setArchived, setWorkspace, type Step } from '../steps'
+  import { accountOf, archivedOf, etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
   import { watchEta } from '../hub.svelte'
   import { etaLine, factorNote } from '../week'
 
@@ -72,9 +72,24 @@
     const why = await setAccount(project, next)
     say(why ?? `Runs and chats of ${project} use ${next === 'personal' ? 'claude-personal' : 'claude'}`, !!why)
   }
+  // The list changes at once; hubd's answer only undoes it on a refusal.
+  async function toggleArchived() {
+    const next = !archivedOf(project)
+    const row = lists.projects?.find((p) => p.id === project)
+    if (row) row.archived = next
+    location.hash = next ? '#/projects' : '#/archived'
+    say(next ? `${project} archived: find it under Projects › archived (a)` : `${project} is back in Projects`)
+    const why = await setArchived(project, next)
+    if (why && row) (row.archived = !next), say(why, true)
+  }
+  const archiveKey = () =>
+    archivedOf(project)
+      ? ask({ title: `Unarchive ${project}?`, text: 'It goes back to the Projects list.', yes: 'Unarchive', run: toggleArchived })
+      : ask({ title: `Archive ${project}?`, text: 'It leaves the Projects list. Its steps and files stay; Projects › archived keeps it and X there brings it back.', yes: 'Archive', run: toggleArchived })
   useKeys({
     W: editWorkspace,
     A: toggleAccount,
+    X: archiveKey,
     j: () => move(1),
     k: () => move(-1),
     h: left,
@@ -82,7 +97,7 @@
     l: right,
     ArrowRight: right,
     Enter: () => (col === 's' ? right() : cur && open(cur)),
-    Escape: () => (location.hash = '#/projects'),
+    Escape: () => (location.hash = archivedOf(project) ? '#/archived' : '#/projects'),
     c: () => chatAbout(project),
     w: () => jump(project),
   })
@@ -147,6 +162,7 @@
       onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveWorkspace() : e.key === 'Escape' && (wsEdit = false))} />
   {:else}<Workspace n={workspaceOf(project)} />{/if}
   {#if accountOf(project) === 'personal'}<span class="chip" title="Uses claude-personal">personal</span>{/if}
+  {#if archivedOf(project)}<span class="chip" title="X unarchives">archived</span>{/if}
 </Header>
 
 {#if gone}

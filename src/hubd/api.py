@@ -94,6 +94,7 @@ class ChatChange(BaseModel):
 class ProjectChange(BaseModel):
     workspace: int | None = Field(None, ge=2, le=9)  # None: its runs open anywhere
     account: Literal["claude", "personal"] | None = None  # only the fields sent are changed
+    archived: bool | None = None
 
 
 class PermissionAnswer(BaseModel):
@@ -211,8 +212,10 @@ def create_app(
             await hub.set_workspace(project, body.workspace)
         if body.account:
             await hub.set_account(project, body.account)
+        if body.archived is not None:
+            await hub.set_archived(project, body.archived)
         p = hub.index.projects[project]
-        return {"workspace": p.workspace, "account": p.account}
+        return {"workspace": p.workspace, "account": p.account, "archived": p.archived}
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:

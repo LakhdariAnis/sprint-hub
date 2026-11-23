@@ -22,6 +22,7 @@ def test_projects(hub: Hub) -> None:
             "account": "claude",
             "model": "sonnet",
             "merge": "manual",
+            "archived": False,
             "repo_missing": False,
         },
         {
@@ -33,6 +34,7 @@ def test_projects(hub: Hub) -> None:
             "account": "claude",
             "model": "sonnet",
             "merge": "manual",
+            "archived": False,
             "repo_missing": False,
         },
     ]

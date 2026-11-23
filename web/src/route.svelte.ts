@@ -2,6 +2,7 @@ export type Route =
   | { name: 'chat'; id?: string }
   | { name: 'today' }
   | { name: 'projects' }
+  | { name: 'archived' }
   | { name: 'project'; project: string }
   | { name: 'step'; project: string; id: string }
   | { name: 'review'; project?: string; id?: string }
@@ -13,6 +14,7 @@ export function parse(hash: string): Route {
   if (!a || a === 'chat') return { name: 'chat', id: b || undefined }
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
+  if (a === 'archived') return { name: 'archived' }
   if (a === 'questions') return { name: 'questions' }
   if (a === 'settings') return { name: 'settings' }
   if (a === 'review') return { name: 'review', project: b, id: c }

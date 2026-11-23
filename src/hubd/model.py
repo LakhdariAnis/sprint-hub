@@ -41,6 +41,7 @@ class Project(BaseModel):
     )
     model: str
     merge: Merge
+    archived: bool = False  # hidden from the Projects list until "show archived"
 
 
 class Task(BaseModel):

@@ -23,6 +23,7 @@ const SCREENS: [string, string, string][] = [
   ['New chat', '#/chat', 'n'],
   ['Today', '#/today', 'g t'],
   ['Projects', '#/projects', 'g p'],
+  ['Archived projects', '#/archived', 'a on Projects'],
   ['Review', '#/review', 'g r'],
   ['Questions', '#/questions', 'g q'],
   ['Settings', '#/settings', 'g s'],

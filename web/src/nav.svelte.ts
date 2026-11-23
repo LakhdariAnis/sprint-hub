@@ -26,7 +26,7 @@ const cached = (have: unknown, load: () => Promise<unknown>) => (have ? (load().
 const projects = () => cached(lists.projects, () => loadProjects().then((d) => (lists.projects = d)))
 
 function data(r: Route): Promise<unknown> {
-  if (r.name === 'projects' || r.name === 'today') return projects()
+  if (r.name === 'projects' || r.name === 'archived' || r.name === 'today') return projects()
   // The workspace chip of a project and of its steps comes from the project rows.
   if (r.name === 'project') return Promise.all([cached(lists.steps[r.project], () => loadProject(r.project)), projects()])
   if (r.name === 'step') {

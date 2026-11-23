@@ -7,7 +7,10 @@
   import { lists } from '../store.svelte'
 
   // Loaded before the screen shows (nav.svelte.ts): none here means that load failed.
-  const rows = $derived(lists.projects ?? [])
+  // Archived (done) projects only show on #/archived.
+  let { archived = false }: { archived?: boolean } = $props()
+  const shelved = $derived((lists.projects ?? []).filter((r) => r.archived).length)
+  const rows = $derived((lists.projects ?? []).filter((r) => r.archived === archived))
 
   const open = (id: string) => (location.hash = `#/projects/${encodeURIComponent(id)}`)
   let sel = $state(0)
@@ -16,7 +19,7 @@
     void sel
     document.querySelector('.body .lr.f')?.scrollIntoView({ block: 'nearest' })
   })
-  useKeys({ j: () => move(1), k: () => move(-1), Enter: () => rows[sel] && open(rows[sel].id) })
+  useKeys({ j: () => move(1), k: () => move(-1), Enter: () => rows[sel] && open(rows[sel].id), a: () => !archived && (location.hash = '#/archived'), Escape: () => archived && (location.hash = '#/projects') })
 
   // The canvas tile: two letters from the name, one colour per row so projects tell apart at a glance.
   const tile = ['g', 'ac', 'm', 'y']
@@ -28,8 +31,8 @@
 </script>
 
 <Header>
-  {#snippet crumb()}{rows.length} projects · {active} with runs active{/snippet}
-  Projects
+  {#snippet crumb()}{#if archived}<a href="#/projects">Projects</a> › archived{:else}{rows.length} projects · {active} with runs active{/if}{/snippet}
+  {archived ? 'Archived projects' : 'Projects'}
 </Header>
 
 {#if !lists.projects}
@@ -37,7 +40,7 @@
 {:else}
   <div class="body">
     <section class="pn f">
-      <div class="ph">All projects<span class="n">{rows.length}</span><span class="r"><span class="kb">↵</span> open</span></div>
+      <div class="ph">{archived ? 'Archived' : 'All projects'}<span class="n">{rows.length}</span><span class="r">{#if archived}<span class="kb">Esc</span> back · {:else}<a href="#/archived"><span class="kb">a</span> archived ({shelved})</a> · {/if}<span class="kb">↵</span> open</span></div>
       <div class="lh grid"><span></span><span>project</span><span class="where">where</span><span>progress</span><span class="c">run</span><span class="c">review</span><span class="c">todo</span></div>
       {#each rows as r, i (r.id)}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -52,13 +55,15 @@
           <span class="num" class:z={!r.todo}>{r.todo}</span>
         </div>
       {:else}
+        {#if archived}<p class="dim pad">No archived projects. Press X on a project to archive it.</p>{:else}
         <div class="first">
           <p><b>{hub.vaultFound ? 'The vault has no projects.' : `No vault at ${hub.vault}.`}</b></p>
           <p>Create it from the projects in <span class="mono">~/.config/sprint-hub/projects.toml</span>. Run in the sprint-hub folder:</p>
           <p class="cmd"><code>uv run hubd init</code> <Copy text="uv run hubd init" label="command" /></p>
         </div>
+        {/if}
       {/each}
-      {#if rows.some((r) => !r.total)}
+      {#if !archived && rows.some((r) => !r.total)}
         <div class="first">
           <p><b>{rows.every((r) => !r.total) ? 'No steps yet.' : 'Some projects have no steps yet.'}</b> Make them from the specs in each repo's <span class="mono">sprint/</span> folder:</p>
           <p class="cmd"><code>uv run hubd import</code> <Copy text="uv run hubd import" label="command" /></p>

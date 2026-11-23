@@ -148,9 +148,12 @@ export async function setWorkspace(project: string, workspace: number | null): P
 }
 
 // `A`: switch the project's Claude login (`claude` or `personal`); the reason when hubd refuses.
-export async function setAccount(project: string, account: string): Promise<string | null> {
+export const setAccount = (project: string, account: string) => patchProject(project, { account })
+export const setArchived = (project: string, archived: boolean) => patchProject(project, { archived })
+
+async function patchProject(project: string, change: object): Promise<string | null> {
   try {
-    const r = await fetch(`/projects/${encodeURIComponent(project)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ account }) })
+    const r = await fetch(`/projects/${encodeURIComponent(project)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(change) })
     if (r.ok) return null
     const reply = await r.json().catch(() => null)
     return typeof reply?.detail === 'string' ? reply.detail : `hubd answered ${r.status}`

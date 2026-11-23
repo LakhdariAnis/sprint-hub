@@ -20,5 +20,6 @@ export const lists = $state({ projects: null as Row[] | null, steps: {} as Recor
 export const etas = $state<Record<string, Eta | null>>({})
 
 // The Hyprland workspace of a project's runs; null when it has none or the rows are not loaded.
+export const archivedOf = (project: string) => !!lists.projects?.find((p) => p.id === project)?.archived
 export const accountOf = (project: string) => lists.projects?.find((p) => p.id === project)?.account ?? 'claude'
 export const workspaceOf = (project: string) => lists.projects?.find((p) => p.id === project)?.workspace ?? null

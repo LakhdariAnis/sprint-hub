@@ -20,7 +20,7 @@
   // The screen on show, not the URL: the frame swaps with the screen.
   const r = $derived(nav.route ?? router.route)
   // A project screen belongs to the Projects tab; a step screen to its OPEN entry.
-  const active = $derived(r.name === 'project' ? 'projects' : r.name)
+  const active = $derived(r.name === 'project' || r.name === 'archived' ? 'projects' : r.name)
   const here = $derived(r.name === 'step' ? `${r.project}/${r.id}` : r.name === 'chat' ? (r.id ?? '') : '')
   const open = $derived(rows())
   // The chat on show has no vault entry yet (not sent): its row says `new`.

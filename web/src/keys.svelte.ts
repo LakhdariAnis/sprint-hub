@@ -6,7 +6,16 @@ import { focusProject } from './steps'
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
-export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null, notice: null as { text: string; bad: boolean } | null })
+export const keys = $state({ help: false, errors: false, palette: false, pending: false, rail: saved, shown: null as string | null, notice: null as { text: string; bad: boolean } | null, confirm: null as Ask | null })
+// A yes / no popup (Confirm.svelte): y or Enter runs `run`, n or Esc closes; every other key waits.
+export type Ask = { title: string; text: string; yes: string; run: () => void }
+export const ask = (a: Ask) => (keys.confirm = a)
+export function answer(yes: boolean) {
+  const a = keys.confirm
+  keys.confirm = null
+  if (yes) a?.run()
+}
+
 export function toggleRail() {
   keys.rail = !keys.rail
   try { localStorage.setItem(railKey, keys.rail ? '1' : '0') } catch {}
@@ -84,6 +93,11 @@ addEventListener('hashchange', () => {
 addEventListener('keydown', (e) => {
   // The palette's box has its own keys.
   if (keys.palette) return
+  if (keys.confirm) {
+    if (e.key === 'y' || e.key === 'Enter') answer(true)
+    else if (e.key === 'n' || e.key === 'Escape') answer(false)
+    return e.preventDefault()
+  }
   // Ctrl+K opens it, also from a box.
   if (e.ctrlKey && !e.shiftKey && !e.metaKey && !e.altKey && (e.key.toLowerCase() === 'k' || e.code === 'KeyK')) {
     keys.palette = true

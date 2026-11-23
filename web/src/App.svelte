@@ -13,6 +13,7 @@
   import Settings from './screens/Settings.svelte'
   import Today from './screens/Today.svelte'
   import Errors from './Errors.svelte'
+  import Confirm from './Confirm.svelte'
   import Help from './Help.svelte'
   import Palette from './Palette.svelte'
   import Sidebar from './Sidebar.svelte'
@@ -24,6 +25,7 @@
 
 <div class="app">
   <Help />
+  <Confirm />
   <Errors />
   <Palette />
   <Sidebar />
@@ -43,6 +45,7 @@
       {:else if r.name === 'questions'}<Questions />
       {:else if r.name === 'settings'}{#if sx.settings && sx.doctor}<Settings />{:else}<p style="padding: 12px 16px; margin: 0; color: var(--fgd)">Cannot load settings. Is hubd running?</p>{/if}
       {:else if r.name === 'projects'}<Projects />
+      {:else if r.name === 'archived'}<Projects archived />
       {:else if r.name === 'project'}<Project project={r.project} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
       {:else}<Review project={r.project} id={r.id} />{/if}
