@@ -267,3 +267,92 @@ class GraphifyGraph:
 
     def reason(self, project: str) -> str | None:
         return self._reasons.get(project)
+
+
+# The demo project's code (`hubd --demo`): (id, label, file, line, group),
+# then (source, target, relation).
+FAKE_NODES = [
+    ("src_api", "api.py", "src/api.py", 1, 0),
+    ("src_api_serve", "serve()", "src/api.py", 8, 0),
+    ("src_api_list_items", "list_items()", "src/api.py", 14, 0),
+    ("src_ui", "ui.py", "src/ui.py", 1, 1),
+    ("src_ui_draw_list", "draw_list()", "src/ui.py", 5, 1),
+    ("src_ui_sort_items", "sort_items()", "src/ui.py", 12, 1),
+    ("src_store", "store.py", "src/store.py", 1, 2),
+    ("src_store_load", "load()", "src/store.py", 4, 2),
+    ("src_store_save", "save()", "src/store.py", 10, 2),
+    ("fastapi", "fastapi", "", None, 0),
+]
+FAKE_LINKS = [
+    ("src_api", "src_api_serve", "contains"),
+    ("src_api", "src_api_list_items", "contains"),
+    ("src_ui", "src_ui_draw_list", "contains"),
+    ("src_ui", "src_ui_sort_items", "contains"),
+    ("src_store", "src_store_load", "contains"),
+    ("src_store", "src_store_save", "contains"),
+    ("src_api", "fastapi", "imports"),
+    ("src_api", "src_store", "imports_from"),
+    ("src_ui", "src_api", "imports_from"),
+    ("src_api_serve", "src_api_list_items", "calls"),
+    ("src_api_list_items", "src_store_load", "calls"),
+    ("src_ui_draw_list", "src_api_list_items", "calls"),
+    ("src_ui_draw_list", "src_ui_sort_items", "calls"),
+]
+FAKE_GROUPS = {0: "api", 1: "ui", 2: "store"}
+FAKE_REPORT = "# Graph Report - demo\n\n## God Nodes\n1. `list_items()` - 4 edges\n"
+
+
+class FakeGraph:
+    """A fixed graph for tests and `hubd --demo`: no graphify, the same graph for every project."""
+
+    def __init__(self) -> None:
+        data = {
+            "nodes": [
+                {"id": i, "label": label, "source_file": f, "source_location": line and f"L{line}",
+                 "community": g, "community_name": FAKE_GROUPS[g]}
+                for i, label, f, line, g in FAKE_NODES
+            ],
+            "links": [{"source": s, "target": t, "relation": r} for s, t, r in FAKE_LINKS],
+            "built_at_commit": None,
+        }  # fmt: skip
+        self.graph = parse(data, "2026-11-25T09:00:00+00:00")
+
+    def build(self, project_path: str | Path, project: str | None = None) -> Built:
+        return Built(len(self.graph.nodes), len(self.graph.links))
+
+    def load(self, project: str) -> Graph | None:
+        return self.graph
+
+    def affected(self, project: str, node: str, depth: int = 2) -> list[tuple[str, str]]:
+        found: dict[str, str] = {}
+        level = {node}
+        for _ in range(depth):
+            reached = {}
+            for e in self.graph.links:
+                if e.target in level and e.source != node and e.source not in found:
+                    reached.setdefault(e.source, e.relation)
+            found |= reached
+            level = set(reached)
+        return list(found.items())
+
+    def path(self, project: str, a: str, b: str) -> list[str]:
+        came: dict[str, str | None] = {a: None}
+        queue = [a]
+        for here in queue:
+            if here == b:
+                ids = [b]
+                while (prev := came[ids[-1]]) is not None:
+                    ids.append(prev)
+                return ids[::-1]
+            for e in self.graph.links:
+                for x, y in ((e.source, e.target), (e.target, e.source)):
+                    if x == here and y not in came:
+                        came[y] = here
+                        queue.append(y)
+        return []
+
+    def report(self, project: str) -> str:
+        return FAKE_REPORT
+
+    def reason(self, project: str) -> str | None:
+        return None

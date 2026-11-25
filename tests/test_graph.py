@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from hubd.graph import Built, GraphError, GraphifyGraph, parse, read
+from hubd.graph import Built, FakeGraph, GraphError, GraphifyGraph, parse, read
 
 FIXTURE = Path(__file__).parent / "fixtures" / "graphify" / "graph.json"
 RAW = json.loads(FIXTURE.read_text())
@@ -156,3 +156,34 @@ def test_no_path_is_an_empty_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     source = fixture_source(tmp_path)
     fake_graphify(tmp_path, monkeypatch, "echo \"No path found between 'a' and 'b'.\"")
     assert source.path("p", "a", "b") == []
+
+
+def test_fake_graph_serves_the_demo_project_without_graphify(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    source = FakeGraph()
+    graph = source.load("demo")
+    assert graph is not None and graph.groups == {0: "api", 1: "ui", 2: "store"}
+    assert source.build("~/demo-repo") == Built(len(graph.nodes), len(graph.links))
+    load = next(n for n in graph.nodes if n.id == "src_store_load")
+    assert (load.file, load.line, load.degree) == ("src/store.py", 4, 2)
+    assert dict(source.affected("demo", "src_store_load")) == {
+        "src_api_list_items": "calls",
+        "src_store": "contains",
+        "src_api_serve": "calls",
+        "src_ui_draw_list": "calls",
+        "src_api": "contains",
+    }
+    assert source.affected("demo", "src_store_load", depth=1) == [
+        ("src_store", "contains"),
+        ("src_api_list_items", "calls"),
+    ]
+    assert source.path("demo", "src_ui_sort_items", "src_store_load") == [
+        "src_ui_sort_items",
+        "src_ui_draw_list",
+        "src_api_list_items",
+        "src_store_load",
+    ]
+    assert source.path("demo", "src_store_save", "nope") == []
+    assert source.report("demo").startswith("# Graph Report") and source.reason("demo") is None
