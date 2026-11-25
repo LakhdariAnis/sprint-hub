@@ -472,7 +472,7 @@ for (const [w, h] of [[743, 730], [743, 540], [960, 540], [960, 1080], [1920, 10
       for (const s of SCREENS) {
         await page.goto(`/#/${s}`)
         await expect(page.locator('main')).toHaveAttribute('data-shown', `#/${s}`) // not the screen before
-        await expect(page.locator('main .ph').first()).toBeVisible()
+        await expect(page.locator(s === 'chat' ? 'main textarea' : 'main .ph').first()).toBeVisible() // the chat has no pane header
         expect(await layoutFaults(page), s).toEqual([])
         expect(await noPageScroll(page), s).toBe(true)
       }
