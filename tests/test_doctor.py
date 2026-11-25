@@ -52,13 +52,17 @@ def settings(tmp_path: Path, data: dict) -> Path:
 
 def test_all_good(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     fake_claude(tmp_path, monkeypatch, HELP)
+    graphify = tmp_path / "bin" / "graphify"
+    graphify.write_text("#!/bin/sh\necho graphify 0.9.120\n")
+    graphify.chmod(0o755)
     path = settings(tmp_path, install.with_hook({}))
     assert doctor.main(path, THEME) == 0
     out = capsys.readouterr().out.splitlines()
     assert out.pop() == "ℹ hubd service: not installed"  # info line, never a failure
     assert all(line.startswith("✔") for line in out)
     assert "✔ version 9.9.9 (Claude Code)" in out
-    assert len(out) == 10  # path, version, 3 flags, 3 hooks, theme, terminal
+    assert f"✔ graphify 0.9.120 at {graphify}" in out
+    assert len(out) == 11  # path, version, 3 flags, 3 hooks, theme, graphify, terminal
 
 
 def test_missing_flag(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
@@ -78,6 +82,7 @@ def test_no_claude_and_no_hook(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
         "✘ Stop hook missing: run hubd install-hook",
         "✘ Notification hook missing: run hubd install-hook",
         f"✘ theme {tmp_path / 'colors.toml'} not found: the app uses its default colours",
+        "⚠ warning: graphify not on PATH: project graphs cannot be built",
         "✘ terminal claude not on PATH",
         "ℹ hubd service: not installed",
     ]

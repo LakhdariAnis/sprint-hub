@@ -47,6 +47,17 @@ def _theme(path: Path) -> tuple[bool, str]:
     return False, f"theme {path} not found: the app uses its default colours"
 
 
+def _graphify() -> tuple[bool, str]:
+    """Not a failure when missing: the code graph is opt-in per project (ADR 0004)."""
+    exe = shutil.which("graphify")
+    if exe is None:
+        return True, f"{WARNING} graphify not on PATH: project graphs cannot be built"
+    try:
+        return True, f"{_run(exe, '--version').strip()} at {exe}"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, f"graphify does not run: {exc}"
+
+
 def _terminal(vault: Path) -> tuple[bool, str]:
     try:
         exe = load_settings(vault / "hub.toml").terminal[0]
@@ -109,6 +120,7 @@ def report(
     results = [
         *checks(settings),
         _theme(theme_file),
+        _graphify(),
         _terminal(vault),
         *_commands(vault),
         *_workspaces(vault),
