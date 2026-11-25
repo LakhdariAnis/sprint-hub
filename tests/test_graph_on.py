@@ -4,6 +4,9 @@ import asyncio
 import threading
 from pathlib import Path
 
+import pytest
+from test_approve import repo  # noqa: F401 (fixture)
+
 from hubd.daemon import Hub
 from hubd.graph import Built, FakeGraph
 from hubd.notify import NullNotifier
@@ -122,3 +125,42 @@ def test_status_of_a_graph_built_before_hubd_started(vault: Path) -> None:
     assert hub.graphs == {
         "demo": {"state": "built", "nodes": 10, "at": "2026-11-25T09:00:00+00:00"}
     }
+
+
+def test_run_end_builds(vault: Path) -> None:
+    turn_on(vault)
+    graph = Counting()
+    hub, _ = make(vault, graph)
+
+    async def main() -> None:
+        await hub.run_ended("3f2a…c91", "102")  # 102 is `doing` in the fixture
+        await settle(hub)
+
+    asyncio.run(main())
+    assert graph.calls == [(vault / "demo-repo", "demo")]
+
+
+def test_run_end_with_graph_off_builds_nothing(vault: Path) -> None:
+    graph = Counting()
+    hub, _ = make(vault, graph)
+
+    async def main() -> None:
+        await hub.run_ended("3f2a…c91", "102")
+        await settle(hub)
+
+    asyncio.run(main())
+    assert graph.calls == []
+
+
+@pytest.mark.usefixtures("repo")
+def test_approve_and_merge_builds(vault: Path) -> None:
+    turn_on(vault)
+    graph = Counting()
+    hub, _ = make(vault, graph)
+
+    async def main() -> None:
+        await hub.approve("demo", "103")
+        await settle(hub)
+
+    asyncio.run(main())
+    assert graph.calls == [(vault / "demo-repo", "demo")]

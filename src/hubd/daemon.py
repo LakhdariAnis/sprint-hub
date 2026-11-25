@@ -778,6 +778,7 @@ class Hub:
         save_step(entry.path, new)
         entry.step = new
         self.emit({"type": "step", **step_json(entry)})
+        self.rebuild(entry.project)
         return new
 
     async def approve(
@@ -808,6 +809,8 @@ class Hub:
             save_step(entry.path, new)
             entry.step = new
             self.emit({"type": "step", **step_json(entry)})
+            if commit:
+                self.rebuild(project)
             if repo:
                 await asyncio.to_thread(self._write_time, project, repo, new, commit)
             return new, commit
