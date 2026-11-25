@@ -66,3 +66,19 @@ run on a copy in the scratchpad so the project stays clean). The project has 50 
 0.5.0 adds a 5th new tool (graphify), against rule 2's max two. The other four are the phone tools: Syncthing with
 Obsidian, and ntfy over Tailscale (ADRs 0002 and 0003, step 704). Sprint 6.5 (this ADR's feature) runs inside 0.5.0 and Sprint 7 pauses after 701.
 TODO(Anis): why the exception is worth it.
+
+## Decision
+TODO(Anis)
+
+Questions for Anis:
+- Which option do you pick, and is it for all projects or only the ones where you turn the graph on?
+- Is 0.5.0 the right place for a 5th new tool, or does graphify get its own version?
+- If graphify drops `.ino` and a new release changes its format, do you still keep it, or fall back to option 1?
+
+## Why
+TODO(Anis)
+
+Questions for Anis:
+- What does a graph give you that `rg` plus Claude reading files does not, in one sentence you could say in an interview?
+- What does it cost you: a Python tool you do not control, a format you follow, the `.ino` gap?
+- What would make you cut graphify from 0.5.0 (rule 2: if the ADR can't justify the tool, cut the feature)?
