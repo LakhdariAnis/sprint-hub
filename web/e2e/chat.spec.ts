@@ -470,3 +470,62 @@ test('Claude answered pops up when the window looks elsewhere, not when it shows
   await page.evaluate(() => (location.hash = '#/today')) // reports "no chat shown"
   await expect.poll(async () => (await popups()).slice(before), { timeout: 20_000 }).toEqual([{ title: 'Claude answered', body: 'stall away' }])
 })
+
+// Step 652: the home state, the soft card, the floating menu.
+test('home: greeting and box in the middle, round chips; the box moves to the bottom after the first send', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/#/chat')
+  const hi = page.getByText('What are we working on?')
+  const form = page.locator('form.cmp')
+  await expect(hi).toBeVisible()
+  await expect(hi).toHaveCSS('font-size', '36px')
+  await expect(page.locator('.starter')).toHaveText(['/project', '/sprint', '/step'])
+  await expect(page.locator('.starter').first()).toHaveCSS('border-radius', '999px')
+  const mid = async () => {
+    const f = (await form.boundingBox())!, b = (await page.locator('.body').boundingBox())!
+    return (f.y + f.height / 2 - b.y) / b.height
+  }
+  expect(await mid()).toBeGreaterThan(0.35)
+  expect(await mid()).toBeLessThan(0.65)
+  expect((await hi.boundingBox())!.y).toBeLessThan((await page.locator('.box').boundingBox())!.y)
+  await expect(page.locator('.meta')).toBeHidden() // no chat yet: the pills say model and project
+
+  await page.locator('.starter', { hasText: '/sprint' }).click() // the menu opens above the box with the options column ready
+  const menu = page.locator('.menu')
+  await expect(menu).toBeVisible()
+  await expect(menu).toHaveCSS('border-radius', '14px')
+  await expect(menu).not.toHaveCSS('box-shadow', 'none')
+  expect((await menu.boundingBox())!.y + (await menu.boundingBox())!.height).toBeLessThanOrEqual((await page.locator('.box').boundingBox())!.y)
+  await page.keyboard.press('Escape')
+
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('say hi')
+  await box.press('Enter')
+  await expect(page.locator('.me', { hasText: 'say hi' })).toBeVisible()
+  await expect(page.locator('.starter')).toHaveCount(0)
+  await expect.poll(mid).toBeGreaterThan(0.85) // bottom of the page
+  await expect(page.locator('.meta')).toHaveText(/^sonnet · none$/)
+  await answered(page)
+  await expect(page.locator('.tl .ts').first()).toHaveText('✓')
+  await expect(page.locator('.tl').first()).toHaveCSS('border-top-width', '0px')
+  await expect(page.locator('.cost')).toHaveCSS('font-size', '12px')
+})
+
+test('the card is a soft block with a filled Allow; the chip sits inside the box', async ({ page }) => {
+  await page.goto('/#/chat')
+  await page.locator('.pill', { hasText: 'project' }).click()
+  await page.getByRole('listbox', { name: 'Options of /project' }).getByRole('option', { name: /demo/ }).click()
+  await expect(page.locator('.box .chip')).toBeVisible()
+  await expect(page.locator('.box .chip')).toHaveCSS('font-size', '12.5px')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('run ls')
+  await box.press('Enter')
+  const card = page.getByRole('group', { name: 'Permission: Bash' }).last()
+  await expect(card).toContainText('ls')
+  await expect(card).toHaveCSS('border-top-width', '0px')
+  await expect(card.getByRole('button', { name: 'Allow', exact: true })).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(card.getByRole('button', { name: 'Deny' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(page.locator('.meta')).toHaveText(/sonnet · demo/)
+  await page.keyboard.press('a')
+  await expect(card).toContainText('Allowed')
+})
