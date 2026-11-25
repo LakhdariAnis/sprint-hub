@@ -256,108 +256,105 @@
     {:else}{title || 'New chat'}{/if}
   </Header>
   <div class="body">
-    <section class="pn f">
-      <div class="ph"><span class="hk">c</span>Chat<span class="n">plain chat · no project</span></div>
-      <div class="log" bind:this={log} {onscroll}>
-        <div class="col">
-          {#if !turns.length && !failed && !title}
-            <div class="hi">What are we working on?</div>
-            <div class="dim">Just type. Or start from a project, a sprint or one step.</div>
-            <div class="starters">
-              {#each starters as [c, t, d]}
-                <button type="button" class="starter" onmousedown={(e) => e.preventDefault()} onclick={() => ask(c.slice(1))}><span class="c">{c}</span><span>{t}</span><span class="dim xs">{d}</span></button>
+    <div class="log" bind:this={log} {onscroll}>
+      <div class="col">
+        {#if !turns.length && !failed && !title}
+          <div class="hi">What are we working on?</div>
+          <div class="dim">Just type. Or start from a project, a sprint or one step.</div>
+          <div class="starters">
+            {#each starters as [c, t, d]}
+              <button type="button" class="starter" onmousedown={(e) => e.preventDefault()} onclick={() => ask(c.slice(1))}><span class="c">{c}</span><span>{t}</span><span class="dim xs">{d}</span></button>
+            {/each}
+          </div>
+        {/if}
+        {#if cid && chats[cid]?.earlier_hidden}<div class="dim xs" role="status">earlier turns not shown</div>{/if}
+        {#each turns as t, i}
+          <div class="turn" class:foc={i === sel} aria-current={i === sel ? 'true' : undefined}>
+            <div class="me">{t.me}</div>
+            {#each t.blocks as b}
+              {#if b.kind === 'text'}
+                <div class="ai"><Markdown text={b.text} /></div>
+              {:else if b.kind === 'tool'}
+                <div class="tool" class:open={b.open}>
+                  <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
+                    <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>
+                  </button>
+                  {#if b.open}
+                    <pre class="tin" aria-label="Input">{b.input}</pre>
+                    {#if b.result === undefined}<div class="dim xs">{t.done ? 'No result' : 'Running…'}</div>{:else}<pre class="tres" class:bad={b.error} aria-label="Result">{b.result || '(empty)'}</pre>{/if}
+                  {/if}
+                </div>
+              {:else}
+                {@const a = b}
+                <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
+                  <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
+                  <code class="tgt">{a.target}</code>
+                  {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
+                  {#if a === waiting}
+                    <div class="btns">
+                      <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
+                      <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
+                      {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
+                    </div>
+                    <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
+                  {:else}
+                    <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
+                  {/if}
+                </div>
+              {/if}
+            {/each}
+            {#if !t.blocks.length && !t.done}<div class="think">thinking…</div>{/if}
+            {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
+            {#if t.stopped}<div class="stopped" role="status">stopped</div>{/if}
+            {#if t.end && costLine(t.end)}<div class="cost dim xs">{costLine(t.end)}</div>{/if}
+          </div>
+        {/each}
+        {#if failed}<div class="err" role="alert">{failed}</div>{/if}
+      </div>
+    </div>
+    <form class="cmp" onsubmit={(e) => (e.preventDefault(), submit())}>
+      <div class="col rel">
+        {#if cmds.length}
+          <div class="menu" aria-label="Commands">
+            <div class="cmds" role="listbox" aria-label="Commands">
+              {#each cmds as c, i}
+                {@const [a, b] = split(c.name, q ?? '')}
+                <button type="button" tabindex="-1" role="option" aria-selected={i === at} class:on={i === at} class:foc={i === at && !col} onmousedown={(e) => e.preventDefault()} onclick={() => ((at = i), c.name === 'clear' ? clear() : toOptions())}>
+                  <span class="cn">/<u>{a}</u>{b}</span><span class="dim xs">{c.desc}</span>
+                </button>
               {/each}
             </div>
-          {/if}
-          {#if cid && chats[cid]?.earlier_hidden}<div class="dim xs" role="status">earlier turns not shown</div>{/if}
-          {#each turns as t, i}
-            <div class="turn" class:foc={i === sel} aria-current={i === sel ? 'true' : undefined}>
-              <div class="me">{t.me}</div>
-              {#each t.blocks as b}
-                {#if b.kind === 'text'}
-                  <div class="ai"><Markdown text={b.text} /></div>
-                {:else if b.kind === 'tool'}
-                  <div class="tool" class:open={b.open}>
-                    <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
-                      <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>
-                    </button>
-                    {#if b.open}
-                      <pre class="tin" aria-label="Input">{b.input}</pre>
-                      {#if b.result === undefined}<div class="dim xs">{t.done ? 'No result' : 'Running…'}</div>{:else}<pre class="tres" class:bad={b.error} aria-label="Result">{b.result || '(empty)'}</pre>{/if}
-                    {/if}
-                  </div>
-                {:else}
-                  {@const a = b}
-                  <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
-                    <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
-                    <code class="tgt">{a.target}</code>
-                    {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
-                    {#if a === waiting}
-                      <div class="btns">
-                        <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
-                        <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
-                        {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
-                      </div>
-                      <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
-                    {:else}
-                      <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
-                    {/if}
-                  </div>
-                {/if}
+            <div class="cmds" role="listbox" aria-label="Options of /{cmd?.name}">
+              {#each opts as o, i}
+                <button type="button" tabindex="-1" role="option" aria-selected={col === 1 && i === opt} class:on={col === 1 && i === opt} class:foc={col === 1 && i === opt} onmousedown={(e) => e.preventDefault()} onclick={() => choose(o)}>
+                  <span class="cn">{#if i < 9}<span class="dim num">{i + 1}</span>{/if}{o.label}</span><span class="dim xs">{o.value === current(cmd.name) ? 'current' : (o.desc ?? '')}</span>
+                </button>
+              {:else}
+                <div class="dim xs pad">{nothing ? (!view.project ? 'Pick a project first' : lists.steps[view.project] ? 'This project has no steps' : 'Loading steps…') : 'Enter clears the chat'}</div>
               {/each}
-              {#if !t.blocks.length && !t.done}<div class="think">thinking…</div>{/if}
-              {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
-              {#if t.stopped}<div class="stopped" role="status">stopped</div>{/if}
-              {#if t.end && costLine(t.end)}<div class="cost dim xs">{costLine(t.end)}</div>{/if}
             </div>
-          {/each}
-          {#if failed}<div class="err" role="alert">{failed}</div>{/if}
+          </div>
+        {/if}
+        {#if context}
+          <div class="chip" role="status"><span class="dim">context</span> {typeof context === 'string' ? `not loaded: ${context}` : chip(context)}</div>
+        {/if}
+        <div class="box">
+          <label class="sr" for="msg">Message</label>
+          <textarea id="msg" rows="2" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
+          <div class="hint">
+            {#if busy}<button type="button" class="stop" onclick={() => halt(true)}>Stop <span class="kb">Esc Esc</span></button>{/if}
+            <span><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</span>
+          </div>
+        </div>
+        <div class="pills">
+          <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
+          {#if pills.sprint}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
+          {#if pills.step}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
+          <button type="button" class="pill" onclick={() => ask('model')}><span class="dim">model</span> {view.model}</button>
+          <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
         </div>
       </div>
-      <form class="cmp" onsubmit={(e) => (e.preventDefault(), submit())}>
-        <div class="col rel">
-          {#if cmds.length}
-            <div class="menu" aria-label="Commands">
-              <div class="cmds" role="listbox" aria-label="Commands">
-                {#each cmds as c, i}
-                  {@const [a, b] = split(c.name, q ?? '')}
-                  <button type="button" tabindex="-1" role="option" aria-selected={i === at} class:on={i === at} class:foc={i === at && !col} onmousedown={(e) => e.preventDefault()} onclick={() => ((at = i), c.name === 'clear' ? clear() : toOptions())}>
-                    <span class="cn">/<u>{a}</u>{b}</span><span class="dim xs">{c.desc}</span>
-                  </button>
-                {/each}
-              </div>
-              <div class="cmds" role="listbox" aria-label="Options of /{cmd?.name}">
-                {#each opts as o, i}
-                  <button type="button" tabindex="-1" role="option" aria-selected={col === 1 && i === opt} class:on={col === 1 && i === opt} class:foc={col === 1 && i === opt} onmousedown={(e) => e.preventDefault()} onclick={() => choose(o)}>
-                    <span class="cn">{#if i < 9}<span class="dim num">{i + 1}</span>{/if}{o.label}</span><span class="dim xs">{o.value === current(cmd.name) ? 'current' : (o.desc ?? '')}</span>
-                  </button>
-                {:else}
-                  <div class="dim xs pad">{nothing ? (!view.project ? 'Pick a project first' : lists.steps[view.project] ? 'This project has no steps' : 'Loading steps…') : 'Enter clears the chat'}</div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-          {#if context}
-            <div class="chip" role="status"><span class="dim">context</span> {typeof context === 'string' ? `not loaded: ${context}` : chip(context)}</div>
-          {/if}
-          <div class="box">
-            <label class="sr" for="msg">Message</label>
-            <textarea id="msg" rows="2" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
-            <div class="hint">
-              {#if busy}<button type="button" class="stop" onclick={() => halt(true)}>Stop <span class="kb">Esc Esc</span></button>{/if}
-              <span><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</span>
-            </div>
-          </div>
-          <div class="pills">
-            <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
-            {#if pills.sprint}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
-            {#if pills.step}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
-            <button type="button" class="pill" onclick={() => ask('model')}><span class="dim">model</span> {view.model}</button>
-            <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
-          </div>
-        </div>
-      </form>
-    </section>
+    </form>
   </div>
 </div>
 
@@ -365,10 +362,10 @@
   .dim { color: var(--fgd); }
   .xs { font-size: 11px; }
   .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
-  .body { flex: 1; min-height: 0; padding: 8px 28px 22px; display: flex; flex-direction: column; }
-  .pn { flex: 1; }
-  .log { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 24px 12px; }
-  /* Everything in the pane sits in one centred column. */
+  /* One flat canvas under the header: the log scrolls, the box stays at the bottom. */
+  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .log { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 28px 12px; }
+  /* Everything sits in one centred column. */
   .col { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
   .hi { font-size: 20px; font-weight: 600; margin-bottom: -6px; }
   .starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
@@ -404,7 +401,7 @@
   .b.no { border-color: var(--r); }
   .k { font-family: var(--mono); color: var(--fgd); margin-right: 4px; }
   .err { padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); overflow-wrap: anywhere; }
-  .cmp { flex: none; padding: 0 24px 16px; }
+  .cmp { flex: none; padding: 0 28px 16px; }
   .box { border: 1px solid var(--ac); border-radius: 10px; background: var(--dk); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
   /* Chromium grows the box with its text (field-sizing); max-height is 8 lines, then it scrolls. */
   textarea { border: 0; background: none; resize: none; outline: none; width: 100%; padding: 0; font: inherit; font-size: 15px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 3em; max-height: 12em; overflow-y: auto; }
@@ -431,7 +428,6 @@
   .pad { padding: 5px 8px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   @container (max-width: 700px) {
-    .body { padding: 8px 12px 12px; }
     .log { padding: 16px 12px 8px; }
     .cmp { padding: 0 12px 12px; }
     .starters { grid-template-columns: 1fr; }
