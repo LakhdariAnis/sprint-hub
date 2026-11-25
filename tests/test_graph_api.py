@@ -59,3 +59,40 @@ def test_stale_when_commit_is_not_head(vault: Path, repo: Path) -> None:  # noqa
         "0" * 40, "2026-11-25T09:00:00+00:00",
     )  # fmt: skip
     assert c.get("/projects/demo/graph").json()["stale"] is True
+
+
+def test_affected_gives_ids_with_the_relation(vault: Path) -> None:
+    c, _ = client(vault)
+    body = c.get("/projects/demo/graph/affected", params={"node": "src_store_load"}).json()
+    got = {a["id"]: a["relation"] for a in body["affected"]}
+    assert got["src_api_list_items"] == "calls" and "src_ui_draw_list" in got
+    one = c.get("/projects/demo/graph/affected?node=src_store_load&depth=1").json()
+    assert {a["id"] for a in one["affected"]} == {"src_store", "src_api_list_items"}
+
+
+def test_affected_unknown_node_is_404(vault: Path) -> None:
+    c, _ = client(vault)
+    assert c.get("/projects/demo/graph/affected?node=nope").status_code == 404
+    assert c.get("/projects/demo/graph/affected?node=src_api&depth=0").status_code == 422
+
+
+def test_path_in_order_or_empty(vault: Path) -> None:
+    c, _ = client(vault)
+    url = "/projects/demo/graph/path"
+    assert c.get(url, params={"from": "src_ui_draw_list", "to": "src_store_load"}).json() == {
+        "path": ["src_ui_draw_list", "src_api_list_items", "src_store_load"]
+    }
+    assert c.get(url, params={"from": "src_api", "to": "fastapi"}).json()["path"] == [
+        "src_api",
+        "fastapi",
+    ]
+    assert c.get(url, params={"from": "src_api", "to": "nope"}).status_code == 404
+
+
+def test_path_off_and_failed(vault: Path) -> None:
+    c, hub = client(vault, on=False)
+    assert c.get("/projects/demo/graph/affected?node=x").status_code == 404
+    save_graph(vault / "projects" / "demo" / "project.md", True)
+    hub._reload_all()
+    hub.graphs["demo"] = {"state": "failed", "reason": "boom"}
+    assert c.get("/projects/demo/graph/path?from=a&to=b").status_code == 503

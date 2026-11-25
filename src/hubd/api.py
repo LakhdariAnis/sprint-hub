@@ -264,6 +264,24 @@ def create_app(
             "stale": bool(graph.commit and head and graph.commit != head),
         }
 
+    def known(graph: Graph, *ids: str) -> None:
+        for i in ids:
+            if all(n.id != i for n in graph.nodes):
+                raise NotFound(f"no node {i} in the graph")
+
+    @app.get("/projects/{project}/graph/affected")
+    async def graph_affected(
+        project: str, node: str, depth: Annotated[int, Query(ge=1, le=5)] = 2
+    ) -> dict:
+        known(project_graph(project), node)
+        found = await asyncio.to_thread(hub.graph.affected, project, node, depth)
+        return {"node": node, "affected": [{"id": i, "relation": r} for i, r in found]}
+
+    @app.get("/projects/{project}/graph/path")
+    async def graph_path(project: str, from_: Annotated[str, Query(alias="from")], to: str) -> dict:
+        known(project_graph(project), from_, to)
+        return {"path": await asyncio.to_thread(hub.graph.path, project, from_, to)}
+
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
         if project not in hub.index.projects:
