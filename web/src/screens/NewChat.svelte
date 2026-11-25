@@ -373,7 +373,20 @@
   .starter:hover, .starter:focus-visible { border-color: var(--ac); outline: none; }
   .starter .c { font: 700 13px var(--mono); color: var(--ac); }
   .me { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 10px; background: var(--sel); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .ai { min-width: 0; }
+  /* Claude's text: the reading font. The rules reach into Markdown (scoped here: the Spec view keeps its look); code stays mono. */
+  .ai { min-width: 0; font: 400 17.5px/1.72 var(--read); max-width: 68ch; }
+  .ai :global(.md) { line-height: inherit; }
+  .ai :global(p) { margin: 0 0 0.85em; }
+  .ai :global(.md > :last-child) { margin-bottom: 0; }
+  .ai :global(.h) { font-family: var(--read); line-height: 1.4; margin: 1.1em 0 0.35em; }
+  .ai :global(.h1) { font-size: 1.25em; }
+  .ai :global(.h2) { font-size: 1.12em; }
+  .ai :global(.h3) { font-size: 1.02em; }
+  .ai :global(ul), .ai :global(ol) { margin: 0 0 0.85em; padding-left: 1.4em; }
+  .ai :global(li) { margin: 0.2em 0; }
+  .ai :global(b) { font-weight: 600; }
+  .ai :global(p code), .ai :global(li code), .ai :global(td code), .ai :global(th code) { font-size: 0.82em; }
+  .ai :global(table) { font-size: 0.85em; }
   pre { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--dk); border: 1px solid var(--sel); font: 13px/1.5 var(--mono); overflow-x: auto; }
   .think { color: var(--fgd); font-size: 13px; }
   .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 10px; margin-left: -10px; }
