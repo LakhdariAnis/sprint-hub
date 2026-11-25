@@ -23,6 +23,7 @@ def test_projects(hub: Hub) -> None:
             "model": "sonnet",
             "merge": "manual",
             "archived": False,
+            "graph": False,
             "repo_missing": False,
         },
         {
@@ -35,6 +36,7 @@ def test_projects(hub: Hub) -> None:
             "model": "sonnet",
             "merge": "manual",
             "archived": False,
+            "graph": False,
             "repo_missing": False,
         },
     ]
