@@ -287,10 +287,10 @@
                   {#if a === waiting}
                     <div class="btns">
                       <button type="button" class="b ok" onclick={() => decide('allow')}><span class="k" aria-hidden="true">a</span> Allow</button>
-                      <button type="button" class="b no" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
+                      <button type="button" class="b" onclick={() => decide('deny')}><span class="k" aria-hidden="true">d</span> Deny</button>
                       {#if a.wide}<button type="button" class="b" onclick={() => decide('chat')}><span class="k" aria-hidden="true">A</span> Allow for this chat</button>{/if}
+                      <span class="note dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</span>
                     </div>
-                    <div class="dim xs">Claude waits. No answer in 10 min denies it. a d A work in the box while it is empty.</div>
                   {:else}
                     <div class="dim xs" role="status">{a.refused ? `Refused: ${a.refused}` : a.answer ? outcome[a.answer] ?? a.answer : t.done ? 'Not answered' : 'Waiting for the card above'}</div>
                   {/if}
@@ -414,19 +414,20 @@
   .tn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tin, .tres { max-height: 20em; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .tres.bad { border-color: var(--r); }
-  .ask { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
-  .ask.open { border-color: var(--ac); }
+  .ask { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--lt); border-radius: 12px; min-width: 0; }
   .tname { font: 700 13px var(--mono); }
   .tgt { font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .diff { max-height: 16em; overflow: auto; }
   .diff .add { color: var(--g); }
   .diff .del { color: var(--r); }
-  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
-  .b { font: inherit; font-size: 13px; padding: 4px 12px; border: 1px solid var(--sel); border-radius: 6px; background: none; color: inherit; cursor: pointer; }
-  .b:hover, .b:focus-visible { border-color: var(--ac); outline: none; }
-  .b.ok { border-color: var(--g); }
-  .b.no { border-color: var(--r); }
+  .btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .note { margin-left: auto; text-align: right; min-width: 0; }
+  .b { font: inherit; font-size: 13px; padding: 4px 12px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+  .b:hover, .b:focus-visible { background: var(--sel); outline: none; }
+  .b.ok { background: var(--ac); color: var(--bg); }
+  .b.ok:hover, .b.ok:focus-visible { background: var(--ac); outline: 2px solid var(--fg); outline-offset: 1px; }
   .k { font-family: var(--mono); color: var(--fgd); margin-right: 4px; }
+  .b.ok .k { color: inherit; opacity: 0.7; }
   .err { padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); overflow-wrap: anywhere; }
   .cmp { flex: none; padding: 0 28px 16px; }
   /* A raised box, as in the Claude app; the round button sits bottom right and turns into Stop while a turn runs. */
