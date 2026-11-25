@@ -150,6 +150,8 @@ export async function setWorkspace(project: string, workspace: number | null): P
 // `A`: switch the project's Claude login (`claude` or `personal`); the reason when hubd refuses.
 export const setAccount = (project: string, account: string) => patchProject(project, { account })
 export const setArchived = (project: string, archived: boolean) => patchProject(project, { archived })
+// `G`: the project's code graph on (hubd builds it now) or off.
+export const setGraph = (project: string, graph: boolean) => patchProject(project, { graph })
 
 async function patchProject(project: string, change: object): Promise<string | null> {
   try {

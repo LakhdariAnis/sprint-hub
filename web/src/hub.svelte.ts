@@ -102,6 +102,13 @@ function connect() {
     if (g.window === windowId) location.hash = g.hash
   })
   events.addEventListener('chats', () => loadSaved().catch(() => {}))
+  // A graph build started, ended or failed: the project's row carries the status its page shows.
+  for (const type of ['graph_building', 'graph_built', 'graph_failed'])
+    events.addEventListener(type, (e) => {
+      const { type: _, project, ...status } = JSON.parse(e.data)
+      const row = lists.projects?.find((p) => p.id === project)
+      if (row) row.graphStatus = status
+    })
   events.addEventListener('theme', (e) => applyTheme(JSON.parse(e.data)))
   // (Re)connected: events missed while hubd was away are gone, so re-read what the app shows.
   events.onopen = () => {

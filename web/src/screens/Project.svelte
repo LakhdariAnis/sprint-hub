@@ -12,8 +12,8 @@
   import { chatAbout } from '../chat.svelte'
   import { ask, jump, say, useKeys } from '../keys.svelte'
   import { tick, untrack } from 'svelte'
-  import { ACTUAL_MAX, PLANNED_MAX, agentHours, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setAccount, setArchived, setWorkspace, type Step } from '../steps'
-  import { accountOf, archivedOf, etas, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
+  import { ACTUAL_MAX, PLANNED_MAX, agentHours, ago, fmtHours, goal, groupBySprint, loadStep, needsWork, noEnd, setAccount, setArchived, setGraph, setWorkspace, type Step } from '../steps'
+  import { accountOf, archivedOf, etas, graphOf, graphStatusOf, key, lists, put, steps as store, workspaceOf } from '../store.svelte'
   import { watchEta } from '../hub.svelte'
   import { etaLine, factorNote } from '../week'
 
@@ -86,8 +86,29 @@
     archivedOf(project)
       ? ask({ title: `Unarchive ${project}?`, text: 'It goes back to the Projects list.', yes: 'Unarchive', run: toggleArchived })
       : ask({ title: `Archive ${project}?`, text: 'It leaves the Projects list. Its steps and files stay; Projects › archived keeps it and X there brings it back.', yes: 'Archive', run: toggleArchived })
+  // `G`: the code graph on or off. On, hubd builds it now; the row's status follows the graph_* events.
+  async function toggleGraph() {
+    const next = !graphOf(project)
+    const row = lists.projects?.find((p) => p.id === project)
+    if (row) (row.graph = next), next && (row.graphStatus = { state: 'building' })
+    const why = await setGraph(project, next)
+    if (why && row) (row.graph = !next), say(why, true)
+    else say(next ? `Graph of ${project} on: building it` : `Graph of ${project} off: hubd no longer builds it`)
+  }
+  const graphKey = () =>
+    graphOf(project)
+      ? ask({ title: `Turn the graph of ${project} off?`, text: 'hubd stops rebuilding it. The graph built so far stays on disk.', yes: 'Turn off', run: toggleGraph })
+      : ask({ title: `Turn the graph of ${project} on?`, text: 'hubd builds a code graph of the repo now (graphify, code only, no tokens) and again after each run and approve.', yes: 'Turn on', run: toggleGraph })
+  const gs = $derived(graphOf(project) ? graphStatusOf(project) : null)
+  // "2m ago" moves on by itself.
+  let now = $state(Date.now())
+  $effect(() => {
+    const t = setInterval(() => (now = Date.now()), 30_000)
+    return () => clearInterval(t)
+  })
   useKeys({
     W: editWorkspace,
+    G: graphKey,
     A: toggleAccount,
     X: archiveKey,
     j: () => move(1),
@@ -168,11 +189,14 @@
 {#if gone}
   <p class="gone">The repo {gone.path} does not exist. Steps cannot start until it is back or <span class="mono">repo:</span> is fixed in the project file.</p>
 {/if}
-{#if eta}
+{#if eta || gs}
   <div class="eta">
-    <span class="line">{etaLine(eta)}</span>
-    {#if factorNote(eta)}<span class="note">{factorNote(eta)}</span>{/if}
-    {#each eta.flags as f}<span class="flag">⚠ {f.text}</span>{/each}
+    {#if gs}<span class="graph" class:failed={gs.state === 'failed'} title="G turns the graph off">{gs.state === 'building' ? 'graph: building…' : gs.state === 'failed' ? `graph failed: ${gs.reason}` : `graph: ${gs.nodes} nodes · ${ago(gs.at, now)} ago`}</span>{/if}
+    {#if eta}
+      <span class="line">{etaLine(eta)}</span>
+      {#if factorNote(eta)}<span class="note">{factorNote(eta)}</span>{/if}
+      {#each eta.flags as f}<span class="flag">⚠ {f.text}</span>{/each}
+    {/if}
   </div>
 {/if}
 {#if !ids}
@@ -269,6 +293,7 @@
   /* Under the header: one line of ETA, its factor, and the sprints that are late or in the wrong week. Wraps, never cuts. */
   .eta { flex: none; display: flex; flex-wrap: wrap; gap: 2px 16px; padding: 0 28px 8px; font: 12.5px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
   .eta .line { color: var(--fg); }
+  .eta .graph.failed { color: var(--y); }
   .eta .flag { color: var(--y); }
   .pad { padding: 12px 16px; margin: 0; }
   /* Fixed fractions: the columns keep their width whatever is selected. */

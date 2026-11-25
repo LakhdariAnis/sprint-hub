@@ -18,6 +18,7 @@
     ['s', 'start the step (Step screen)'],
     ['w', 'jump to the Hyprland workspace of this project (Project, Step); `W` on Project sets it (2 to 9, empty = none), its number shows as a chip'],
     ['A', 'switch the Claude login of this project (Project): claude or claude-personal, for its runs and chats'],
+    ['G', 'code graph on / off for this project (Project): a popup asks; on builds it now and after each run and approve'],
     ['X', 'archive / unarchive this project (Project): a popup asks, y or Enter confirms, n or Esc cancels'],
     ['a', 'Projects: open the archived projects; Esc goes back'],
     ['W', 'set the Hyprland workspace of this project (Project): ↵ saves, empty clears, Esc leaves'],
