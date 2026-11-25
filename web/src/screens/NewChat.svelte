@@ -451,7 +451,7 @@
   .pill:hover:not(:disabled), .pill:focus-visible { border-color: var(--ac); outline: none; }
   .pill:disabled { cursor: default; opacity: 0.7; }
   /* Above the box; two columns, commands and the options of the one picked. */
-  .menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); display: grid; grid-template-columns: 1fr 1fr; max-height: min(280px, 45cqh); overflow-y: auto; background: var(--dk); border: 1px solid var(--sel); border-radius: 10px; z-index: 5; }
+  .menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); display: grid; grid-template-columns: 1fr 1fr; max-height: min(280px, 45cqh); overflow-y: auto; background: var(--dk); border: 1px solid var(--sel); border-radius: 14px; box-shadow: 0 10px 32px rgb(0 0 0 / 0.35); z-index: 5; }
   .cmds { display: flex; flex-direction: column; padding: 6px; min-width: 0; }
   .cmds + .cmds { border-left: 1px solid var(--sel); }
   .cmds button { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; font: inherit; color: inherit; background: none; border: 0; border-radius: 6px; padding: 5px 8px; text-align: left; cursor: pointer; min-width: 0; }
