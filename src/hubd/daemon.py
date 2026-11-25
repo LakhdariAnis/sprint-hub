@@ -5,7 +5,7 @@ import subprocess
 import time
 from collections.abc import Callable, Iterator
 from contextlib import aclosing, contextmanager, suppress
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from watchfiles import awatch
 from hubd import close, focus, importer, init, weeks
 from hubd.close import Closed
 from hubd.context import Context, build
+from hubd.graph import Built, FakeGraph, GraphSource
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
 from hubd.notify import Click, Notifier
@@ -89,6 +90,7 @@ class Hub:
         runner: Callable[[RunEnded], AgentRunner],
         notifier: Notifier,
         projects: Path | None = None,
+        graph: GraphSource | None = None,
     ):
         self.vault = vault = vault.resolve()  # watchfiles reports absolute paths
         self.projects_file = projects.resolve() if projects else None  # `projects.toml`
@@ -99,6 +101,13 @@ class Hub:
         self.clock = time.monotonic  # tests move it
         self.waited: dict[tuple[str, str], float] = {}  # (session, kind) -> last popup
         self.lock = asyncio.Lock()
+        self.graph = graph or FakeGraph()  # `hubd serve` passes GraphifyGraph
+        self.graphs: dict[str, dict] = {}  # project -> its graph's status, for its page
+        self.builds: dict[str, asyncio.Task[None]] = {}  # the one build running per project
+        self.again: set[str] = set()  # projects asked for while their build ran
+        for project, settings in self.index.projects.items():
+            if settings.graph and (g := self.graph.load(project)):
+                self.graphs[project] = {"state": "built", "nodes": len(g.nodes), "at": g.built_at}
         for entry in self.index.steps:  # a hook sent while hubd was down never arrived
             if entry.step.state == State.doing and entry.step.by == "claude":
                 runs = entry.step.runs
@@ -139,6 +148,45 @@ class Hub:
         async with self.lock:
             await asyncio.to_thread(save_archived, path, archived)
             self._reload_all()
+
+    def rebuild(self, project: str) -> None:
+        """Build the project's graph in the background if it has `graph: on`.
+
+        One build per project at a time; asks while it runs queue one more, never more.
+        """
+        settings = self.index.projects.get(project)
+        if not (settings and settings.graph):
+            return
+        if project in self.builds:
+            self.again.add(project)
+        else:
+            self.builds[project] = asyncio.create_task(self._build(project))
+
+    async def _build(self, project: str) -> None:
+        try:
+            while True:
+                self.again.discard(project)
+                self._graph_status(project, {"state": "building"})
+                repo = self.repo(project)
+                built = (
+                    await asyncio.to_thread(self.graph.build, repo, project)
+                    if repo
+                    else Built(reason="no repo: set repo: in its project.md")
+                )
+                if built.reason:
+                    self._graph_status(project, {"state": "failed", "reason": built.reason})
+                else:
+                    at = datetime.now(UTC).isoformat(timespec="seconds")
+                    self._graph_status(project, {"state": "built", "nodes": built.nodes, "at": at})
+                settings = self.index.projects.get(project)
+                if project not in self.again or not (settings and settings.graph):
+                    return
+        finally:
+            del self.builds[project]
+
+    def _graph_status(self, project: str, status: dict) -> None:
+        self.graphs[project] = status
+        self.emit({"type": f"graph_{status['state']}", "project": project, **status})
 
     def emit(self, event: dict) -> None:
         for queue in self.queues:
