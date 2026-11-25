@@ -25,6 +25,7 @@ def test_projects(hub: Hub) -> None:
             "archived": False,
             "graph": False,
             "repo_missing": False,
+            "graph_status": None,
         },
         {
             "id": "demo",
@@ -38,6 +39,7 @@ def test_projects(hub: Hub) -> None:
             "archived": False,
             "graph": False,
             "repo_missing": False,
+            "graph_status": None,
         },
     ]
 

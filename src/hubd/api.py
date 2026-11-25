@@ -17,6 +17,7 @@ from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, Valid
 from hubd import doctor, reminders, service, windows
 from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
+from hubd.graph import GraphifyGraph
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import Click, NotifySend
@@ -95,6 +96,7 @@ class ProjectChange(BaseModel):
     workspace: int | None = Field(None, ge=2, le=9)  # None: its runs open anywhere
     account: Literal["claude", "personal"] | None = None  # only the fields sent are changed
     archived: bool | None = None
+    graph: bool | None = None
 
 
 class PermissionAnswer(BaseModel):
@@ -198,7 +200,12 @@ def create_app(
     @app.get("/projects")
     def projects() -> list[dict]:
         return [
-            {"id": k, **p.model_dump(mode="json"), "repo_missing": hub.repo_missing(k)}
+            {
+                "id": k,
+                **p.model_dump(mode="json"),
+                "repo_missing": hub.repo_missing(k),
+                "graph_status": hub.graphs.get(k) if p.graph else None,
+            }
             for k, p in hub.index.projects.items()
         ]
 
@@ -214,8 +221,15 @@ def create_app(
             await hub.set_account(project, body.account)
         if body.archived is not None:
             await hub.set_archived(project, body.archived)
+        if body.graph is not None:
+            await hub.set_graph(project, body.graph)
         p = hub.index.projects[project]
-        return {"workspace": p.workspace, "account": p.account, "archived": p.archived}
+        return {
+            "workspace": p.workspace,
+            "account": p.account,
+            "archived": p.archived,
+            "graph": p.graph,
+        }
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
@@ -469,6 +483,7 @@ def serve_app() -> FastAPI:
         lambda _: ClaudeCodeRunner(current.settings.terminal, url),
         NotifySend(),
         projects=PROJECTS,
+        graph=GraphifyGraph(),
     )
     return create_app(
         hub,

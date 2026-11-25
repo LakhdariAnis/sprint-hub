@@ -36,6 +36,7 @@ from hubd.vault import (
     planned_hours,
     save_account,
     save_archived,
+    save_graph,
     save_sprint,
     save_step,
     save_time,
@@ -148,6 +149,16 @@ class Hub:
         async with self.lock:
             await asyncio.to_thread(save_archived, path, archived)
             self._reload_all()
+
+    async def set_graph(self, project: str, on: bool) -> None:
+        """Turn the project's code graph on (a first build starts now) or off."""
+        if project not in self.index.projects:
+            raise NotFound(f"no project {project}")
+        path = self.vault / "projects" / project / "project.md"
+        async with self.lock:
+            await asyncio.to_thread(save_graph, path, on)
+            self._reload_all()
+        self.rebuild(project)
 
     def rebuild(self, project: str) -> None:
         """Build the project's graph in the background if it has `graph: on`.

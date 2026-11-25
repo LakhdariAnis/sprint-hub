@@ -2,11 +2,14 @@
 
 import asyncio
 import threading
+import time
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from test_approve import repo  # noqa: F401 (fixture)
 
+from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.graph import Built, FakeGraph
 from hubd.notify import NullNotifier
@@ -164,3 +167,22 @@ def test_approve_and_merge_builds(vault: Path) -> None:
 
     asyncio.run(main())
     assert graph.calls == [(vault / "demo-repo", "demo")]
+
+
+def test_patch_turns_the_graph_on_with_a_first_build_and_off(vault: Path) -> None:
+    graph = Counting()
+    hub, _ = make(vault, graph)
+    path = vault / "projects" / "demo" / "project.md"
+    with TestClient(create_app(hub)) as client:
+        assert client.patch("/projects/demo", json={"graph": True}).json()["graph"] is True
+        assert "graph: on" in path.read_text()
+        for _ in range(100):
+            status = {p["id"]: p["graph_status"] for p in client.get("/projects").json()}["demo"]
+            if status["state"] == "built":
+                break
+            time.sleep(0.01)
+        assert status["nodes"] == 10 and graph.calls == [(vault / "demo-repo", "demo")]
+        assert client.patch("/projects/demo", json={"graph": False}).json()["graph"] is False
+        assert "graph" not in path.read_text()
+        assert {p["id"]: p["graph_status"] for p in client.get("/projects").json()}["demo"] is None
+    assert len(graph.calls) == 1

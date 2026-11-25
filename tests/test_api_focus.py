@@ -65,7 +65,12 @@ def test_patch_sets_and_clears_the_workspace(vault: Path, hub: Hub) -> None:
     client = TestClient(create_app(hub))
     response = client.patch("/projects/demo", json={"workspace": 4})
     assert response.status_code == 200
-    assert response.json() == {"workspace": 4, "account": "claude", "archived": False}
+    assert response.json() == {
+        "workspace": 4,
+        "account": "claude",
+        "archived": False,
+        "graph": False,
+    }
     assert "workspace: 4" in path.read_text()
     assert client.patch("/projects/demo", json={"workspace": 5}).json()["workspace"] == 5
     assert path.read_text().count("workspace:") == 1
@@ -81,6 +86,7 @@ def test_patch_sets_the_account_and_keeps_the_workspace(vault: Path, hub: Hub) -
         "workspace": 4,
         "account": "personal",
         "archived": False,
+        "graph": False,
     }
     assert "account: personal" in path.read_text()
     assert client.patch("/projects/demo", json={"account": "claude"}).json()["account"] == "claude"
