@@ -300,7 +300,7 @@
             {#if !t.blocks.length && !t.done}<div class="think">thinking…</div>{/if}
             {#if t.error}<div class="err" role="alert">{t.error}</div>{/if}
             {#if t.stopped}<div class="stopped" role="status">stopped</div>{/if}
-            {#if t.end && costLine(t.end)}<div class="cost dim xs">{costLine(t.end)}</div>{/if}
+            {#if t.end && costLine(t.end)}<div class="cost">{costLine(t.end)}</div>{/if}
           </div>
         {/each}
         {#if failed}<div class="err" role="alert">{failed}</div>{/if}
@@ -403,7 +403,7 @@
   .think { color: var(--fgd); font-size: 13px; }
   .turn { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-left: 10px; margin-left: -10px; }
   .turn.foc { box-shadow: inset 3px 0 0 var(--ac); }
-  .cost { overflow-wrap: anywhere; }
+  .cost { overflow-wrap: anywhere; font-size: 12px; color: var(--fgm); }
   .name { font: inherit; color: inherit; background: var(--dk); border: 1px solid var(--ac); border-radius: 5px; padding: 0 6px; height: 30px; width: min(420px, 100%); outline: none; }
   .stopped { align-self: flex-start; padding: 0 8px; border: 1px solid var(--sel); border-radius: 999px; font-size: 11px; color: var(--fgd); }
   .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
