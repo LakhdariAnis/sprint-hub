@@ -48,3 +48,21 @@ run on a copy in the scratchpad so the project stays clean). The project has 50 
      needs its own parser (tree-sitter bindings or one walker per language). **Not built, not measured;** my estimate is
      a few hundred lines per language plus community detection and the report. That is a project in itself.
    - Misses: everything we do not write. `.ino` would still need work.
+
+### Where the output lives and how it is wrapped
+- graphify writes `graphify-out/` inside the folder it scans, and `graphify --help` shows no output-folder option for
+  `update`. The hub must not leave that folder in a repo. The graph files live in the hub's own folder
+  (next to `hub.toml`), one folder per project, and are never added to a project repo or to a git commit. How the run
+  gets there (a throwaway copy, or a move after the run) is step 655.
+- The graph is **opt-in per project** and **code only**, which keeps it free. Docs go in only when Anis asks in a chat.
+- Rule 4: hubd talks to a `GraphSource` interface (build or refresh a graph, read nodes and edges, query, path,
+  affected, report). `GraphifyGraph` is the one real class: it shells out to `graphify` and reads its `graph.json`.
+  `FakeGraph` serves a small fixed graph, so the tests and `hubd --demo` run without graphify installed. A real sample
+  (`tinyml-graph.json` and its report) becomes a test fixture in step 654, the same way a real hook input is in
+  `tests/fixtures/hook/`. A graphify release that changes `graph.json` is then one edit in one module, and `hubd doctor`
+  can show it as ✘.
+
+### Rule 2 exception
+0.5.0 adds a 5th new tool (graphify), against rule 2's max two. The other four are the phone tools: Syncthing with
+Obsidian, and ntfy over Tailscale (ADRs 0002 and 0003, step 704). Sprint 6.5 (this ADR's feature) runs inside 0.5.0 and Sprint 7 pauses after 701.
+TODO(Anis): why the exception is worth it.
