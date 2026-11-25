@@ -1,4 +1,7 @@
 /* All colours live here as variables. These are the defaults (Everforest); theme.ts sets the desktop theme's over them at start. */
+/* Reading font of the chat (Literata, OFL, latin subset). Served from /fonts: the app works offline. */
+@font-face { font-family: 'Literata'; font-style: normal; font-weight: 400 600; font-display: swap; src: url(/fonts/literata-latin.woff2) format('woff2'); }
+@font-face { font-family: 'Literata'; font-style: italic; font-weight: 400 600; font-display: swap; src: url(/fonts/literata-latin-italic.woff2) format('woff2'); }
 :root {
   --bg: #2d353b;
   --dk: #21272c;
@@ -22,6 +25,7 @@
   --fgm: color-mix(in srgb, var(--fg2) 75%, var(--fg3));
   --mono: 'Liberation Mono', 'Cousine', ui-monospace, monospace;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --read: 'Literata', Georgia, serif;
 }
 
 * { box-sizing: border-box; }
