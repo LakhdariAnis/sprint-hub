@@ -271,7 +271,7 @@
               {:else if b.kind === 'tool'}
                 <div class="tool" class:open={b.open}>
                   <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
-                    <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>
+                    <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>{#if b.result !== undefined}<span class="ts" class:bad={b.error} aria-label={b.error ? 'failed' : 'done'}>{b.error ? '✗' : '✓'}</span>{/if}
                   </button>
                   {#if b.open}
                     <pre class="tin" aria-label="Input">{b.input}</pre>
@@ -281,7 +281,7 @@
               {:else}
                 {@const a = b}
                 <div class="ask" class:open={a === waiting} role="group" aria-label="Permission: {a.tool}">
-                  <div class="at"><span class="tool">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
+                  <div class="at"><span class="tname">{a.tool}</span> <span class="dim">wants to {verb(a)}</span></div>
                   <code class="tgt">{a.target}</code>
                   {#if a.diff}<pre class="diff">{#each a.diff.split('\n') as line}<span class:add={line.startsWith('+')} class:del={line.startsWith('-')}>{line}</span>{'\n'}{/each}</pre>{/if}
                   {#if a === waiting}
@@ -409,12 +409,14 @@
   .tool { display: flex; flex-direction: column; gap: 4px; min-width: 0; font: 13px/1.5 var(--mono); }
   .tl { display: flex; gap: 8px; min-width: 0; padding: 0; border: 0; background: none; color: var(--fgd); font: inherit; text-align: left; cursor: pointer; }
   .tl:hover, .tl:focus-visible { color: inherit; outline: none; }
+  .ts { flex: none; }
+  .ts.bad { color: var(--r); }
   .tn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tin, .tres { max-height: 20em; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .tres.bad { border-color: var(--r); }
   .ask { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; }
   .ask.open { border-color: var(--ac); }
-  .tool { font: 700 13px var(--mono); }
+  .tname { font: 700 13px var(--mono); }
   .tgt { font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .diff { max-height: 16em; overflow: auto; }
   .diff .add { color: var(--g); }
