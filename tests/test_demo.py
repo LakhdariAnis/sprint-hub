@@ -139,3 +139,14 @@ def test_demo_closes_a_sprint() -> None:
         }
         r = client.post("/projects/notes/sprints/4/close")
         assert r.status_code == 409 and "Sprint 5 has no row" in r.json()["detail"]
+
+
+def test_demo_serves_its_graph_from_fakegraph() -> None:
+    with TestClient(demo_app()) as client:
+        base = "/projects/demo/graph"
+        assert len(client.get(base).json()["nodes"]) == 10
+        assert client.get(f"{base}/affected?node=src_store_load").json()["affected"]
+        assert client.get(f"{base}/path?from=src_ui&to=src_store").json()["path"]
+        assert client.get(f"{base}/report").json()["god_nodes"]
+        assert client.get(f"{base}/find?q=load").json()["nodes"]
+        assert client.get("/projects/notes/graph").status_code == 404  # off there

@@ -13,6 +13,7 @@ from hubd.api import create_app
 from hubd.daemon import Hub
 from hubd.notify import Click, NullNotifier
 from hubd.runners.fake import FakeRunner
+from hubd.vault import save_graph
 from hubd.weeks import week_of
 
 # shortcut: the demo data is the test fixture, so it only runs from a source checkout.
@@ -72,6 +73,7 @@ def demo_vault() -> Path:
     vault = Path(tempfile.mkdtemp(prefix="hubd-demo-"))
     shutil.copytree(FIXTURE, vault, dirs_exist_ok=True)
     shutil.rmtree(vault / "projects" / "broken")
+    save_graph(vault / "projects" / "demo" / "project.md", True)  # its graph is FakeGraph's
     for name, text in EXTRA.items():
         path = vault / name
         path.parent.mkdir(parents=True, exist_ok=True)
