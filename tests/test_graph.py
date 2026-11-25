@@ -121,3 +121,38 @@ def test_a_real_build_leaves_the_repo_clean(tmp_path: Path) -> None:
     graph = source.load("tiny")
     assert graph is not None and "main()" in {n.label for n in graph.nodes}
     assert source.report("tiny").startswith("# Graph Report")
+
+
+def fixture_source(tmp_path: Path) -> GraphifyGraph:
+    """A GraphifyGraph whose project "p" holds the fixture graph."""
+    (tmp_path / "graphs" / "p").mkdir(parents=True)
+    shutil.copy(FIXTURE, tmp_path / "graphs" / "p" / "graph.json")
+    return GraphifyGraph(tmp_path / "graphs")
+
+
+@pytest.mark.skipif(shutil.which("graphify") is None, reason="graphify is not installed")
+def test_affected_and_path_map_graphify_back_to_node_ids(tmp_path: Path) -> None:
+    source = fixture_source(tmp_path)
+    affected = dict(source.affected("p", "src_split_chronological_split"))
+    assert affected["src_test_held_out_load_parts"] == "calls"
+    assert affected["src_test_held_out"] == "imports"
+    assert len(affected) == 7
+    recipe, envelope = "src_test_held_out_recipe", "src_envelope_features_extract_envelope_features"
+    assert source.path("p", recipe, envelope) == [recipe, envelope]
+    split = "src_split_chronological_split"
+    assert source.path("p", recipe, split) == [recipe, "src_test_held_out", split]
+    assert source.reason("p") is None
+
+
+def test_an_unknown_node_is_a_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = fixture_source(tmp_path)
+    fake_graphify(tmp_path, monkeypatch, "echo 'No unique node match for nope'; exit 4")
+    assert source.affected("p", "nope") == []
+    assert source.reason("p") == "No unique node match for nope"
+    assert source.path("p", "nope", "numpy") == []
+
+
+def test_no_path_is_an_empty_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = fixture_source(tmp_path)
+    fake_graphify(tmp_path, monkeypatch, "echo \"No path found between 'a' and 'b'.\"")
+    assert source.path("p", "a", "b") == []

@@ -7,6 +7,7 @@ Everything fails soft (rule 4): no graph is `None` (or empty) plus a reason, nev
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -136,6 +137,10 @@ def _line(location: object) -> int | None:
 
 GRAPHS = Path.home() / ".local" / "share" / "sprint-hub" / "graphs"
 TIMEOUT = 120  # seconds; tinyml (33 code files) takes 1.5 s
+# `graphify affected`: "- load_parts() [calls] src/test_held_out.py:L31" (the line is the edge's).
+AFFECTED = re.compile(r"^- (.+) \[(\w+)\](?: (.+?)(?::L\d+)?)?$")
+# `graphify path`: "recipe() <--indirect_call [INFERRED 0.85]-- t.py --imports [EXTRACTED]--> x()"
+HOP = re.compile(r" (?:<--\S+ \[[^\]]*\]--|--\S+ \[[^\]]*\]-->) ")
 
 
 class GraphifyGraph:
@@ -204,6 +209,54 @@ class GraphifyGraph:
             return None
         self._reasons[project] = None
         return graph
+
+    def _query(self, project: str, *args: str) -> tuple[Graph, list[str]] | None:
+        """Run a graphify query on the project's graph: the graph and graphify's output lines."""
+        graph = self.load(project)
+        if graph is None:
+            return None
+        done = self._cli(project, *args, "--graph", str(self._out(project) / "graph.json"))
+        if done is None:
+            return None
+        lines = done.stdout.splitlines()
+        if done.returncode != 0:  # 3: the name is ambiguous, 4: no such node
+            self._reasons[project] = (lines or [f"graphify {args[0]} failed"])[0]
+            return None
+        return graph, lines
+
+    def affected(self, project: str, node: str, depth: int = 2) -> list[tuple[str, str]]:
+        found = self._query(project, "affected", node, "--depth", str(depth))
+        if found is None:
+            return []
+        graph, lines = found
+        ids = {(n.label, n.file): n.id for n in graph.nodes}
+        result: dict[str, str] = {}
+        for line in lines:
+            if (m := AFFECTED.match(line)) and (key := (m[1], m[3] or "")) in ids:
+                result.setdefault(ids[key], m[2])
+        return list(result.items())
+
+    def path(self, project: str, a: str, b: str) -> list[str]:
+        found = self._query(project, "path", a, b, "--undirected")
+        if found is None:
+            return []
+        graph, lines = found
+        if len(lines) < 2 or not lines[0].startswith("Shortest path"):
+            return []  # "No path found between …"
+        labels = {n.id: n.label for n in graph.nodes}
+        near: dict[str, list[str]] = {}
+        for link in graph.links:
+            near.setdefault(link.source, []).append(link.target)
+            near.setdefault(link.target, []).append(link.source)
+        # graphify prints labels; walk from `a` to the neighbour with each next label.
+        ids = [a]
+        for label in HOP.split(lines[1].strip())[1:]:
+            step = next((n for n in near.get(ids[-1], []) if labels.get(n) == label), None)
+            if step is None:
+                self._reasons[project] = f"cannot follow graphify's path at {label}"
+                return []
+            ids.append(step)
+        return ids if ids[-1] == b else []
 
     def report(self, project: str) -> str:
         try:
