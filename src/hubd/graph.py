@@ -6,6 +6,9 @@ Everything fails soft (rule 4): no graph is `None` (or empty) plus a reason, nev
 """
 
 import json
+import os
+import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -129,3 +132,85 @@ def _line(location: object) -> int | None:
     """graphify's "L17" as 17."""
     text = str(location or "")
     return int(text[1:]) if text[:1] == "L" and text[1:].isdigit() else None
+
+
+GRAPHS = Path.home() / ".local" / "share" / "sprint-hub" / "graphs"
+TIMEOUT = 120  # seconds; tinyml (33 code files) takes 1.5 s
+
+
+class GraphifyGraph:
+    """The real `GraphSource`: `graphify update` (code only, no LLM), one folder per project.
+
+    graphify writes into `<repo>/graphify-out/` unless `GRAPHIFY_OUT` names another folder,
+    so the repo stays clean. `build` blocks up to 2 min: call it with `asyncio.to_thread`.
+    """
+
+    def __init__(self, root: Path = GRAPHS, exe: str = "graphify") -> None:
+        self.root, self.exe = root, exe
+        self._reasons: dict[str, str | None] = {}
+
+    def _out(self, project: str) -> Path:
+        return self.root / project
+
+    def _cli(self, project: str, *args: str) -> subprocess.CompletedProcess[str] | None:
+        """Run graphify with its output in the project's folder; None (and a reason) if it fails."""
+        exe = shutil.which(self.exe)
+        if exe is None:
+            self._reasons[project] = f"{self.exe} not on PATH"
+            return None
+        out = self._out(project)
+        out.mkdir(parents=True, exist_ok=True)
+        try:
+            done = subprocess.run(
+                [exe, *args],
+                cwd=out,
+                env={**os.environ, "GRAPHIFY_OUT": str(out)},
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            self._reasons[project] = f"graphify {args[0]} took over {TIMEOUT // 60} min"
+            return None
+        except OSError as exc:
+            self._reasons[project] = f"graphify does not run: {exc}"
+            return None
+        self._reasons[project] = None
+        return done
+
+    def build(self, project_path: str | Path, project: str | None = None) -> Built:
+        repo = Path(project_path).expanduser()
+        name = project or repo.name
+        if not repo.is_dir():
+            self._reasons[name] = f"{repo} is not a folder"
+            return Built(reason=self._reasons[name])
+        # --force: a rebuild with fewer nodes (code was deleted) still replaces the old graph.
+        done = self._cli(name, "update", str(repo), "--force")
+        if done is not None and done.returncode != 0:
+            lines = (done.stderr or done.stdout).strip().splitlines() or ["no output"]
+            self._reasons[name] = f"graphify update failed ({done.returncode}): {lines[-1]}"
+        if self._reasons[name] is not None:
+            return Built(reason=self._reasons[name])
+        graph = self.load(name)
+        if graph is None:
+            return Built(reason=self._reasons[name])
+        return Built(len(graph.nodes), len(graph.links))
+
+    def load(self, project: str) -> Graph | None:
+        try:
+            graph = read(self._out(project) / "graph.json")
+        except GraphError as exc:
+            self._reasons[project] = str(exc)
+            return None
+        self._reasons[project] = None
+        return graph
+
+    def report(self, project: str) -> str:
+        try:
+            return (self._out(project) / "GRAPH_REPORT.md").read_text()
+        except OSError:
+            self._reasons[project] = "no graph report built yet"
+            return ""
+
+    def reason(self, project: str) -> str | None:
+        return self._reasons.get(project)

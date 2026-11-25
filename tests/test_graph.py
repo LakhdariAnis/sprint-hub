@@ -1,11 +1,13 @@
 """Contract: the parser maps a real graphify graph.json (tinyml-bearing-fault, graphify 0.9.120)."""
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from hubd.graph import GraphError, parse, read
+from hubd.graph import Built, GraphError, GraphifyGraph, parse, read
 
 FIXTURE = Path(__file__).parent / "fixtures" / "graphify" / "graph.json"
 RAW = json.loads(FIXTURE.read_text())
@@ -53,3 +55,69 @@ def test_a_missing_or_broken_file_is_a_reason(tmp_path: Path) -> None:
     (tmp_path / "graph.json").write_text("{not json")
     with pytest.raises(GraphError, match="cannot read"):
         read(tmp_path / "graph.json")
+
+
+def repo(tmp_path: Path) -> Path:
+    """A tiny git repo with two Python files, one calling the other."""
+    path = tmp_path / "tiny"
+    (path / "src").mkdir(parents=True)
+    (path / "src" / "a.py").write_text('def helper():\n    """Help."""\n    return 1\n')
+    (path / "src" / "b.py").write_text("from a import helper\n\n\ndef main():\n    helper()\n")
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    subprocess.run(["git", "-C", str(path), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x"],
+        check=True,
+    )
+    return path
+
+
+def fake_graphify(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "graphify").write_text(f"#!/bin/sh\n{body}\n")
+    (bin_dir / "graphify").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+
+
+def test_missing_graphify_is_a_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    source = GraphifyGraph(tmp_path / "graphs")
+    assert source.build(tmp_path) == Built(reason="graphify not on PATH")
+    assert source.reason(tmp_path.name) == "graphify not on PATH"
+
+
+def test_a_crash_is_a_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_graphify(tmp_path, monkeypatch, "echo boom >&2; exit 2")
+    built = GraphifyGraph(tmp_path / "graphs").build(tmp_path, "p")
+    assert built == Built(reason="graphify update failed (2): boom")
+
+
+def test_a_graph_in_an_unknown_shape_is_a_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_graphify(tmp_path, monkeypatch, 'echo \'{"vertices": []}\' > "$GRAPHIFY_OUT/graph.json"')
+    source = GraphifyGraph(tmp_path / "graphs")
+    assert source.build(tmp_path, "p") == Built(reason="graph.json has no field 'nodes'")
+    assert source.load("p") is None
+    assert source.reason("p") == "graph.json has no field 'nodes'"
+
+
+def test_no_graph_yet_is_a_reason(tmp_path: Path) -> None:
+    source = GraphifyGraph(tmp_path)
+    assert source.load("p") is None and source.reason("p") == "no graph built yet"
+    assert source.report("p") == "" and source.reason("p") == "no graph report built yet"
+
+
+@pytest.mark.skipif(shutil.which("graphify") is None, reason="graphify is not installed")
+def test_a_real_build_leaves_the_repo_clean(tmp_path: Path) -> None:
+    path = repo(tmp_path)
+    source = GraphifyGraph(tmp_path / "graphs")
+    built = source.build(path)
+    assert built.reason is None and built.nodes > 0, source.reason("tiny")
+    assert not (path / "graphify-out").exists()
+    status = subprocess.run(["git", "-C", str(path), "status", "--porcelain"], capture_output=True)
+    assert status.stdout == b""
+    graph = source.load("tiny")
+    assert graph is not None and "main()" in {n.label for n in graph.nodes}
+    assert source.report("tiny").startswith("# Graph Report")
