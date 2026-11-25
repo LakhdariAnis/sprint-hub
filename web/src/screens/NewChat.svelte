@@ -340,19 +340,25 @@
         {/if}
         <div class="box">
           <label class="sr" for="msg">Message</label>
-          <textarea id="msg" rows="2" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
-          <div class="hint">
-            {#if busy}<button type="button" class="stop" onclick={() => halt(true)}>Stop <span class="kb">Esc Esc</span></button>{/if}
-            <span><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</span>
-          </div>
+          <textarea id="msg" rows="1" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
+          {#if busy}
+            <button type="button" class="go" aria-label="Stop (Esc Esc)" title="Stop (Esc Esc)" onclick={() => halt(true)}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor" /></svg></button>
+          {:else}
+            <button type="submit" class="go" aria-label="Send" title="Send (↵)" disabled={!text.trim() || sending}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+          {/if}
         </div>
         <div class="pills">
-          <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
-          {#if pills.sprint}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
-          {#if pills.step}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
-          <button type="button" class="pill" onclick={() => ask('model')}><span class="dim">model</span> {view.model}</button>
-          <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
+          <div class="pg">
+            <button type="button" class="pill" disabled={!!cid} onclick={() => ask('project')}><span class="dim">project</span> {projectName(view.project)}</button>
+            {#if pills.sprint}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('sprint')}><span class="dim">sprint</span> {pills.sprint}</button>{/if}
+            {#if pills.step}<button type="button" class="pill" disabled={!!cid} onclick={() => ask('step')}><span class="dim">step</span> {pills.step}</button>{/if}
+          </div>
+          <div class="pg">
+            <button type="button" class="pill" onclick={() => ask('model')}><span class="dim">model</span> {view.model}</button>
+            <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
+          </div>
         </div>
+        <div class="hint"><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</div>
       </div>
     </form>
   </div>
@@ -372,7 +378,7 @@
   .starter { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; font: inherit; color: inherit; background: none; text-align: left; cursor: pointer; }
   .starter:hover, .starter:focus-visible { border-color: var(--ac); outline: none; }
   .starter .c { font: 700 13px var(--mono); color: var(--ac); }
-  .me { align-self: flex-end; max-width: 85%; padding: 8px 12px; border-radius: 10px; background: var(--sel); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .me { align-self: flex-end; max-width: 85%; padding: 10px 16px; border-radius: 16px; background: var(--sel); font: 16px/1.55 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
   /* Claude's text: the reading font. The rules reach into Markdown (scoped here: the Spec view keeps its look); code stays mono. */
   .ai { min-width: 0; font: 400 17.5px/1.72 var(--read); max-width: 68ch; }
   .ai :global(.md) { line-height: inherit; }
@@ -415,15 +421,21 @@
   .k { font-family: var(--mono); color: var(--fgd); margin-right: 4px; }
   .err { padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); overflow-wrap: anywhere; }
   .cmp { flex: none; padding: 0 28px 16px; }
-  .box { border: 1px solid var(--ac); border-radius: 10px; background: var(--dk); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  /* A raised box, as in the Claude app; the round button sits bottom right and turns into Stop while a turn runs. */
+  .box { display: flex; align-items: flex-end; gap: 10px; background: var(--lt); border: 1px solid var(--mu); border-radius: 16px; padding: 12px 12px 12px 18px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+  .box:focus-within { border-color: color-mix(in srgb, var(--ac) 55%, var(--mu)); }
   /* Chromium grows the box with its text (field-sizing); max-height is 8 lines, then it scrolls. */
-  textarea { border: 0; background: none; resize: none; outline: none; width: 100%; padding: 0; font: inherit; font-size: 15px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 3em; max-height: 12em; overflow-y: auto; }
-  .hint { align-self: flex-end; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 14px; font-size: 11px; color: var(--fgd); }
-  .stop { font: inherit; padding: 2px 10px; border: 1px solid var(--r); border-radius: 6px; background: none; color: inherit; cursor: pointer; }
-  .stop:hover, .stop:focus-visible { background: var(--sel); outline: none; }
+  textarea { flex: 1; min-width: 0; border: 0; background: none; resize: none; outline: none; padding: 4px 0; font: inherit; font-size: 16px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 1.5em; max-height: 12em; overflow-y: auto; }
+  textarea::placeholder { color: var(--fgm); }
+  .go { flex: none; width: 36px; height: 36px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--ac); color: var(--bg); cursor: pointer; }
+  .go svg { width: 18px; height: 18px; }
+  .go:disabled { background: var(--sel); color: var(--fgm); cursor: default; }
+  .go:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .hint { text-align: center; font-size: 11px; color: var(--fgd); }
   .rel { position: relative; }
   .chip { align-self: flex-start; max-width: 100%; margin-bottom: 6px; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 6px; overflow-wrap: anywhere; }
-  .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pills { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+  .pg { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 999px; background: none; color: inherit; cursor: pointer; }
   .pill:hover:not(:disabled), .pill:focus-visible { border-color: var(--ac); outline: none; }
   .pill:disabled { cursor: default; opacity: 0.7; }
