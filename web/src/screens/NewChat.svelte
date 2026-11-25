@@ -329,17 +329,20 @@
             </div>
           </div>
         {/if}
-        {#if context}
-          <div class="chip" role="status"><span class="dim">context</span> {typeof context === 'string' ? `not loaded: ${context}` : chip(context)}</div>
-        {/if}
         <div class="box">
+          {#if context}
+            <div class="chip" role="status"><span class="dim">context</span> {typeof context === 'string' ? `not loaded: ${context}` : chip(context)}</div>
+          {/if}
+          <div class="in">
           <label class="sr" for="msg">Message</label>
           <textarea id="msg" rows="1" placeholder="Message Claude…" bind:this={box} bind:value={text} {onkeydown} oninput={typed}></textarea>
+          {#if cid}<span class="meta" title="This chat's model and project">{view.model} · {projectName(view.project)}</span>{/if}
           {#if busy}
             <button type="button" class="go" aria-label="Stop (Esc Esc)" title="Stop (Esc Esc)" onclick={() => halt(true)}><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5" fill="currentColor" /></svg></button>
           {:else}
             <button type="submit" class="go" aria-label="Send" title="Send (↵)" disabled={!text.trim() || sending}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
           {/if}
+          </div>
         </div>
         <div class="pills">
           <div class="pg">
@@ -425,7 +428,9 @@
   .err { padding: 8px 12px; border: 1px solid var(--r); border-radius: 6px; color: var(--r); overflow-wrap: anywhere; }
   .cmp { flex: none; padding: 0 28px 16px; }
   /* A raised box, as in the Claude app; the round button sits bottom right and turns into Stop while a turn runs. */
-  .box { display: flex; align-items: flex-end; gap: 10px; background: var(--lt); border: 1px solid var(--mu); border-radius: 16px; padding: 12px 12px 12px 18px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+  .box { display: flex; flex-direction: column; gap: 6px; background: var(--lt); border: 1px solid var(--mu); border-radius: 16px; padding: 12px 12px 12px 18px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+  .in { display: flex; align-items: flex-end; gap: 10px; }
+  .meta { flex: none; align-self: center; max-width: 40%; font-size: 12px; color: var(--fgm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .box:focus-within { border-color: color-mix(in srgb, var(--ac) 55%, var(--mu)); }
   /* Chromium grows the box with its text (field-sizing); max-height is 8 lines, then it scrolls. */
   textarea { flex: 1; min-width: 0; border: 0; background: none; resize: none; outline: none; padding: 4px 0; font: inherit; font-size: 16px; line-height: 1.5; color: inherit; field-sizing: content; min-height: 1.5em; max-height: 12em; overflow-y: auto; }
@@ -436,7 +441,7 @@
   .go:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
   .hint { text-align: center; font-size: 11px; color: var(--fgd); }
   .rel { position: relative; }
-  .chip { align-self: flex-start; max-width: 100%; margin-bottom: 6px; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 6px; overflow-wrap: anywhere; }
+  .chip { max-width: 100%; font-size: 12.5px; color: var(--fgm); overflow-wrap: anywhere; }
   .pills { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
   .pg { display: flex; flex-wrap: wrap; gap: 8px; }
   .pill { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--sel); border-radius: 999px; background: none; color: inherit; cursor: pointer; }
