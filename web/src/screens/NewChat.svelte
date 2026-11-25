@@ -59,6 +59,8 @@
   }
   // The saved chat's name (the vault's, `R` changes it); a chat that was not sent has none.
   const title = $derived(saved.list?.find((c) => c.id === cid)?.title ?? '')
+  // No turns and no saved name: the greeting and the box sit in the middle, until the first send.
+  const home = $derived(!turns.length && !title)
   let renaming = $state(false)
   let draft = $state('')
   let nameBox = $state<HTMLInputElement>()
@@ -240,9 +242,9 @@
   })
 
   const starters = [
-    ['/project', 'Talk about a project', 'loads its README and sprints'],
-    ['/sprint', 'Plan or check a sprint', 'hours vs the 15 h budget'],
-    ['/step', 'Work on one step', 'spec, report and diff in context'],
+    ['/project', 'Talk about a project: loads its README and sprints'],
+    ['/sprint', 'Plan or check a sprint: hours vs the 15 h budget'],
+    ['/step', 'Work on one step: spec, report and diff in context'],
   ]
 </script>
 
@@ -255,18 +257,10 @@
         onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveName() : e.key === 'Escape' && ((renaming = false), focusBox()))} />
     {:else}{title || 'New chat'}{/if}
   </Header>
-  <div class="body">
+  <div class="body" class:home>
     <div class="log" bind:this={log} {onscroll}>
       <div class="col">
-        {#if !turns.length && !failed && !title}
-          <div class="hi">What are we working on?</div>
-          <div class="dim">Just type. Or start from a project, a sprint or one step.</div>
-          <div class="starters">
-            {#each starters as [c, t, d]}
-              <button type="button" class="starter" onmousedown={(e) => e.preventDefault()} onclick={() => ask(c.slice(1))}><span class="c">{c}</span><span>{t}</span><span class="dim xs">{d}</span></button>
-            {/each}
-          </div>
-        {/if}
+        {#if home && !failed}<div class="hi">What are we working on?</div>{/if}
         {#if cid && chats[cid]?.earlier_hidden}<div class="dim xs" role="status">earlier turns not shown</div>{/if}
         {#each turns as t, i}
           <div class="turn" class:foc={i === sel} aria-current={i === sel ? 'true' : undefined}>
@@ -358,6 +352,13 @@
             <button type="button" class="pill" onclick={() => ask('effort')}><span class="dim">effort</span> {view.effort}</button>
           </div>
         </div>
+        {#if home}
+          <div class="starters">
+            {#each starters as [c, d]}
+              <button type="button" class="starter" title={d} onmousedown={(e) => e.preventDefault()} onclick={() => ask(c.slice(1))}>{c}</button>
+            {/each}
+          </div>
+        {/if}
         <div class="hint"><span class="kb">/</span> commands · <span class="kb">⇧↵</span> new line · <span class="kb">↵</span> send</div>
       </div>
     </form>
@@ -371,13 +372,15 @@
   /* One flat canvas under the header: the log scrolls, the box stays at the bottom. */
   .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .log { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 28px 12px; }
+  /* Home: the log shrinks to the greeting and the whole body centres, so the box sits mid-page. */
+  .home { justify-content: center; }
+  .home .log { flex: none; overflow: visible; padding-bottom: 20px; }
   /* Everything sits in one centred column. */
   .col { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-  .hi { font-size: 20px; font-weight: 600; margin-bottom: -6px; }
-  .starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
-  .starter { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--sel); border-radius: 8px; min-width: 0; font: inherit; color: inherit; background: none; text-align: left; cursor: pointer; }
+  .hi { font: 400 36px/1.2 var(--read); text-align: center; padding: 0 0 8px; }
+  .starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .starter { padding: 3px 12px; border: 1px solid var(--sel); border-radius: 999px; font: 12px var(--mono); color: var(--ac); background: none; cursor: pointer; }
   .starter:hover, .starter:focus-visible { border-color: var(--ac); outline: none; }
-  .starter .c { font: 700 13px var(--mono); color: var(--ac); }
   .me { align-self: flex-end; max-width: 85%; padding: 10px 16px; border-radius: 16px; background: var(--sel); font: 16px/1.55 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
   /* Claude's text: the reading font. The rules reach into Markdown (scoped here: the Spec view keeps its look); code stays mono. */
   .ai { min-width: 0; font: 400 17.5px/1.72 var(--read); max-width: 68ch; }
@@ -455,7 +458,7 @@
   @container (max-width: 700px) {
     .log { padding: 16px 12px 8px; }
     .cmp { padding: 0 12px 12px; }
-    .starters { grid-template-columns: 1fr; }
+    .hi { font-size: 28px; }
     .me { max-width: 95%; }
   }
 </style>
