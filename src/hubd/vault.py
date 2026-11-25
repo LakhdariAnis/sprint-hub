@@ -237,6 +237,11 @@ def save_archived(path: Path, archived: bool) -> None:
     _save_field(path, "archived", "true" if archived else None)
 
 
+def save_graph(path: Path, on: bool) -> None:
+    """Set `graph: on` in a `project.md` frontmatter (off removes it)."""
+    _save_field(path, "graph", "on" if on else None)
+
+
 def save_sprint(path: Path, sprint: int) -> None:
     """Set `sprint:` in a step file (`save_step` never writes it); every other byte stays."""
     _save_field(path, "sprint", str(sprint))

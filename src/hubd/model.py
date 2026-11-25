@@ -42,6 +42,7 @@ class Project(BaseModel):
     model: str
     merge: Merge
     archived: bool = False  # hidden from the Projects list until "show archived"
+    graph: bool = False  # `graph: on`: hubd keeps a graphify code graph of the repo
 
 
 class Task(BaseModel):
