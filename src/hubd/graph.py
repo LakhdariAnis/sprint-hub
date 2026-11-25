@@ -135,7 +135,7 @@ def _line(location: object) -> int | None:
     return int(text[1:]) if text[:1] == "L" and text[1:].isdigit() else None
 
 
-def top(graph: Graph, nodes: list[Node], n: int) -> list[Node]:
+def top(nodes: list[Node], n: int) -> list[Node]:
     """The `n` most connected of `nodes`; ties keep graph order."""
     return sorted(nodes, key=lambda x: -x.degree)[:n]
 

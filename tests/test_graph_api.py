@@ -7,7 +7,7 @@ from test_approve import repo  # noqa: F401 (fixture)
 
 from hubd.api import create_app
 from hubd.daemon import Hub
-from hubd.graph import FakeGraph
+from hubd.graph import FakeGraph, Graph, Node, find, report_facts
 from hubd.notify import NullNotifier
 from hubd.runners.fake import FakeRunner
 from hubd.vault import save_graph
@@ -96,3 +96,48 @@ def test_path_off_and_failed(vault: Path) -> None:
     hub._reload_all()
     hub.graphs["demo"] = {"state": "failed", "reason": "boom"}
     assert c.get("/projects/demo/graph/path?from=a&to=b").status_code == 503
+
+
+def test_report_god_nodes_groups_cycles_unread(vault: Path) -> None:
+    c, _ = client(vault)
+    body = c.get("/projects/demo/graph/report").json()
+    assert body["god_nodes"][0]["id"] == "src_api_list_items"  # not a file, not fastapi
+    assert len(body["god_nodes"]) == 6
+    degrees = [n["degree"] for n in body["god_nodes"]]
+    assert degrees == sorted(degrees, reverse=True)
+    api = next(g for g in body["groups"] if g["name"] == "api")
+    assert api["size"] == 4 and len(api["top"]) == 4
+    assert body["cycles"] == [] and body["unread"] == {"count": 0, "top": []}
+
+
+def test_report_facts_read_graphify_text() -> None:
+    text = (
+        "- Unclassified: 4 file(s) not represented in the graph (top: .ino 3, (none) 1)\n"
+        "## Import Cycles\n- 3-file cycle: `a.py -> b.py -> c.py -> a.py`\n"
+    )
+    assert report_facts(text) == (
+        [["a.py", "b.py", "c.py", "a.py"]],
+        {"count": 4, "top": [".ino 3", "(none) 1"]},
+    )
+    assert report_facts("- Unclassified: 2 file(s) not represented in the graph")[1] == {
+        "count": 2,
+        "top": [],
+    }
+    assert report_facts("") == ([], {"count": 0, "top": []})
+
+
+def test_find_matches_label_or_file(vault: Path) -> None:
+    c, _ = client(vault)
+
+    def ids(q: str) -> set[str]:
+        body = c.get("/projects/demo/graph/find", params={"q": q}).json()
+        return {n["id"] for n in body["nodes"]}
+
+    assert ids("LOAD") == {"src_store_load"}
+    assert ids("src/ui.py") == {"src_ui", "src_ui_draw_list", "src_ui_sort_items"}
+    assert ids("") == set() and ids("zzz") == set()
+
+
+def test_find_is_capped_at_20(vault: Path) -> None:
+    nodes = [Node(f"n{i}", f"feats{i}()", "a.py", i, 0, "g", 0) for i in range(30)]
+    assert len(find(Graph(nodes, [], {}, None, ""), "feats")) == 20

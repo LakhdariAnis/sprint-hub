@@ -17,7 +17,7 @@ from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, Valid
 from hubd import doctor, reminders, service, windows
 from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
-from hubd.graph import Graph, GraphifyGraph, Node
+from hubd.graph import Graph, GraphifyGraph, Node, find, report_facts, top
 from hubd.importer import git
 from hubd.init import PROJECTS
 from hubd.model import one_line
@@ -281,6 +281,32 @@ def create_app(
     async def graph_path(project: str, from_: Annotated[str, Query(alias="from")], to: str) -> dict:
         known(project_graph(project), from_, to)
         return {"path": await asyncio.to_thread(hub.graph.path, project, from_, to)}
+
+    @app.get("/projects/{project}/graph/report")
+    async def graph_report(project: str) -> dict:
+        graph = project_graph(project)
+        cycles, unread = report_facts(await asyncio.to_thread(hub.graph.report, project))
+        return {
+            # like graphify's report: no library (no file) and no file node, only code inside files
+            "god_nodes": [
+                node_json(n)
+                for n in top(
+                    [n for n in graph.nodes if n.file and n.label != Path(n.file).name], 10
+                )
+            ],
+            "cycles": cycles,
+            "groups": [
+                {"id": k, "name": v, "size": len(ns),
+                 "top": [node_json(n) for n in top(ns, 4)]}
+                for k, v in graph.groups.items()
+                if (ns := [n for n in graph.nodes if n.group == k])
+            ],
+            "unread": unread,
+        }  # fmt: skip
+
+    @app.get("/projects/{project}/graph/find")
+    def graph_find(project: str, q: str = "") -> dict:
+        return {"nodes": [node_json(n) for n in find(project_graph(project), q)]}
 
     @app.get("/projects/{project}/steps")
     def project_steps(project: str) -> list[dict]:
