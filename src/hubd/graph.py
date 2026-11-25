@@ -135,6 +135,27 @@ def _line(location: object) -> int | None:
     return int(text[1:]) if text[:1] == "L" and text[1:].isdigit() else None
 
 
+def top(graph: Graph, nodes: list[Node], n: int) -> list[Node]:
+    """The `n` most connected of `nodes`; ties keep graph order."""
+    return sorted(nodes, key=lambda x: -x.degree)[:n]
+
+
+def find(graph: Graph, q: str, limit: int = 20) -> list[Node]:
+    """Nodes whose label or file contains `q` (any case); an empty `q` finds nothing."""
+    q = q.strip().lower()
+    hits = [n for n in graph.nodes if q and (q in n.label.lower() or q in n.file.lower())]
+    return hits[:limit]
+
+
+def report_facts(text: str) -> tuple[list[list[str]], dict]:
+    """From GRAPH_REPORT.md: the import cycles (files in order) and the unclassified files."""
+    cycles = [m[1].split(" -> ") for m in re.finditer(r"^- \d+-file cycle: `(.+)`$", text, re.M)]
+    unread: dict = {"count": 0, "top": []}
+    if m := re.search(r"^- Unclassified: (\d+) file\(s\).*?(?:\(top: (.+)\))?$", text, re.M):
+        unread = {"count": int(m[1]), "top": (m[2] or "").split(", ") if m[2] else []}
+    return cycles, unread
+
+
 GRAPHS = Path.home() / ".local" / "share" / "sprint-hub" / "graphs"
 TIMEOUT = 120  # seconds; tinyml (33 code files) takes 1.5 s
 # `graphify affected`: "- load_parts() [calls] src/test_held_out.py:L31" (the line is the edge's).

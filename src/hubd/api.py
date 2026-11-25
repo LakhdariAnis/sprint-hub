@@ -17,7 +17,8 @@ from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, Valid
 from hubd import doctor, reminders, service, windows
 from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
-from hubd.graph import GraphifyGraph
+from hubd.graph import Graph, GraphifyGraph, Node
+from hubd.importer import git
 from hubd.init import PROJECTS
 from hubd.model import one_line
 from hubd.notify import Click, NotifySend
@@ -229,6 +230,38 @@ def create_app(
             "account": p.account,
             "archived": p.archived,
             "graph": p.graph,
+        }
+
+    def node_json(n: Node) -> dict:
+        return {"id": n.id, "label": n.label, "file": n.file, "line": n.line,
+                "group": n.group, "degree": n.degree}  # fmt: skip
+
+    def project_graph(project: str) -> Graph:
+        """The project's graph; 404 with the reason when it is off, 503 when it is not usable."""
+        settings = hub.index.projects.get(project)
+        if settings is None:
+            raise NotFound(f"no project {project}")
+        if not settings.graph:
+            raise NotFound(f"{project} has no graph: turn it on in its project settings")
+        status = hub.graphs.get(project) or {}
+        if status.get("state") == "failed":
+            raise Unavailable(f"the last graph build failed: {status['reason']}")
+        if (graph := hub.graph.load(project)) is None:
+            raise Unavailable(hub.graph.reason(project) or "no graph built yet")
+        return graph
+
+    @app.get("/projects/{project}/graph")
+    async def project_graph_json(project: str) -> dict:
+        graph = project_graph(project)
+        repo = hub.repo(project)
+        head = await asyncio.to_thread(git, repo, "rev-parse", "HEAD") if repo else ""
+        return {
+            "nodes": [node_json(n) for n in graph.nodes],
+            "links": [asdict(e) for e in graph.links],
+            "groups": [{"id": k, "name": v} for k, v in graph.groups.items()],
+            "commit": graph.commit,
+            "built_at": graph.built_at,
+            "stale": bool(graph.commit and head and graph.commit != head),
         }
 
     @app.get("/projects/{project}/steps")
