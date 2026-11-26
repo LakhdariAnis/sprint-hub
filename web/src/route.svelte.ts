@@ -8,6 +8,7 @@ export type Route =
   | { name: 'review'; project?: string; id?: string }
   | { name: 'questions' }
   | { name: 'settings' }
+  | { name: 'graph'; project: string } // the graph pane alone (658a); 658b puts it next to a chat
 
 export function parse(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/').map(decodeURIComponent)
@@ -15,6 +16,7 @@ export function parse(hash: string): Route {
   if (a === 'chat') return { name: 'chat', id: b || undefined }
   if (a === 'projects') return b ? { name: 'project', project: b } : { name: 'projects' }
   if (a === 'steps' && b && c) return { name: 'step', project: b, id: c }
+  if (a === 'graph' && b) return { name: 'graph', project: b }
   if (a === 'archived') return { name: 'archived' }
   if (a === 'questions') return { name: 'questions' }
   if (a === 'settings') return { name: 'settings' }

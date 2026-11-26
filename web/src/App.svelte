@@ -12,6 +12,8 @@
   import Step from './screens/Step.svelte'
   import Settings from './screens/Settings.svelte'
   import Today from './screens/Today.svelte'
+  import GraphPane from './graph/GraphPane.svelte'
+  import { chatAbout } from './chat.svelte'
   import Errors from './Errors.svelte'
   import Confirm from './Confirm.svelte'
   import Help from './Help.svelte'
@@ -47,6 +49,7 @@
       {:else if r.name === 'projects'}<Projects />
       {:else if r.name === 'archived'}<Projects archived />
       {:else if r.name === 'project'}<Project project={r.project} />
+      {:else if r.name === 'graph'}<GraphPane project={r.project} onask={() => chatAbout(r.project)} />
       {:else if r.name === 'step'}<Step project={r.project} id={r.id} />
       {:else}<Review project={r.project} id={r.id} />{/if}
     </main>

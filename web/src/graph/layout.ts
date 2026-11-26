@@ -11,6 +11,8 @@ export function layout(r: number[], links: [number, number][], { length = 38, ma
   const n = r.length
   const at = r.map((_, i) => ({ x: 10 * Math.sqrt(i + 0.5) * Math.cos(i * 2.4), y: 10 * Math.sqrt(i + 0.5) * Math.sin(i * 2.4) }))
   const v = r.map(() => ({ x: 0, y: 0 }))
+  const deg = r.map(() => 0)
+  for (const [s, t] of links) (deg[s]++, deg[t]++)
   let ticks = 0
   for (let alpha = 1; ticks < maxTicks && alpha > 0.005; ticks++, alpha *= 0.985) {
     for (let i = 0; i < n; i++)
@@ -22,8 +24,9 @@ export function layout(r: number[], links: [number, number][], { length = 38, ma
     for (const [s, t] of links) {
       const dx = at[t].x - at[s].x, dy = at[t].y - at[s].y
       const d = Math.hypot(dx, dy) || 1
-      const f = ((d - length) / d) * alpha * 0.25
-      v[s].x += dx * f; v[s].y += dy * f; v[t].x -= dx * f; v[t].y -= dy * f
+      // weaker on a hub, and the hub moves less: numpy's 66 springs would throw it off the map
+      const f = ((d - length) / d) * alpha * 0.5 / Math.min(deg[s], deg[t]), b = deg[s] / (deg[s] + deg[t])
+      v[s].x += dx * f * (1 - b); v[s].y += dy * f * (1 - b); v[t].x -= dx * f * b; v[t].y -= dy * f * b
     }
     let moved = 0
     for (let i = 0; i < n; i++) {

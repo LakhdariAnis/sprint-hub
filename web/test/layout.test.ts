@@ -48,3 +48,10 @@ test('no links and one node: nothing breaks', () => {
   assert.equal(layout([5], []).at.length, 1)
   assert.equal(overlaps(layout([5, 5, 5], []).at, [5, 5, 5]), 0)
 })
+
+test('a library 66 files import (numpy in tinyml) stays on the map', () => {
+  const star: [number, number][] = Array.from({ length: 66 }, (_, i) => [i + 1, 0])
+  const chain: [number, number][] = Array.from({ length: 65 }, (_, i) => [i + 1, i + 2])
+  const { at } = layout(Array(67).fill(4), [...star, ...chain])
+  assert.ok(at.every((p) => Math.abs(p.x) < 1000 && Math.abs(p.y) < 1000), JSON.stringify(at[0]))
+})
