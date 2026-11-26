@@ -12,7 +12,7 @@ from hubd.daemon import Hub
 from hubd.graph import GraphifyGraph, ids_in, read
 from hubd.notify import NullNotifier
 from hubd.runners.chat import tool_line
-from hubd.runners.fake import FakeChat, FakeRunner
+from hubd.runners.fake import GRAPH_COMMAND, GRAPH_TOOL, FakeChat, FakeRunner
 from hubd.vault import save_graph
 
 FIXTURES = Path(__file__).parent / "fixtures" / "graphify"
@@ -229,3 +229,7 @@ def test_adding_a_doc_costs_tokens_and_is_kept_in_project_md(vault: Path, graphs
     assert project_md.read_text() == text
     ctx = asyncio.run(make(vault, graphs).context("demo", None, None))
     assert "The graph holds code only, plus these docs: README.md." in ctx.text
+
+
+def test_fake_chat_graph_line_is_the_real_one() -> None:
+    assert tool_line("Bash", {"command": GRAPH_COMMAND}) == GRAPH_TOOL["line"]

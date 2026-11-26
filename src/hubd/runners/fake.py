@@ -99,13 +99,26 @@ TOOL = {
     "input": "command: ls",
 }
 TOOL_RESULT = {"type": "tool_result", "id": "fake_tool", "error": False, "text": "README.md"}
+# A message that starts with "graph" asks the demo project's graph instead (657).
+GRAPH_COMMAND = (
+    'graphify affected "list_items()" --relation calls --relation imports_from --depth 3 '
+    "--graph graph.json"
+)
+GRAPH_TOOL = TOOL | {
+    "line": "Asked the graph: affected list_items() --relation calls --relation imports_from"
+    " --depth 3",
+    "input": f"command: {GRAPH_COMMAND}",
+}
+GRAPH_RESULT = TOOL_RESULT | {
+    "text": "- serve() [calls] src/api.py:L9\n- draw_list() [calls] src/ui.py:L6"
+}
 
 
 class FakeChat:
     """ChatRunner without Claude: each message gets REPLY in deltas, one tool call, `turn_end`.
 
     A message "run <command>" asks permission for Bash first, as Claude would. A message that
-    starts with "stall" takes 40 times longer.
+    starts with "stall" takes 40 times longer, one that starts with "graph" asks the graph.
     """
 
     def __init__(self, on_event: ChatEvent, delay: float = 0.05):
@@ -168,9 +181,10 @@ class FakeChat:
             await self.on_event(chat_id, {"type": "text", "text": piece})
             await sleep(delay)
         if reply is REPLY:
-            await self.on_event(chat_id, TOOL)
+            graph = text.startswith("graph")
+            await self.on_event(chat_id, GRAPH_TOOL if graph else TOOL)
             await sleep(delay)
-            await self.on_event(chat_id, TOOL_RESULT)
+            await self.on_event(chat_id, GRAPH_RESULT if graph else TOOL_RESULT)
         for piece in reply[3:]:
             await self.on_event(chat_id, {"type": "text", "text": piece})
             await sleep(delay)

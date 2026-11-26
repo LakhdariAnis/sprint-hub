@@ -411,7 +411,7 @@
   .tl:hover, .tl:focus-visible { color: inherit; outline: none; }
   .ts { flex: none; }
   .ts.bad { color: var(--r); }
-  .tn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tn { min-width: 0; overflow-wrap: anywhere; }
   .tin, .tres { max-height: 20em; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .tres.bad { border-color: var(--r); }
   .ask { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--lt); border-radius: 12px; min-width: 0; }

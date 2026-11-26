@@ -249,7 +249,7 @@ test('a tool line opens with ↵ or a click; the cost line; j k pick turns', asy
   await expect(line).toHaveText(/Bash ls/)
   await expect(line).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByLabel('Input')).toBeHidden()
-  await expect(line.locator('.tn')).toHaveCSS('text-overflow', 'ellipsis')
+  await expect(line.locator('.tn')).toHaveCSS('overflow-wrap', 'anywhere')
   await line.click()
   await expect(page.getByLabel('Input')).toHaveText('command: ls')
   await expect(page.getByLabel('Result')).toHaveText('README.md')
@@ -425,6 +425,21 @@ test('answers show code, lists, a table and links; markup stays text; wide code 
   await code.locator('pre').evaluate((el) => (el.textContent = 'x'.repeat(400)))
   expect(await code.locator('pre').evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+// Step 657: a graphify read reads "Asked the graph: …" and wraps at half screen, never cut.
+test('a graph tool line wraps at half screen', async ({ page }) => {
+  await page.setViewportSize({ width: 743, height: 730 })
+  await page.goto('/#/chat')
+  const box = page.getByRole('textbox', { name: 'Message' })
+  await box.fill('graph what breaks')
+  await box.press('Enter')
+  await answered(page)
+  const name = page.locator('.tl .tn')
+  await expect(name).toHaveText('Asked the graph: affected list_items() --relation calls --relation imports_from --depth 3')
+  const { height, lineHeight, cut } = await name.evaluate((n) => ({ height: n.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(n).lineHeight), cut: n.scrollWidth > n.clientWidth }))
+  expect(cut).toBe(false)
+  expect(height).toBeGreaterThan(lineHeight * 1.5) // two lines or more
 })
 
 // Step 611a: a chat with an answer (markdown, a tool line, the cost line) in the Sprint 4 sizes.
