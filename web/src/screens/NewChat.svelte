@@ -11,6 +11,7 @@
   import { graphOf, lists, steps } from '../store.svelte'
   import GraphPane from '../graph/GraphPane.svelte'
   import { MAX, MIN, clamp, read, write } from '../split'
+  import { litNote } from '../links'
 
   let { id }: { id?: string } = $props()
 
@@ -154,6 +155,14 @@
     if (view.project && !lists.projects) loadProjects().then((p) => (lists.projects ??= p), () => {})
   })
   $effect(() => write({ open, left }))
+  // What the map lights (659): the newest graph query of this chat until a tool line or a chip picks another, Show all clears it.
+  let lit = $state.raw<{ ids: Set<string>; note: string } | null>(null)
+  const light = (ids: string[], note: string) => ((lit = { ids: new Set(ids), note }), (open = true))
+  const latest = $derived(turns.flatMap(toolsOf).findLast((t) => t.nodes?.length))
+  $effect(() => {
+    const t = latest
+    lit = t?.nodes ? { ids: new Set(t.nodes), note: litNote(t.line, t.nodes.length) } : null
+  })
   // The split takes the room: the sidebar folds to its ^B rail (not saved) and comes back as it was.
   $effect(() => {
     if (!shared) return
@@ -315,9 +324,16 @@
                 <div class="ai"><Markdown text={b.text} /></div>
               {:else if b.kind === 'tool'}
                 <div class="tool" class:open={b.open}>
+                  {#if b.nodes?.length && graphOn}
+                    <!-- A graph read: the line shows its nodes on the map, the arrow opens its input and result. -->
+                    <div class="tl">
+                      <button type="button" class="tw" aria-label="Input and result" aria-expanded={b.open} onclick={() => (b.open = !b.open)}>{b.open ? '▾' : '▸'}</button><button type="button" class="tn lit" title="Show these {b.nodes.length} nodes on the map" onclick={() => light(b.nodes!, litNote(b.line, b.nodes!.length))}>{b.line}</button>{#if b.result !== undefined}<span class="ts" class:bad={b.error} aria-label={b.error ? 'failed' : 'done'}>{b.error ? '✗' : '✓'}</span>{/if}
+                    </div>
+                  {:else}
                   <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
                     <span class="tw" aria-hidden="true">{b.open ? '▾' : '▸'}</span><span class="tn">{b.line}</span>{#if b.result !== undefined}<span class="ts" class:bad={b.error} aria-label={b.error ? 'failed' : 'done'}>{b.error ? '✗' : '✓'}</span>{/if}
                   </button>
+                  {/if}
                   {#if b.open}
                     <pre class="tin" aria-label="Input">{b.input}</pre>
                     {#if b.result === undefined}<div class="dim xs">{t.done ? 'No result' : 'Running…'}</div>{:else}<pre class="tres" class:bad={b.error} aria-label="Result">{b.result || '(empty)'}</pre>{/if}
@@ -414,7 +430,7 @@
   {#if shared && view.project}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div class="drag" role="separator" aria-orientation="vertical" aria-label="Chat and graph width" aria-valuemin={MIN} aria-valuemax={MAX} aria-valuenow={Math.round(left)} tabindex="0" onpointerdown={drag} onkeydown={nudge}></div>
-    <GraphPane project={view.project} onask={(t) => ((text = t), focusBox())} />
+    <GraphPane project={view.project} {lit} onclear={() => (lit = null)} onask={(t) => ((text = t), focusBox())} />
   {/if}
   </div>
 </div>
@@ -471,6 +487,9 @@
   .ts { flex: none; }
   .ts.bad { color: var(--r); }
   .tn { min-width: 0; overflow-wrap: anywhere; }
+  .tw { flex: none; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+  .tl .lit { padding: 0; border: 0; background: none; color: var(--ac); font: inherit; text-align: left; cursor: pointer; }
+  .tl .lit:hover, .tl .lit:focus-visible, .tl .tw:focus-visible { text-decoration: underline; outline: none; }
   .tin, .tres { max-height: 20em; overflow: auto; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .tres.bad { border-color: var(--r); }
   .ask { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; background: var(--lt); border-radius: 12px; min-width: 0; }

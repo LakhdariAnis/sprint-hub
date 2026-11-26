@@ -110,8 +110,17 @@ GRAPH_TOOL = TOOL | {
     "input": f"command: {GRAPH_COMMAND}",
 }
 GRAPH_RESULT = TOOL_RESULT | {
-    "text": "- serve() [calls] src/api.py:L9\n- draw_list() [calls] src/ui.py:L6"
+    "text": "- serve() [calls] src/api.py:L9\n- draw_list() [calls] src/ui.py:L6",
+    "nodes": ["src_api_serve", "src_ui_draw_list"],  # as hubd adds them when it has a graph.json
 }
+# The answer to it names two nodes and one thing that is not in the graph (659: chips).
+GRAPH_REPLY = [
+    "Asked ",
+    "the graph. ",
+    "",
+    "`list_items()` is called by `draw_list()` in `src/ui.py`. ",
+    "`not_a_node()` is not in it.",
+]
 
 
 class FakeChat:
@@ -173,6 +182,8 @@ class FakeChat:
         delay = self.delay * 40 if text.startswith("stall") else self.delay  # time to press Stop
         if text.startswith("md "):
             reply = MARKDOWN
+        if text.startswith("graph"):
+            reply = GRAPH_REPLY
         if text.startswith("run "):
             answer = await self.ask(chat_id, "Bash", {"command": text.removeprefix("run ")})
             if answer["behavior"] != "allow":
@@ -180,8 +191,8 @@ class FakeChat:
         for piece in reply[:3]:
             await self.on_event(chat_id, {"type": "text", "text": piece})
             await sleep(delay)
-        if reply is REPLY:
-            graph = text.startswith("graph")
+        if reply in (REPLY, GRAPH_REPLY):
+            graph = reply is GRAPH_REPLY
             await self.on_event(chat_id, GRAPH_TOOL if graph else TOOL)
             await sleep(delay)
             await self.on_event(chat_id, GRAPH_RESULT if graph else TOOL_RESULT)

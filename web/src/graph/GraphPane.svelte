@@ -5,8 +5,9 @@
   import { layout } from './layout'
 
   // A project's code graph: a canvas map (130+ nodes, so no SVG) and a Report tab.
-  // `lit`: node ids to light (a chat's graph query, 659); `onask`: "Ask Claude about it" hands its text up.
-  let { project, lit = null, onask }: { project: string; lit?: Set<string> | null; onask: (text: string) => void } = $props()
+  // `lit`: node ids to light and the banner that says why (a chat's graph query or a chip, 659); `onclear`: Show all was pressed;
+  // `onask`: "Ask Claude about it" hands its text up.
+  let { project, lit = null, onclear, onask }: { project: string; lit?: { ids: Set<string>; note: string } | null; onclear?: () => void; onask: (text: string) => void } = $props()
 
   type GNode = { id: string; label: string; file: string; line: number | null; group: number | null; degree: number; x: number; y: number; r: number }
   type Data = { nodes: GNode[]; links: { source: string; target: string; relation: string }[]; groups: { id: number; name: string }[]; commit: string | null; stale: boolean }
@@ -76,8 +77,8 @@
   const counts = $derived(data ? data.groups.map((g) => ({ ...g, n: data!.nodes.filter((n) => n.group === g.id).length })).filter((g) => g.n) : [])
 
   // What stands out: 659's `lit` until a search or "What depends on it" replaces it, "Show all" clears it.
-  let bright = $derived(lit)
-  let note = $derived(lit ? `${lit.size} nodes from the chat` : '')
+  let bright = $derived(lit?.ids ?? null)
+  let note = $derived(lit?.note ?? '')
   let q = $state('')
   const hidden = new SvelteSet<number>()
   let sel = $state<GNode | null>(null)
@@ -90,6 +91,7 @@
   }
   function showAll() {
     ;[bright, note, q] = [null, '', '']
+    onclear?.()
   }
   const toggle = (g: number) => (hidden.has(g) ? hidden.delete(g) : hidden.add(g))
 

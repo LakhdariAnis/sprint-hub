@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { matcher } from '../src/links.ts'
+import { litNote, matcher } from '../src/links.ts'
 
 const nodes = [
   { id: 'api', label: 'api.py', file: 'src/api.py' },
@@ -37,4 +37,11 @@ test('a file path matches its file node only, a bare file name too', () => {
 test('around: the node and one link each way', () => {
   assert.deepEqual([...m.around(['serve'])].sort(), ['api', 'load', 'serve'])
   assert.deepEqual([...m.around(['fastapi'])], ['fastapi'])
+})
+
+test('litNote names the query without the command and its options', () => {
+  assert.equal(litNote('Asked the graph: affected chronological_split()', 22), '22 nodes read chronological_split()')
+  assert.equal(litNote('Asked the graph: affected list_items() --relation calls --depth 3', 2), '2 nodes read list_items()')
+  assert.equal(litNote('Asked the graph: path a() b()', 1), '1 node read a() b()')
+  assert.equal(litNote('Asked the graph: query', 3), '3 nodes from the graph')
 })

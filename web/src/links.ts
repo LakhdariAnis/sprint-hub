@@ -26,3 +26,9 @@ export function matcher(nodes: Node[], links: Link[]) {
     },
   }
 }
+
+// The banner for a graph tool line: "Asked the graph: affected f() --depth 3" with 22 nodes is "22 nodes read f()".
+export function litNote(line: string, n: number): string {
+  const what = line.replace(/^Asked the graph:\s*/, '').replace(/^\S+\s*/, '').split(' --')[0].trim()
+  return `${n} node${n === 1 ? '' : 's'}${what ? ` read ${what}` : ' from the graph'}`
+}

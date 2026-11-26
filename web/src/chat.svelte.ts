@@ -4,7 +4,7 @@ import type { End } from './cost'
 export type Turn = { me: string; blocks: Block[]; done: boolean; error?: string; stopped?: boolean; end?: End }
 export type Block = ({ kind: 'text'; text: string }) | ({ kind: 'tool' } & Tool) | ({ kind: 'ask' } & Ask)
 // A tool call (608): `line` is the collapsed line, `input` and `result` show when `open`. `result` is undefined until the call returns.
-export type Tool = { id?: string; name: string; line: string; input: string; result?: string; error?: boolean; open: boolean }
+export type Tool = { id?: string; name: string; line: string; input: string; result?: string; error?: boolean; nodes?: string[]; open: boolean }
 export const answerOf = (t: Turn) => t.blocks.flatMap((b) => (b.kind === 'text' ? [b.text] : [])).join('')
 export const asksOf = (t: Turn) => t.blocks.filter((b): b is { kind: 'ask' } & Ask => b.kind === 'ask')
 export const toolsOf = (t: Turn) => t.blocks.filter((b): b is { kind: 'tool' } & Tool => b.kind === 'tool')
@@ -20,7 +20,7 @@ export const chats = $state<Record<string, { turns: Turn[] } & Partial<Meta>>>({
 export const pills = $state({ project: null as string | null, model: 'sonnet', effort: 'medium', sprint: null as string | null, step: null as string | null })
 
 // What hubd sends on `/events` for a chat (`chat` events) and in GET /chats/<id> turns, less the fields 608 uses.
-type Ev = { kind: string; text?: string; message?: string; answer?: string; tool_id?: string; name?: string; line?: string; input?: string; error?: boolean } & Partial<Ask> & End
+type Ev = { kind: string; text?: string; message?: string; answer?: string; tool_id?: string; name?: string; line?: string; input?: string; error?: boolean; nodes?: string[] } & Partial<Ask> & End
 
 // Events of a message sent mid-turn wait for the turn before it, as in hubd.
 function take(turn: Turn, e: Ev) {
@@ -31,7 +31,7 @@ function take(turn: Turn, e: Ev) {
   } else if (e.kind === 'tool') turn.blocks.push({ kind: 'tool', id: e.tool_id, name: e.name ?? 'tool', line: e.line ?? e.name ?? 'tool', input: e.input ?? '', open: false })
   else if (e.kind === 'tool_result') {
     const tool = toolsOf(turn).find((t) => t.id === e.tool_id)
-    if (tool) Object.assign(tool, { result: e.text ?? '', error: !!e.error })
+    if (tool) Object.assign(tool, { result: e.text ?? '', error: !!e.error, nodes: e.nodes })
   } else if (e.kind === 'turn_end') {
     turn.done = true
     turn.end = { model: e.model, cost_usd: e.cost_usd, input_tokens: e.input_tokens, output_tokens: e.output_tokens, duration_ms: e.duration_ms }
