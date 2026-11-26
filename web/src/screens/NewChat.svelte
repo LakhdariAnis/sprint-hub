@@ -347,7 +347,7 @@
                   {#if b.nodes?.length && graphOn}
                     <!-- A graph read: the line shows its nodes on the map, the arrow opens its input and result. -->
                     <div class="tl">
-                      <button type="button" class="tw" aria-label="Input and result" aria-expanded={b.open} onclick={() => (b.open = !b.open)}>{b.open ? '▾' : '▸'}</button><button type="button" class="tn lit" title="Show these {b.nodes.length} nodes on the map" onclick={() => light(b.nodes!, litNote(b.line, b.nodes!.length))}>{b.line}</button>{#if b.result !== undefined}<span class="ts" class:bad={b.error} aria-label={b.error ? 'failed' : 'done'}>{b.error ? '✗' : '✓'}</span>{/if}
+                      <button type="button" class="tw" aria-label="Open the call" aria-expanded={b.open} onclick={() => (b.open = !b.open)}>{b.open ? '▾' : '▸'}</button><button type="button" class="tn lit" title="Show these {b.nodes.length} nodes on the map" onclick={() => light(b.nodes!, litNote(b.line, b.nodes!.length))}>{b.line}</button>{#if b.result !== undefined}<span class="ts" class:bad={b.error} aria-label={b.error ? 'failed' : 'done'}>{b.error ? '✗' : '✓'}</span>{/if}
                     </div>
                   {:else}
                   <button type="button" class="tl" aria-expanded={b.open} title={b.line} onclick={() => (b.open = !b.open)}>
