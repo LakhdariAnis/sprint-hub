@@ -6,6 +6,7 @@ https://code.claude.com/docs/en/cli-reference, https://code.claude.com/docs/en/h
 (checked 2026-11-11).
 """
 
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ COMMANDS = ("Bash", "PowerShell")  # tools that run code: never in a scratch cha
 # `Edit(path)` rules cover every built-in tool that writes a file.
 # https://code.claude.com/docs/en/agent-sdk/permissions#path-patterns-in-rules (checked 2026-11-11)
 FILES = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+# graphify commands that only read a graph: a project chat runs them with no card (657).
+GRAPH_READS = ("query", "path", "affected", "explain")
 DIFF_LINES = 12  # lines of a card's diff
 ASK_WAIT = 10 * 60  # seconds a card waits for Anis, then the call is denied
 
@@ -46,6 +49,32 @@ def refuse(tool: str, tool_input: dict[str, Any], cwd: Path, scratch: bool) -> s
     if tool in FILES and (path is None or not inside(path, cwd)):
         return f"A chat with no project only writes inside {cwd}."
     return None
+
+
+def graph_read(tool: str, tool_input: dict[str, Any], graph: Path | None) -> bool:
+    """Is this Bash call one plain `graphify query|path|affected|explain … --graph <graph>`?
+
+    Nothing the shell would read as more than one command, a redirect or an expansion passes.
+    """
+    command = tool_input.get("command")
+    if tool != "Bash" or graph is None or not isinstance(command, str):
+        return False
+    if any(c in command for c in "$`\\\n\r"):
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:  # an open quote
+        return False
+    if any(w and set(w) <= set(lexer.punctuation_chars) for w in words):
+        return False  # ; & | < > ( ) outside quotes
+    if len(words) < 3 or words[0] != "graphify" or words[1] not in GRAPH_READS:
+        return False
+    given = [words[i + 1] for i, w in enumerate(words[:-1]) if w == "--graph"]
+    if any(w.startswith("--graph=") for w in words) or words[-1] == "--graph":
+        return False
+    return given == [str(graph)]
 
 
 def chat_wide(tool: str, tool_input: dict[str, Any], cwd: Path) -> bool:

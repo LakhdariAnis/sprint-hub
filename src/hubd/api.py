@@ -136,8 +136,12 @@ def create_app(
     def account(project: str) -> str:
         return p.account if (p := hub.index.projects.get(project)) else "claude"
 
+    def graph(project: str) -> Path | None:
+        p = hub.index.projects.get(project)
+        return hub.graph.where(project) if p and p.graph else None
+
     chats = (
-        Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup, workspace, account)
+        Chats(chat, hub.emit, hub.vault, hub.context, transcript, popup, workspace, account, graph)
         if hub
         else None
     )

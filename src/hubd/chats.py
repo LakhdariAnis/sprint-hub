@@ -94,6 +94,7 @@ class Chats:
         popup: Popup = lambda *_: False,
         workspace: Callable[[str], int | None] = lambda _: None,
         account: Callable[[str], str] = lambda _: "claude",
+        graph: Callable[[str], Path | None] = lambda _: None,
     ):
         self.runner = runner(self.on_event)
         self.runner.ask = self.ask
@@ -106,6 +107,7 @@ class Chats:
         self.popup = popup
         self.workspace = workspace  # a project's Hyprland workspace, read at each open
         self.account = account  # and its Claude login
+        self.graph = graph  # its graph.json when `graph: on`: graphify reads of it need no card
         self.clock = time.monotonic  # tests move it
         # Each page window's last report: window id -> (focused, chat it shows, when).
         self.windows: dict[str, tuple[bool, str | None, float]] = {}
@@ -295,6 +297,8 @@ class Chats:
         if why := permits.refuse(tool, tool_input, chat.cwd, chat.scratch):
             await self.on_event(chat_id, {"type": "permission_refused", **card, "message": why})
             return {"behavior": "deny", "message": why}
+        if chat.project and permits.graph_read(tool, tool_input, self.graph(chat.project)):
+            return ALLOW
         wide = permits.chat_wide(tool, tool_input, chat.cwd)
         if wide and tool in chat.allowed:
             return ALLOW

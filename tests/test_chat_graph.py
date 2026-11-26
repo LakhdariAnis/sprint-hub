@@ -6,10 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from hubd import permits
+from hubd.chats import Chats
 from hubd.daemon import Hub
 from hubd.graph import GraphifyGraph
 from hubd.notify import NullNotifier
-from hubd.runners.fake import FakeRunner
+from hubd.runners.fake import FakeChat, FakeRunner
 from hubd.vault import save_graph
 
 FIXTURES = Path(__file__).parent / "fixtures" / "graphify"
@@ -51,3 +53,80 @@ def test_no_block_when_on_but_never_built(vault: Path, tmp_path: Path) -> None:
     hub = make(vault, tmp_path / "empty")
     ctx = asyncio.run(hub.context("demo", None, None))
     assert "graph" not in ctx.parts and "graphify" not in ctx.text
+
+
+GRAPH = Path("/home/a/.local/share/sprint-hub/graphs/tinyml/graph.json")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f'graphify query "what calls chronological_split" --graph {GRAPH}',
+        f'graphify path "load1_split()" "chronological_split()" --graph {GRAPH} --undirected',
+        f"graphify affected 'chronological_split()' --depth 3 --graph {GRAPH}",
+        f'graphify explain "split.py" --graph {GRAPH}',
+        f'graphify query "a; b && c | d" --graph "{GRAPH}"',  # quoted: one argument, no shell
+    ],
+)
+def test_the_four_read_commands_need_no_card(command: str) -> None:
+    assert permits.graph_read("Bash", {"command": command}, GRAPH)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls",
+        f"graphify add https://example.com --graph {GRAPH}",
+        f"graphify update . --graph {GRAPH}",
+        f'graphify query "x" --graph {GRAPH}; rm -rf ~',
+        f'graphify query "x" --graph {GRAPH} && ls',
+        f'graphify query "x" --graph {GRAPH} | tee out',
+        f'graphify query "x" --graph {GRAPH} > out',
+        f'graphify query "$(rm -rf ~)" --graph {GRAPH}',
+        f'graphify query "`ls`" --graph {GRAPH}',
+        f'graphify query "x" --graph {GRAPH}\nls',
+        f"graphify explain main() --graph {GRAPH}",  # unquoted (): a shell syntax error
+        'graphify query "x"',  # no --graph: graphify-out/ of the folder
+        'graphify query "x" --graph /tmp/other.json',
+        f'graphify query "x" --graph {GRAPH} --graph /tmp/other.json',
+        f'graphify query "x" --graph={GRAPH}',
+        f'GRAPHIFY_OUT=/tmp graphify query "x" --graph {GRAPH}',
+        f'/usr/bin/graphify query "x" --graph {GRAPH}',
+        f'graphify query "x --graph {GRAPH}',  # open quote
+        f'graphify query "x" --graph {GRAPH} &',
+    ],
+)
+def test_anything_else_still_asks(command: str) -> None:
+    assert not permits.graph_read("Bash", {"command": command}, GRAPH)
+
+
+def test_not_bash_or_no_graph_asks() -> None:
+    command = {"command": f'graphify query "x" --graph {GRAPH}'}
+    assert not permits.graph_read("PowerShell", command, GRAPH)
+    assert not permits.graph_read("Bash", command, None)
+    assert not permits.graph_read("Bash", {"command": 3}, GRAPH)
+
+
+def test_chats_allow_graph_reads_without_a_card(tmp_path: Path) -> None:
+    events: list[dict] = []
+    chats = Chats(
+        lambda on_event: FakeChat(on_event, delay=0), events.append, tmp_path,
+        context=None, graph=lambda project: GRAPH if project == "tinyml" else None,
+    )  # type: ignore[arg-type]  # fmt: skip
+    read = {"command": f'graphify affected "chronological_split()" --graph {GRAPH}'}
+
+    async def main() -> None:
+        on = await chats.open("tinyml", tmp_path, "sonnet", "high", None)
+        off = await chats.open("other", tmp_path, "sonnet", "high", None)
+        assert await chats.ask(on.id, "Bash", read) == {"behavior": "allow"}
+        asking = asyncio.create_task(chats.ask(on.id, "Bash", {"command": "ls"}))
+        other = asyncio.create_task(chats.ask(off.id, "Bash", read))
+        await asyncio.sleep(0.01)
+        cards = [e for e in events if e.get("kind") == "permission"]
+        assert [(e["id"], e["target"]) for e in cards] == [
+            (on.id, "ls"), (off.id, read["command"])
+        ]  # fmt: skip
+        asking.cancel()
+        other.cancel()
+
+    asyncio.run(main())
