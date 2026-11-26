@@ -8,7 +8,9 @@
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
   import { filter, options, slashQuery, split, type Opt } from '../slash'
-  import { lists, steps } from '../store.svelte'
+  import { graphOf, lists, steps } from '../store.svelte'
+  import GraphPane from '../graph/GraphPane.svelte'
+  import { MAX, MIN, clamp, read, write } from '../split'
 
   let { id }: { id?: string } = $props()
 
@@ -140,6 +142,30 @@
     return () => (live = false)
   })
   const context = $derived(cid && chats[cid]?.model ? (chats[cid].context ?? null) : preview)
+  // The split (658b): chat | handle | graph, only for a project whose graph is on. `open` and `left` (the chat's % of the width) are kept per window.
+  const saved0 = read()
+  let open = $state(saved0.open)
+  let left = $state(saved0.left)
+  let grid = $state<HTMLElement>()
+  const graphOn = $derived(!!view.project && graphOf(view.project))
+  const shared = $derived(graphOn && open)
+  $effect(() => write({ open, left }))
+  function drag(e: PointerEvent) {
+    const h = e.currentTarget as HTMLElement
+    h.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => {
+      const b = grid!.getBoundingClientRect()
+      left = clamp(((ev.clientX - b.left) / b.width) * 100)
+    }
+    const up = () => (h.removeEventListener('pointermove', move), h.removeEventListener('pointerup', up))
+    h.addEventListener('pointermove', move)
+    h.addEventListener('pointerup', up)
+  }
+  function nudge(e: KeyboardEvent) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    left = clamp(left + (e.key === 'ArrowLeft' ? -3 : 3))
+  }
   const projectName = (id: string | null) => (id ? (lists.projects?.find((p) => p.id === id)?.name ?? id) : 'none')
 
   // The / menu: `at` = command row, `opt` = option row, `col` = the column that has the keys. Esc sets `shut` until the next key typed.
@@ -257,6 +283,7 @@
         onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveName() : e.key === 'Escape' && ((renaming = false), focusBox()))} />
     {:else}{title || 'New chat'}{/if}
   </Header>
+  <div class="split" class:on={shared} style:--left="{left}%" bind:this={grid}>
   <div class="body" class:home>
     <div class="log" bind:this={log} {onscroll}>
       <div class="col">
@@ -366,6 +393,12 @@
       </div>
     </form>
   </div>
+  {#if shared && view.project}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div class="drag" role="separator" aria-orientation="vertical" aria-label="Chat and graph width" aria-valuemin={MIN} aria-valuemax={MAX} aria-valuenow={Math.round(left)} tabindex="0" onpointerdown={drag} onkeydown={nudge}></div>
+    <GraphPane project={view.project} onask={(t) => ((text = t), focusBox())} />
+  {/if}
+  </div>
 </div>
 
 <style>
@@ -373,7 +406,11 @@
   .xs { font-size: 11px; }
   .page { height: 100%; display: flex; flex-direction: column; container-type: size; }
   /* One flat canvas under the header: the log scrolls, the box stays at the bottom. */
-  .body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .split { flex: 1; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+  .split.on { grid-template-columns: var(--left) 6px minmax(0, 1fr); }
+  .drag { cursor: col-resize; background: var(--sel); touch-action: none; }
+  .drag:hover, .drag:focus-visible, .drag:active { background: var(--ac); outline: none; }
+  .body { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
   .log { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 28px 12px; }
   /* Home: the log shrinks to the greeting and the whole body centres, so the box sits mid-page. */
   .home { justify-content: center; }
@@ -463,6 +500,12 @@
   .num { margin-right: 8px; }
   .pad { padding: 5px 8px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* Narrow: chat on top, graph under; the handle goes (the halves are equal). */
+  @container (max-width: 900px) {
+    .split.on { grid-template: minmax(0, 1fr) minmax(0, 1fr) / minmax(0, 1fr); }
+    .drag { display: none; }
+    .split > :global(.graph) { border-top: 1px solid var(--sel); }
+  }
   @container (max-width: 700px) {
     .log { padding: 16px 12px 8px; }
     .cmp { padding: 0 12px 12px; }

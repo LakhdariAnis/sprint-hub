@@ -104,8 +104,8 @@ addEventListener('keydown', (e) => {
     return e.preventDefault()
   }
   const el = e.target as HTMLElement
-  // Off while typing; Enter on a focused button or link keeps its own click.
-  if (el.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.altKey) return
+  // Off while typing, and on the split's handle (its arrows are its own); Enter on a focused button or link keeps its own click.
+  if (el.closest('input, textarea, select, [contenteditable], [role="separator"]') || e.metaKey || e.altKey) return
   if (e.ctrlKey) {
     if (!e.shiftKey && ctrl[e.key]) {
       ctrl[e.key]()
