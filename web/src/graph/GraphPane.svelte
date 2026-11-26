@@ -46,6 +46,24 @@
     if (status?.state !== 'building') untrack(load)
   })
 
+  // The Report tab: read when first opened, again after a rebuild.
+  type Brief = { id: string; label: string; file: string; degree: number; group: number | null }
+  type Report = { god_nodes: Brief[]; cycles: string[][]; groups: { id: number; name: string; size: number; top: Brief[] }[]; unread: { count: number; top: string[] } }
+  let tab = $state<'map' | 'report'>('map')
+  let report = $state.raw<Report | string | null>(null)
+  $effect(() => {
+    void data
+    report = null
+  })
+  $effect(() => {
+    if (tab === 'report' && data && report === null) untrack(loadReport)
+  })
+  async function loadReport() {
+    const r = await fetch(`/projects/${encodeURIComponent(project)}/graph/report`).catch(() => null)
+    report = r?.ok ? await r.json() : `Could not read the report${r ? ` (HTTP ${r.status})` : ''}`
+  }
+  const rel = (f: string) => f.replace(/^src\//, '')
+
   // The map: view transform, size, theme (a switch rewrites the root's style attribute).
   let tf = $state({ x: 0, y: 0, k: 1 })
   let W = $state(0), H = $state(0), themed = $state(0)
@@ -212,54 +230,98 @@
       <span class="stat">{data.nodes.length} nodes · {data.links.length} links · {data.groups.length} groups{#if data.commit}{" · "}commit {data.commit.slice(0, 7)}{/if}</span>
       {#if data.stale && data.commit}<span class="chip x-y" title="The repo moved on since this build">built from {data.commit.slice(0, 7)}</span>{/if}
       <span class="sp"></span>
-      <input class="find" placeholder="Find a function or file" aria-label="Find in graph" bind:value={q} oninput={search} />
-    </div>
-    <div class="stage" bind:this={stage}>
-      <canvas
-        bind:this={canvas}
-        style:width="{W}px"
-        style:height="{H}px"
-        aria-label="Code graph of {project}. Drag to pan, scroll to zoom, click a node."
-        title={hover ? `${hover.label} · ${hover.file || 'library'}` : ''}
-        onpointerdown={down}
-        onpointermove={move}
-        onpointerup={up}
-        onpointerleave={() => (hover = null)}
-        onwheel={wheel}
-      ></canvas>
-      {#if note}
-        <div class="banner" role="status"><span>{note}</span><button onclick={showAll}>Show all</button></div>
-      {/if}
-      <div class="zoom">
-        <button aria-label="Zoom in" onclick={() => zoomAt(1.3)}>+</button>
-        <button aria-label="Zoom out" onclick={() => zoomAt(1 / 1.3)}>−</button>
-        <button aria-label="Fit" onclick={fit}>⤢</button>
+      {#if tab === 'map'}<input class="find" placeholder="Find a function or file" aria-label="Find in graph" bind:value={q} oninput={search} />{/if}
+      <div class="tabs" role="group" aria-label="Graph view">
+        <button aria-pressed={tab === 'map'} onclick={() => (tab = 'map')}>Map</button>
+        <button aria-pressed={tab === 'report'} onclick={() => (tab = 'report')}>Report</button>
       </div>
-      <!-- One row: when the pane is narrow the card wraps above the legend instead of covering it. -->
-      <div class="over">
-        <div class="legend" role="group" aria-label="Groups">
-          {#each counts as g (g.id)}
-            <button class:off={hidden.has(g.id)} aria-pressed={!hidden.has(g.id)} title="Show or hide this group" onclick={() => toggle(g.id)}>
-              <span class="dot" style:--x="var({tokenOf(g.id)})"></span>{g.name} · {g.n}
-            </button>
-          {/each}
-        </div>
-        {#if sel}
-          <div class="card" role="dialog" aria-label={sel.label}>
-            <div class="ct">{sel.label}<button class="x" aria-label="Close" onclick={() => (sel = null)}>×</button></div>
-            <div class="cf">{sel.file ? `${sel.file}${sel.line ? `:${sel.line}` : ''}` : 'library (outside the repo)'}</div>
-            <div class="row">
-              <span class="dot" style:--x="var({tokenOf(sel.group)})"></span>
-              {data.groups.find((g) => g.id === sel!.group)?.name ?? 'no group'} · {into} in · {outOf} out
-            </div>
-            <div class="acts">
-              <button onclick={() => dependents(sel!)}>What depends on it</button>
-              <button onclick={() => onask(`Explain ${sel!.label} in ${sel!.file || 'the project'}${sel!.line ? `:${sel!.line}` : ''}`)}>Ask Claude about it</button>
-            </div>
+    </div>
+    {#if tab === 'report'}
+      <div class="report">
+        {#if typeof report === 'string'}
+          <p class="msg bad" role="alert">{report}</p>
+        {:else if report}
+          <h4>Most connected</h4>
+          {@const most = Math.max(1, ...report.god_nodes.map((n) => n.degree))}
+          <div class="gods">
+            {#each report.god_nodes as n (n.id)}
+              <code>{n.label}</code><span class="f">{rel(n.file)}</span>
+              <span class="bar" style:width="{(n.degree / most) * 100}%" title="{n.degree} links"></span><span class="f">{n.degree}</span>
+            {/each}
           </div>
+          <h4>Import cycles</h4>
+          {#each report.cycles as c, i (i)}
+            <div class="warnc">{c.map(rel).join(' → ')}</div>
+          {:else}
+            <p class="none">No import cycle.</p>
+          {/each}
+          <h4>Groups</h4>
+          <div class="groups">
+            {#each report.groups as g (g.id)}
+              <div class="grp">
+                <b><span class="dot" style:--x="var({tokenOf(g.id)})"></span>{g.name} <span>· {g.size}</span></b>
+                <span>{g.top.map((n) => n.label).join(', ')}</span>
+              </div>
+            {/each}
+          </div>
+          <h4>Not in the graph</h4>
+          {#if report.unread.count}
+            <p class="none">{report.unread.count} files graphify could not read{report.unread.top.length ? `: ${report.unread.top.join(', ')}` : ''}.</p>
+          {:else}
+            <p class="none">Every file was read.</p>
+          {/if}
+        {:else}
+          <p class="msg">Reading the report…</p>
         {/if}
       </div>
-    </div>
+    {:else}
+      <div class="stage" bind:this={stage}>
+        <canvas
+          bind:this={canvas}
+          style:width="{W}px"
+          style:height="{H}px"
+          aria-label="Code graph of {project}. Drag to pan, scroll to zoom, click a node."
+          title={hover ? `${hover.label} · ${hover.file || 'library'}` : ''}
+          onpointerdown={down}
+          onpointermove={move}
+          onpointerup={up}
+          onpointerleave={() => (hover = null)}
+          onwheel={wheel}
+        ></canvas>
+        {#if note}
+          <div class="banner" role="status"><span>{note}</span><button onclick={showAll}>Show all</button></div>
+        {/if}
+        <div class="zoom">
+          <button aria-label="Zoom in" onclick={() => zoomAt(1.3)}>+</button>
+          <button aria-label="Zoom out" onclick={() => zoomAt(1 / 1.3)}>−</button>
+          <button aria-label="Fit" onclick={fit}>⤢</button>
+        </div>
+        <!-- One row: when the pane is narrow the card wraps above the legend instead of covering it. -->
+        <div class="over">
+          <div class="legend" role="group" aria-label="Groups">
+            {#each counts as g (g.id)}
+              <button class:off={hidden.has(g.id)} aria-pressed={!hidden.has(g.id)} title="Show or hide this group" onclick={() => toggle(g.id)}>
+                <span class="dot" style:--x="var({tokenOf(g.id)})"></span>{g.name} · {g.n}
+              </button>
+            {/each}
+          </div>
+          {#if sel}
+            <div class="card" role="dialog" aria-label={sel.label}>
+              <div class="ct">{sel.label}<button class="x" aria-label="Close" onclick={() => (sel = null)}>×</button></div>
+              <div class="cf">{sel.file ? `${sel.file}${sel.line ? `:${sel.line}` : ''}` : 'library (outside the repo)'}</div>
+              <div class="row">
+                <span class="dot" style:--x="var({tokenOf(sel.group)})"></span>
+                {data.groups.find((g) => g.id === sel!.group)?.name ?? 'no group'} · {into} in · {outOf} out
+              </div>
+              <div class="acts">
+                <button onclick={() => dependents(sel!)}>What depends on it</button>
+                <button onclick={() => onask(`Explain ${sel!.label} in ${sel!.file || 'the project'}${sel!.line ? `:${sel!.line}` : ''}`)}>Ask Claude about it</button>
+              </div>
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
   {:else}
     <p class="msg">Loading the code graph…</p>
   {/if}
@@ -295,6 +357,21 @@
   .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .acts button { border: 0; border-radius: 7px; background: var(--sel); padding: 4px 10px; font-size: 12.5px; cursor: pointer; }
   .acts button:first-child { background: var(--ac); color: var(--bg); }
+  .tabs { display: flex; gap: 2px; background: var(--dk); border-radius: 8px; padding: 2px; }
+  .tabs button { border: 0; background: none; color: var(--fg2); border-radius: 6px; padding: 4px 12px; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-pressed='true'] { background: var(--sel); color: var(--fg); }
+  .report { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 24px; }
+  .report h4 { font: 11px var(--mono); letter-spacing: 0.1em; color: var(--fgm); margin: 18px 0 8px; text-transform: uppercase; }
+  .gods { display: grid; grid-template-columns: auto minmax(0, auto) minmax(40px, 1fr) auto; gap: 4px 12px; font-size: 13px; align-items: center; }
+  .gods code { font: 13px var(--mono); overflow-wrap: anywhere; }
+  .gods .f { color: var(--fgm); font: 12px var(--mono); overflow-wrap: anywhere; }
+  .bar { height: 6px; border-radius: 3px; background: var(--y); }
+  .warnc { background: color-mix(in srgb, var(--r) 10%, var(--dk)); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font: 13px/1.6 var(--mono); overflow-wrap: anywhere; }
+  .none { margin: 0; color: var(--fg2); font-size: 13.5px; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .grp { background: var(--dk); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 0; }
+  .grp b { display: flex; gap: 8px; align-items: center; font-weight: 600; overflow-wrap: anywhere; }
+  .grp span { color: var(--fgm); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
   .zoom { position: absolute; right: 14px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
   .zoom button { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--sel); background: var(--dk); color: var(--fg2); cursor: pointer; }
   .zoom button:hover { color: var(--fg); }
