@@ -4,7 +4,7 @@
   import Markdown from '../Markdown.svelte'
   import { answer, answerOf, asksOf, toolsOf, change, chats, edit, saved, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
   import { costLine } from '../cost'
-  import { useKeys } from '../keys.svelte'
+  import { keys, useKeys } from '../keys.svelte'
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
   import { filter, options, slashQuery, split, type Opt } from '../slash'
@@ -89,7 +89,7 @@
     } else lastEsc = now
   }
   const choices: Record<string, 'allow' | 'deny' | 'chat'> = { a: 'allow', d: 'deny', A: 'chat' }
-  useKeys({ x: close, R: rename, c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
+  useKeys({ get g() { return graphOn ? () => (open = !open) : undefined }, x: close, R: rename, c: focusBox, i: focusBox, Escape: esc, j: () => pick(1), k: () => pick(-1), Enter: fold, a: () => decide('allow'), d: () => decide('deny'), A: () => decide('chat') })
   const verb = (a: Ask) => (a.tool === 'Bash' || a.tool === 'PowerShell' ? 'run' : a.diff !== null || /Edit|Write/.test(a.tool) ? 'change' : 'use')
   const outcome: Record<string, string> = {
     allow: 'Allowed',
@@ -150,6 +150,13 @@
   const graphOn = $derived(!!view.project && graphOf(view.project))
   const shared = $derived(graphOn && open)
   $effect(() => write({ open, left }))
+  // The split takes the room: the sidebar folds to its ^B rail (not saved) and comes back as it was.
+  $effect(() => {
+    if (!shared) return
+    const was = untrack(() => keys.rail)
+    keys.rail = true
+    return () => void (!was && (keys.rail = false))
+  })
   function drag(e: PointerEvent) {
     const h = e.currentTarget as HTMLElement
     h.setPointerCapture(e.pointerId)
@@ -277,7 +284,14 @@
 <div class="page">
   <Header>
     {#snippet crumb()}<a href="#/chat">Chats</a> › {title ? 'Chat' : 'New'}{/snippet}
-    {#snippet aside()}{#if !turns.length && !title}Not saved until you send{/if}{/snippet}
+    {#snippet aside()}
+      {#if graphOn}
+        <div class="seg" role="group" aria-label="Layout">
+          <button type="button" aria-pressed={!open} onclick={() => (open = false)}>Chat</button>
+          <button type="button" aria-pressed={open} onclick={() => (open = true)}>Chat + Graph <span class="kb">g</span></button>
+        </div>
+      {:else if !turns.length && !title}Not saved until you send{/if}
+    {/snippet}
     {#if renaming}
       <input class="name" aria-label="Chat name" maxlength="100" bind:this={nameBox} bind:value={draft} onblur={() => (renaming = false)}
         onkeydown={(e) => (e.key === 'Enter' && !e.isComposing ? saveName() : e.key === 'Escape' && ((renaming = false), focusBox()))} />
@@ -408,6 +422,10 @@
   /* One flat canvas under the header: the log scrolls, the box stays at the bottom. */
   .split { flex: 1; min-height: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
   .split.on { grid-template-columns: var(--left) 6px minmax(0, 1fr); }
+  .seg { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--sel); border-radius: 8px; }
+  .seg button { border: 0; background: none; color: var(--fg2); border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .seg button[aria-pressed='true'] { background: var(--sel); color: var(--fg); }
+  .seg button:focus-visible { outline: 2px solid var(--ac); }
   .drag { cursor: col-resize; background: var(--sel); touch-action: none; }
   .drag:hover, .drag:focus-visible, .drag:active { background: var(--ac); outline: none; }
   .body { min-width: 0; min-height: 0; display: flex; flex-direction: column; }

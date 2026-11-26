@@ -2,7 +2,7 @@ import { onMount } from 'svelte'
 import { hashOf, rows } from './open.svelte'
 import { focusProject } from './steps'
 
-// The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here.
+// The one key handler of the app. Screens add their own keys with `useKeys`; `g` + letter and `?` live here; a screen that defines `g` (the chat's split) takes the key instead.
 // `rail`: the sidebar is collapsed to its icon rail (^B). `shown`: the URL hash of the screen on show (nav.svelte.ts).
 const railKey = 'sprint-hub:rail'
 const saved = (() => { try { return localStorage.getItem(railKey) === '1' } catch { return false } })()
@@ -36,7 +36,7 @@ export const openPalette = () => (keys.palette = true)
 // `n`: a screen with its own `n` (the Step screen's fresh chat) wins; elsewhere it opens New chat.
 export const newChat = () => (location.hash = '#/chat')
 
-type Handlers = Record<string, () => void>
+type Handlers = Record<string, (() => void) | undefined>
 let current: Handlers = {}
 // Screen keys pressed while the URL is ahead of the screen (hashchange fires late, then the data loads): they belong to the next screen.
 let held: string[] = []
@@ -108,7 +108,7 @@ addEventListener('keydown', (e) => {
   if (el.closest('input, textarea, select, [contenteditable], [role="separator"]') || e.metaKey || e.altKey) return
   if (e.ctrlKey) {
     if (!e.shiftKey && ctrl[e.key]) {
-      ctrl[e.key]()
+      ctrl[e.key]?.()
       e.preventDefault()
     }
     return
@@ -122,7 +122,7 @@ addEventListener('keydown', (e) => {
     if (k === 'Escape' || k === (keys.help ? '?' : 'e')) keys.help = keys.errors = false
   } else if (keys.pending) {
     run = go[k]
-  } else if (k === 'g') {
+  } else if (k === 'g' && !current.g) {
     keys.pending = true
     clearTimeout(timer)
     timer = setTimeout(() => (keys.pending = false), 1500)

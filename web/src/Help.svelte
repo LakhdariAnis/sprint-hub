@@ -36,6 +36,7 @@
     ['c  i', 'New chat: put the cursor in the message box; Enter sends, Shift+Enter is a new line, Esc leaves the box'],
     ['x  R', 'New chat: x closes the chat (out of OPEN, kept in the vault); R renames it'],
     ['a  d  A', 'New chat: answer the permission card: Allow, Deny, Allow for this chat (Esc leaves the box first)'],
+    ['g', 'New chat of a project with the code graph on: show / hide the graph beside the chat (the sidebar folds meanwhile; ← → on the handle between them resize). `g` + letter is off there'],
     ['?', 'show / hide this help'],
   ]
 </script>
