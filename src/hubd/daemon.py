@@ -13,7 +13,7 @@ from watchfiles import awatch
 
 from hubd import close, focus, importer, init, weeks
 from hubd.close import Closed
-from hubd.context import Context, build
+from hubd.context import Context, build, graph_block
 from hubd.graph import Built, FakeGraph, GraphSource
 from hubd.importer import git
 from hubd.model import Deadline, Review, Run, State, Step, TaskState, one_line
@@ -876,8 +876,17 @@ class Hub:
             spec = spec_text(self.entry(project, step_id))
             with suppress(InvalidTransition):  # a branch gone or never made: a note says so
                 diff = await self.diffstat(project, step_id)
-        name = self.index.projects[project].name
-        return await asyncio.to_thread(build, repo, name, sprint, step_id, spec, diff)
+        settings = self.index.projects[project]
+        return await asyncio.to_thread(
+            lambda: build(repo, settings.name, sprint, step_id, spec, diff, self._graph(project))
+        )
+
+    def _graph(self, project: str) -> str | None:
+        """The context's code graph part: only with `graph: on` and a graph built."""
+        if not self.index.projects[project].graph or (path := self.graph.where(project)) is None:
+            return None
+        graph = self.graph.load(project)
+        return graph_block(path, graph) if graph else None
 
 
 def _git(repo: Path, *args: str) -> str:

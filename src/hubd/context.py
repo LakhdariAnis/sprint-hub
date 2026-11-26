@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from hubd.graph import Graph
 from hubd.vault import live_file
 
 CAP = 40_000  # bytes; one argv string may be at most 128 KiB (Linux MAX_ARG_STRLEN)
@@ -70,6 +71,33 @@ def _entries(progress: str, ids: set[str]) -> list[str]:
     return out
 
 
+# The graphify commands a chat may run without a card (`hubd.permits.graph_read`).
+GRAPH_READS = (
+    ("query", '"<question>"'),
+    ("path", '"<A>" "<B>"'),
+    ("affected", '"<X>"'),
+    ("explain", '"<X>"'),
+)
+
+
+def graph_block(path: Path, graph: Graph) -> str:
+    """What a chat on a `graph: on` project is told of its code graph (657)."""
+    commit = graph.commit[:7] if graph.commit else "unknown"
+    lines = [
+        "## Code graph",
+        f"A graphify code graph of this repo is at {path}: {len(graph.nodes)} nodes, "
+        f"{len(graph.links)} links, built from commit {commit} at {graph.built_at}.",
+        "Prefer these for structure questions (what calls X, what breaks if X changes, how X "
+        "and Y are connected, what X is) over reading many files: they are faster and cheaper, "
+        "and they run without asking Anis because they only read.",
+        *(f"- `graphify {verb} {args} --graph {path}`" for verb, args in GRAPH_READS),
+        "Name a node by its label, e.g. `split.py` or `main()`. Run each as one plain command "
+        "with that `--graph`: no pipes, `&&`, `;`, redirects or `$`, or it needs Anis's OK.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 class _Builder:
     def __init__(self, repo: Path):
         self.repo = repo
@@ -95,11 +123,13 @@ def build(
     step: str | None = None,
     spec: str | None = None,
     diffstat: str | None = None,
+    graph: str | None = None,
 ) -> Context:
     """The project's context, with the sprint's and the step's in front when given.
 
     Most specific first, so the cap cuts the README before the step. `spec` and `diffstat` come
     from the hub (the spec may be archived, the diffstat needs the step branch); None = none.
+    `graph`: the `graph_block` of a `graph: on` project, kept first so the cap never cuts it.
     """
     b = _Builder(repo)
     b.out += [
@@ -109,6 +139,8 @@ def build(
         "the project is.",
         "",
     ]
+    if graph:
+        b.out.append(graph)
     progress = _read(repo / "sprint/PROGRESS.md")
     readme = _read(repo / "sprint/README.md")
     lines = readme.split("\n") if readme is not None else []
@@ -173,5 +205,7 @@ def build(
         "sprints",
         "no sprint/README.md" if readme is None else "no Sprints table in sprint/README.md",
     )
+    if graph:
+        b.ctx.parts.append("graph")
     b.ctx.text = cap("\n".join(b.out).rstrip() + "\n")
     return b.ctx

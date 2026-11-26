@@ -79,6 +79,10 @@ class GraphSource(Protocol):
         """Why the last call for this project gave nothing; None when it went fine."""
         ...
 
+    def where(self, project: str) -> Path | None:
+        """The project's graph.json, for `graphify … --graph` in its chats; None: no such file."""
+        ...
+
 
 # Docstrings graphify keeps as nodes: text, not code.
 DOCSTRING = "rationale"
@@ -289,6 +293,10 @@ class GraphifyGraph:
     def reason(self, project: str) -> str | None:
         return self._reasons.get(project)
 
+    def where(self, project: str) -> Path | None:
+        path = self._out(project) / "graph.json"
+        return path if path.is_file() else None
+
 
 # The demo project's code (`hubd --demo`): (id, label, file, line, group),
 # then (source, target, relation).
@@ -377,3 +385,6 @@ class FakeGraph:
 
     def reason(self, project: str) -> str | None:
         return None
+
+    def where(self, project: str) -> Path | None:
+        return None  # no file: its chats are told nothing of it
