@@ -43,6 +43,8 @@ class Project(BaseModel):
     merge: Merge
     archived: bool = False  # hidden from the Projects list until "show archived"
     graph: bool = False  # `graph: on`: hubd keeps a graphify code graph of the repo
+    # Docs and URLs Anis had added to the graph in a chat (they cost tokens): a rebuild keeps them.
+    graph_docs: list[str] = []
 
 
 class Task(BaseModel):

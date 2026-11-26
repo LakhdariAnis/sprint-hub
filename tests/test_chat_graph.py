@@ -213,3 +213,19 @@ def test_a_graph_read_result_carries_its_node_ids(tmp_path: Path, graphs: Path) 
         "src_test_envelope_load1_split",
     ]
     assert "nodes" not in ls_result
+
+
+def test_adding_a_doc_costs_tokens_and_is_kept_in_project_md(vault: Path, graphs: Path) -> None:
+    project_md = vault / "projects" / "demo" / "project.md"
+    save_graph(project_md, True)
+    ctx = asyncio.run(make(vault, graphs).context("demo", None, None))
+    assert "costs tokens" in ctx.text and "wait for his yes" in ctx.text
+    assert f"`graph_docs:` list in {project_md}" in ctx.text
+    assert "The graph holds code only. " in ctx.text
+
+    text = project_md.read_text().replace("---\nDemo", "graph_docs:\n  - README.md\n---\nDemo")
+    project_md.write_text(text)
+    save_graph(project_md, True)  # hubd's own writes keep the list
+    assert project_md.read_text() == text
+    ctx = asyncio.run(make(vault, graphs).context("demo", None, None))
+    assert "The graph holds code only, plus these docs: README.md." in ctx.text

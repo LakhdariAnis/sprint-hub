@@ -80,7 +80,7 @@ GRAPH_READS = (
 )
 
 
-def graph_block(path: Path, graph: Graph) -> str:
+def graph_block(path: Path, graph: Graph, docs: list[str], project_md: Path) -> str:
     """What a chat on a `graph: on` project is told of its code graph (657)."""
     commit = graph.commit[:7] if graph.commit else "unknown"
     lines = [
@@ -93,6 +93,13 @@ def graph_block(path: Path, graph: Graph) -> str:
         *(f"- `graphify {verb} {args} --graph {path}`" for verb, args in GRAPH_READS),
         "Name a node by its label, e.g. `split.py` or `main()`. Run each as one plain command "
         "with that `--graph`: no pipes, `&&`, `;`, redirects or `$`, or it needs Anis's OK.",
+        "The graph holds code only"
+        + (f", plus these docs: {', '.join(docs)}." if docs else ".")
+        + " If Anis asks to add a doc or a URL to it, first tell him it costs tokens (an LLM "
+        "reads it; the code graph is free) and wait for his yes. Then: a URL with "
+        f"`GRAPHIFY_OUT={path.parent} graphify add <url> --dir {path.parent / 'raw'}`, a file "
+        f"with graphify's semantic update into {path.parent}. Then add it to the `graph_docs:` "
+        f"list in {project_md}, so a rebuild keeps it.",
         "",
     ]
     return "\n".join(lines)

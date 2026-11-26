@@ -883,10 +883,13 @@ class Hub:
 
     def _graph(self, project: str) -> str | None:
         """The context's code graph part: only with `graph: on` and a graph built."""
-        if not self.index.projects[project].graph or (path := self.graph.where(project)) is None:
+        settings = self.index.projects[project]
+        if not settings.graph or (path := self.graph.where(project)) is None:
             return None
-        graph = self.graph.load(project)
-        return graph_block(path, graph) if graph else None
+        if (graph := self.graph.load(project)) is None:
+            return None
+        project_md = self.vault / "projects" / project / "project.md"
+        return graph_block(path, graph, settings.graph_docs, project_md)
 
 
 def _git(repo: Path, *args: str) -> str:
