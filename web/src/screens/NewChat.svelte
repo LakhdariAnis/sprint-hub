@@ -149,6 +149,10 @@
   let grid = $state<HTMLElement>()
   const graphOn = $derived(!!view.project && graphOf(view.project))
   const shared = $derived(graphOn && open)
+  // Whether a project has the graph on comes with the project list: fetch it when a chat has a project and none is loaded (a reload).
+  $effect(() => {
+    if (view.project && !lists.projects) loadProjects().then((p) => (lists.projects ??= p), () => {})
+  })
   $effect(() => write({ open, left }))
   // The split takes the room: the sidebar folds to its ^B rail (not saved) and comes back as it was.
   $effect(() => {
