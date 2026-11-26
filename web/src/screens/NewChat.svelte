@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from 'svelte'
+  import { setContext, tick, untrack } from 'svelte'
   import Header from '../Header.svelte'
   import Markdown from '../Markdown.svelte'
   import { answer, answerOf, asksOf, toolsOf, change, chats, edit, saved, chip, contextOf, loadChat, pills, send, stop, type Ask, type Context } from '../chat.svelte'
@@ -8,10 +8,10 @@
   import { loadProject } from '../nav.svelte'
   import { loadProjects } from '../projects'
   import { filter, options, slashQuery, split, type Opt } from '../slash'
-  import { graphOf, lists, steps } from '../store.svelte'
+  import { graphOf, graphStatusOf, lists, steps } from '../store.svelte'
   import GraphPane from '../graph/GraphPane.svelte'
   import { MAX, MIN, clamp, read, write } from '../split'
-  import { litNote } from '../links'
+  import { litNote, matcher, type Chips } from '../links'
 
   let { id }: { id?: string } = $props()
 
@@ -159,6 +159,26 @@
   let lit = $state.raw<{ ids: Set<string>; note: string } | null>(null)
   const light = (ids: string[], note: string) => ((lit = { ids: new Set(ids), note }), (open = true))
   const latest = $derived(turns.flatMap(toolsOf).findLast((t) => t.nodes?.length))
+  // The project's nodes, read once per build, make the chips of the answers: a code span that is exactly a label or a file.
+  let found = $state.raw<ReturnType<typeof matcher> | null>(null)
+  $effect(() => {
+    const p = view.project
+    void graphStatusOf(p ?? '')?.at // a rebuild reads it again
+    if (!p || !graphOn) return void (found = null)
+    let live = true
+    fetch(`/projects/${encodeURIComponent(p)}/graph`).then((r) => (r.ok ? r.json() : Promise.reject())).then(
+      (g) => live && (found = matcher(g.nodes, g.links)),
+      () => live && (found = null),
+    )
+    return () => (live = false)
+  })
+  setContext<Chips>('chips', {
+    ids: (code) => found?.ids(code) ?? [],
+    show: (ids, code) => {
+      const around = found!.around(ids)
+      light([...around], `${code} and its links · ${around.size} nodes`)
+    },
+  })
   $effect(() => {
     const t = latest
     lit = t?.nodes ? { ids: new Set(t.nodes), note: litNote(t.line, t.nodes.length) } : null

@@ -27,6 +27,9 @@ export function matcher(nodes: Node[], links: Link[]) {
   }
 }
 
+// What an answer's chips need (set in the chat screen, read by Inline): the ids a code span names, and "show them".
+export type Chips = { ids: (code: string) => string[]; show: (ids: string[], code: string) => void }
+
 // The banner for a graph tool line: "Asked the graph: affected f() --depth 3" with 22 nodes is "22 nodes read f()".
 export function litNote(line: string, n: number): string {
   const what = line.replace(/^Asked the graph:\s*/, '').replace(/^\S+\s*/, '').split(' --')[0].trim()
