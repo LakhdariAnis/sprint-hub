@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 import shutil
 import sys
 import tempfile
@@ -138,10 +139,28 @@ def _cut(text: str) -> str:
     return "\n".join(lines[:SHOWN_LINES] + ([f"… {more} more lines"] if more > 0 else []))
 
 
+GRAPH_LINE = "Asked the graph: "  # a graphify read (657); the page and `Chats` know it by this
+
+
+def graph_line(command: str) -> str | None:
+    """`Asked the graph: affected chronological_split()` for a graphify read, else None."""
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return None
+    if len(words) < 2 or words[0] != "graphify" or words[1] not in permits.GRAPH_READS:
+        return None
+    shown = [w for i, w in enumerate(words) if w != "--graph" and words[i - 1] != "--graph"]
+    return GRAPH_LINE + _short(" ".join(shown[1:]))
+
+
 def tool_line(name: str, given: Any, cwd: Path | None = None) -> str:
     """The one line a tool call gets in the chat: `Read src/hubd/api.py`, `Edit a.ts +4 −1`."""
     if not isinstance(given, dict):
         return name
+    if name == "Bash" and isinstance(given.get("command"), str):
+        if line := graph_line(given["command"]):
+            return line
     main = given.get(MAIN.get(name, ""))
     if not isinstance(main, str):
         main = next((v for v in given.values() if isinstance(v, str)), "")

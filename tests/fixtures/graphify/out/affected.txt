@@ -1,0 +1,10 @@
+Affected nodes for chronological_split()
+Relations: calls, indirect_call, references, imports, imports_from, dynamic_import, re_exports, inherits, extends, implements, uses, mixes_in, embeds, defines, requires
+Depth: 2
+- load_parts() [calls] src/test_combined.py:L34
+- load1_split() [calls] src/test_envelope.py:L39
+- load_parts() [calls] src/test_held_out.py:L31
+- test_combined.py [imports] src/test_combined.py:L7
+- test_envelope.py [imports] src/test_envelope.py:L8
+- test_held_out.py [imports] src/test_held_out.py:L7
+- run() [calls] src/test_held_out.py:L40

@@ -9,8 +9,9 @@ import pytest
 from hubd import permits
 from hubd.chats import Chats
 from hubd.daemon import Hub
-from hubd.graph import GraphifyGraph
+from hubd.graph import GraphifyGraph, ids_in, read
 from hubd.notify import NullNotifier
+from hubd.runners.chat import tool_line
 from hubd.runners.fake import FakeChat, FakeRunner
 from hubd.vault import save_graph
 
@@ -130,3 +131,85 @@ def test_chats_allow_graph_reads_without_a_card(tmp_path: Path) -> None:
         other.cancel()
 
     asyncio.run(main())
+
+
+OUT = FIXTURES / "out"  # graphify's output on the fixture graph (graphify 0.9.120, 2026-11-26)
+
+
+def test_tool_line_of_a_graph_read() -> None:
+    line = tool_line(
+        "Bash", {"command": f'graphify affected "chronological_split()" --graph {GRAPH}'}
+    )
+    assert line == "Asked the graph: affected chronological_split()"
+    line = tool_line(
+        "Bash", {"command": f"graphify query 'what calls x' --graph {GRAPH} --depth 3"}
+    )
+    assert line == "Asked the graph: query what calls x --depth 3"
+    assert tool_line("Bash", {"command": "graphify update ."}) == "Bash graphify update ."
+    assert tool_line("Bash", {"command": 'graphify query "open'}) == 'Bash graphify query "open'
+
+
+@pytest.mark.parametrize(
+    ("sample", "ids"),
+    [
+        (
+            "affected",
+            ["src_test_combined_load_parts", "src_test_envelope_load1_split",
+             "src_test_held_out_load_parts", "src_test_combined", "src_test_envelope",
+             "src_test_held_out", "src_test_held_out_run"],
+        ),
+        (
+            "explain",
+            ["src_split_chronological_split", "src_test_combined", "src_test_envelope",
+             "src_test_held_out", "src_test_held_out_load_parts", "src_split",
+             "src_test_combined_load_parts", "src_test_envelope_load1_split"],
+        ),
+        ("path", ["src_test_envelope_load1_split", "src_split_chronological_split"]),
+        (
+            "query",  # 8 NODE lines: the docstring one is not in the parsed graph
+            ["src_split_chronological_split", "src_split", "src_test_envelope_load1_split",
+             "src_test_held_out_load_parts", "src_test_combined_load_parts", "numpy",
+             "src_test_held_out_run"],
+        ),
+    ],
+)  # fmt: skip
+def test_node_ids_from_a_sample_output(sample: str, ids: list[str]) -> None:
+    graph = read(FIXTURES / "graph.json")
+    assert ids_in(graph, (OUT / f"{sample}.txt").read_text()) == ids
+
+
+def test_nothing_from_an_error_or_another_output() -> None:
+    graph = read(FIXTURES / "graph.json")
+    assert ids_in(graph, "No node matching 'test_set()' found.") == []
+    assert ids_in(graph, "- nowhere() [calls] src/x.py:L1\n") == []
+
+
+def test_a_graph_read_result_carries_its_node_ids(tmp_path: Path, graphs: Path) -> None:
+    events: list[dict] = []
+    path = graphs / "demo" / "graph.json"
+    chats = Chats(
+        lambda on_event: FakeChat(on_event, delay=0), events.append, tmp_path,
+        context=None, graph=lambda project: path,
+    )  # type: ignore[arg-type]  # fmt: skip
+    command = f'graphify affected "chronological_split()" --graph {path}'
+
+    async def main() -> None:
+        chat = await chats.open("demo", tmp_path, "sonnet", "high", None)
+        chat.turns.append({"text": "what breaks?", "events": [], "done": False})
+        for call, text in (("g", (OUT / "affected.txt").read_text()), ("l", "a.txt\n")):
+            given = {"command": command} if call == "g" else {"command": "ls"}
+            line = tool_line("Bash", given)
+            await chats.on_event(
+                chat.id, {"type": "tool", "id": call, "name": "Bash", "line": line}
+            )
+            await chats.on_event(
+                chat.id, {"type": "tool_result", "id": call, "error": False, "text": text}
+            )
+
+    asyncio.run(main())
+    graph_result, ls_result = [e for e in events if e["kind"] == "tool_result"]
+    assert graph_result["nodes"][:2] == [
+        "src_test_combined_load_parts",
+        "src_test_envelope_load1_split",
+    ]
+    assert "nodes" not in ls_result

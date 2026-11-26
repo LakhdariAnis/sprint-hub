@@ -1,0 +1,3 @@
+Shortest path (1 hops):
+  load1_split() --calls [EXTRACTED]--> chronological_split()
+Path confidence: EXTRACTED (weakest hop 1: calls)

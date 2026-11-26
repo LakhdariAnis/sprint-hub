@@ -1,0 +1,15 @@
+Node: chronological_split()
+  ID:        src_split_chronological_split
+  Source:    src/split.py L3
+  Type:      code
+  Community: chronological_split
+  Degree:    7
+
+Connections (7):
+  <-- test_combined.py [imports] [EXTRACTED] src/test_combined.py:L7
+  <-- test_envelope.py [imports] [EXTRACTED] src/test_envelope.py:L8
+  <-- test_held_out.py [imports] [EXTRACTED] src/test_held_out.py:L7
+  <-- load_parts() [calls] [EXTRACTED] src/test_held_out.py:L31
+  <-- split.py [contains] [EXTRACTED] src/split.py:L3
+  <-- load_parts() [calls] [EXTRACTED] src/test_combined.py:L34
+  <-- load1_split() [calls] [EXTRACTED] src/test_envelope.py:L39

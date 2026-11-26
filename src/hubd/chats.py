@@ -13,9 +13,10 @@ from typing import Any
 from hubd import chatlog, focus, permits
 from hubd.context import Context
 from hubd.daemon import NotFound
+from hubd.graph import GraphError, ids_in, read
 from hubd.model import one_line
 from hubd.notify import Click
-from hubd.runners.chat import ChatEvent, ChatRunner
+from hubd.runners.chat import GRAPH_LINE, ChatEvent, ChatRunner
 from hubd.transcript import Transcript, no_transcript
 
 MAX_LIVE = 3  # claude processes at once
@@ -345,6 +346,8 @@ class Chats:
         if chat:
             chat.used = time.monotonic()
         waiting = [t for t in chat.turns if not t["done"]] if chat else []
+        if kind == "tool_result" and chat and waiting:
+            event = self._graph_nodes(chat, waiting[0]["events"], event)
         if waiting:  # a message sent mid-turn waits: events go to the oldest turn not ended
             events = waiting[0]["events"]
             if kind == "text" and events and events[-1]["kind"] == "text":
@@ -358,6 +361,21 @@ class Chats:
         self.emit({"type": "chat", "id": chat_id, **event})
         if chat and kind == "turn_end":
             self._tell(chat, "turn", "Claude answered", self._label(chat))
+
+    def _graph_nodes(self, chat: Chat, events: list[dict], result: dict) -> dict:
+        """A graphify read's result, with the node ids it names (for the graph pane, 659)."""
+        call = next((e for e in events if e.get("tool_id") == result.get("tool_id")), {})
+        if not str(call.get("line", "")).startswith(GRAPH_LINE) or not chat.project:
+            return result
+        if (path := self.graph(chat.project)) is None:
+            return result
+        try:
+            graph = read(path)
+        except GraphError:
+            return result
+        # shortcut: reads the result as the page gets it (40 lines); a longer `query` names
+        # more nodes than that. Upgrade if 659 needs them all.
+        return {**result, "nodes": ids_in(graph, result.get("text", ""))}
 
     async def close_idle(self, now: float, idle: float = IDLE) -> None:
         """Close the process of each chat with no turn under way and nothing for `idle` s."""

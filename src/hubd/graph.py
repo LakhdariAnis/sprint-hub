@@ -160,6 +160,42 @@ def report_facts(text: str) -> tuple[list[list[str]], dict]:
     return cycles, unread
 
 
+# Lines of graphify's read commands that name a node (657): `explain` prints its id, the
+# others a label and mostly a file. `affected` and `explain` print the edge's file, which is the
+# source node's: a label then matches on its own when it is the only node with it.
+ID_LINE = re.compile(r"^\s+ID:\s+(\S+)$")
+NODE_LINE = re.compile(r"^NODE (.+?) \[src=(\S*) ")
+NEAR_LINE = re.compile(r"^\s+(?:<--|-->) (.+?) \[\w+\] \[[^\]]*\](?: (.+?)(?::L\d+)?)?$")
+
+
+def ids_in(graph: Graph, output: str) -> list[str]:
+    """The node ids a graphify query, path, affected or explain output names, in its order."""
+    by_place = {(n.label, n.file): n.id for n in graph.nodes}
+    by_label: dict[str, list[str]] = {}
+    for n in graph.nodes:
+        by_label.setdefault(n.label, []).append(n.id)
+    known = {n.id for n in graph.nodes}
+    found: dict[str, None] = {}
+    lines = output.splitlines()
+    for i, line in enumerate(lines):
+        names: list[tuple[str, str]] = []
+        if m := ID_LINE.match(line):
+            if m[1] in known:
+                found[m[1]] = None
+            continue
+        if m := NODE_LINE.match(line) or AFFECTED.match(line):
+            names = [(m[1], m[2] if m.re is NODE_LINE else m[3] or "")]
+        elif m := NEAR_LINE.match(line):
+            names = [(m[1], m[2] or "")]
+        elif i and lines[i - 1].startswith("Shortest path"):
+            names = [(label, "") for label in HOP.split(line.strip())]
+        for label, file in names:
+            hits = [by_place[(label, file)]] if (label, file) in by_place else by_label.get(label)
+            if hits and len(hits) == 1:
+                found[hits[0]] = None
+    return list(found)
+
+
 GRAPHS = Path.home() / ".local" / "share" / "sprint-hub" / "graphs"
 TIMEOUT = 120  # seconds; tinyml (33 code files) takes 1.5 s
 # `graphify affected`: "- load_parts() [calls] src/test_held_out.py:L31" (the line is the edge's).

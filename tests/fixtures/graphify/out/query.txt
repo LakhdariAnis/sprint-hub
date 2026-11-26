@@ -1,0 +1,18 @@
+Graph: tests/fixtures/graphify/graph.json (43 nodes) | Traversal: BFS depth=2 | Start: ['chronological_split()', 'Chronological train/val/test per class (as split.py), stacked over classes.', 'split.py'] | Context: call (heuristic) | 8 nodes found
+
+NODE chronological_split() [src=src/split.py loc=L3 community=chronological_split]
+NODE split.py [src=src/split.py loc=L1 community=chronological_split]
+NODE Chronological train/val/test per class (as split.py), stacked over classes. [src=src/test_combined.py loc=L31 community=test_combined.py]
+NODE load1_split() [src=src/test_envelope.py loc=L35 community=test_combined.py]
+NODE load_parts() [src=src/test_held_out.py loc=L27 community=test_held_out.py]
+NODE load_parts() [src=src/test_combined.py loc=L30 community=test_combined.py]
+NODE numpy [src= loc= community=numpy]
+NODE run() [src=src/test_held_out.py loc=L37 community=test_held_out.py]
+EDGE load_parts() --calls [EXTRACTED context=call]--> chronological_split() at=src/test_held_out.py:L31
+EDGE load_parts() --calls [EXTRACTED context=call]--> chronological_split() at=src/test_combined.py:L34
+EDGE load1_split() --calls [EXTRACTED context=call]--> chronological_split() at=src/test_envelope.py:L39
+EDGE load_parts() --calls [EXTRACTED context=call]--> numpy at=src/test_held_out.py:L33
+EDGE run() --calls [EXTRACTED context=call]--> load_parts() at=src/test_held_out.py:L40
+EDGE load_parts() --calls [EXTRACTED context=call]--> numpy at=src/test_combined.py:L36
+EDGE load1_split() --calls [EXTRACTED context=call]--> numpy at=src/test_envelope.py:L41
+EDGE run() --calls [EXTRACTED context=call]--> numpy at=src/test_held_out.py:L41
