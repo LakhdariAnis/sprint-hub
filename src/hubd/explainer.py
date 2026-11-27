@@ -1,5 +1,12 @@
 """The project explainer: a lecture-handout page Claude writes once into the vault (660)."""
 
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+from hubd.vault import _write_atomic
+
 # The page's 9 sections, in order: the Explainer tab (661) and Obsidian show them as they are.
 SECTIONS = (
     "In one sentence",
@@ -26,6 +33,9 @@ KINDS = {
     "report": "school report / TP",
 }
 HEAD = "Write the explainer of project"  # FakeChat knows the explainer turn by it
+FILE = "explainer.md"  # next to `project.md`
+# The fenced blocks the Explainer tab draws, and the `|` cells of each line.
+BLOCKS = {"stages": 5, "kpis": 2, "bars": 2}
 TYPE_LINE = "type: "  # the first line of the answer when project.md has no `type:`
 
 
@@ -77,3 +87,68 @@ def prompt(name: str, kind: str | None) -> str:
             "untested, from the code. How to run: the real commands from the README.",
         ]
     )
+
+
+def blocks(text: str) -> dict[str, list[list[str]]]:
+    """The lines of each ```stages, ```kpis and ```bars block, split into stripped cells."""
+    found: dict[str, list[list[str]]] = {}
+    for name, body in re.findall(r"(?ms)^```(stages|kpis|bars)[ \t]*\n(.*?)^```", text):
+        rows = [[c.strip() for c in line.split("|")] for line in body.splitlines() if line.strip()]
+        found.setdefault(name, []).extend(rows)
+    return found
+
+
+def problems(text: str) -> list[str]:
+    """What the page gets wrong against the prompt: headings, blocks, cells. Empty: none."""
+    out = []
+    if (headings := re.findall(r"(?m)^## (.+?)\s*$", text)) != list(SECTIONS):
+        out.append(f"headings are {headings}, not the 9 sections in order")
+    found = blocks(text)
+    for name, cells in BLOCKS.items():
+        rows = found.get(name)
+        if not rows:
+            out.append(f"no ```{name} block")
+        out += [
+            f"{name}: {' | '.join(r)} has not {cells} cells" for r in rows or [] if len(r) != cells
+        ]
+    for row in found.get("bars", []):
+        if len(row) == 2 and not re.fullmatch(r"-?\d+(\.\d+)?", row[1]):
+            out.append(f"bars: {row[1]} is not a plain number")
+    return out
+
+
+@dataclass
+class Page:
+    kind: str | None  # the project's type, or the one Claude picked
+    guessed: bool
+    body: str
+
+
+def page(answer: str, kind: str | None) -> Page:
+    """Claude's answer as a page: the `type:` line read off when it had to guess."""
+    guessed = kind is None
+    if guessed and (m := re.match(rf"\s*{TYPE_LINE}(\w+)", answer)):
+        kind = m[1] if m[1] in STAGES else None
+    start = answer.find("## ")  # a stray line of preamble before the first heading goes
+    return Page(kind, guessed, answer[start:] if start >= 0 else answer.strip())
+
+
+def write(
+    folder: Path, p: Page, written: str, commit: str | None, model: str | None, cost: float | None
+) -> Path:
+    """`explainer.md` in the project's vault folder, frontmatter first."""
+    # A commit of only digits would read back as a number: quoted.
+    sha = json.dumps(commit) if commit else None
+    meta = {"written": written, "commit": sha, "model": model, "type": p.kind, "cost": cost}
+    head = ["---", *(f"{k}: {'' if v is None else v}" for k, v in meta.items())]
+    if p.guessed:
+        head.append("guessed: true")
+    head.append("---")
+    if p.guessed:
+        head.append(
+            f"> Type guessed by Claude: {p.kind or 'none fits'}. Set `type:` in "
+            "project.md to change it.\n"
+        )
+    path = folder / FILE
+    _write_atomic(path, ("\n".join(head) + "\n" + p.body.rstrip() + "\n").encode())
+    return path

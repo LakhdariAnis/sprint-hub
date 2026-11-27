@@ -123,6 +123,66 @@ GRAPH_REPLY = [
 ]
 
 
+# FakeChat's answer to the explainer prompt (660): the demo project's page, with every block.
+EXPLAINER = """type: app
+
+## In one sentence
+
+A small app that keeps a list and draws it on screen.
+
+```kpis
+2 | screens
+3 | source files
+1 | API route
+```
+
+## The problem
+
+A list is easy to keep in your head until it grows. This app stores it and shows it.
+
+## Big picture
+
+`serve()` in `src/api.py` hands the items to `draw_list()` in `src/ui.py`.
+
+## Stages
+
+**User.** Anis opens the app.
+**Screens.** `draw_list()` draws one row per item.
+**API.** `serve()` answers with the items.
+**Data.** `list_items()` reads them.
+
+```stages
+user | a click | the list screen | 1 click | src/ui.py
+screens | items | rows on screen | 1 row per item | src/ui.py
+API | a request | the items | 1 route | src/api.py
+data | the list file | items | 3 items | src/data.py
+```
+
+## Key ideas
+
+**One way in.** Every screen gets its items through `serve()`.
+
+## Results
+
+```bars
+items shown | 3
+routes | 1
+```
+
+## Weak spots
+
+No test covers `draw_list()`.
+
+## How to run
+
+`python -m src.api`
+
+## Glossary
+
+**API**: the part that answers requests.
+"""
+
+
 class FakeChat:
     """ChatRunner without Claude: each message gets REPLY in deltas, one tool call, `turn_end`.
 
