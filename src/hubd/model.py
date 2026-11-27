@@ -45,6 +45,8 @@ class Project(BaseModel):
     graph: bool = False  # `graph: on`: hubd keeps a graphify code graph of the repo
     # Docs and URLs Anis had added to the graph in a chat (they cost tokens): a rebuild keeps them.
     graph_docs: list[str] = []
+    # What kind of project its explainer teaches (660); None: Claude guesses and says so.
+    type: Literal["ml", "app", "robotics", "report"] | None = None
 
 
 class Task(BaseModel):
