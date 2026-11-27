@@ -1,10 +1,19 @@
 """The project explainer: a lecture-handout page Claude writes once into the vault (660)."""
 
+import asyncio
 import json
 import re
-from dataclasses import dataclass
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from hubd import permits
+from hubd.importer import git
+from hubd.runners.chat import ChatEvent, ChatRunner
+from hubd.states import InvalidTransition
 from hubd.vault import _write_atomic
 
 # The page's 9 sections, in order: the Explainer tab (661) and Obsidian show them as they are.
@@ -36,6 +45,7 @@ HEAD = "Write the explainer of project"  # FakeChat knows the explainer turn by 
 FILE = "explainer.md"  # next to `project.md`
 # The fenced blocks the Explainer tab draws, and the `|` cells of each line.
 BLOCKS = {"stages": 5, "kpis": 2, "bars": 2}
+WAIT = 20 * 60  # seconds the turn may take, then it is stopped and fails
 TYPE_LINE = "type: "  # the first line of the answer when project.md has no `type:`
 
 
@@ -152,3 +162,113 @@ def write(
     path = folder / FILE
     _write_atomic(path, ("\n".join(head) + "\n" + p.body.rstrip() + "\n").encode())
     return path
+
+
+@dataclass
+class _Job:
+    project: str
+    graph: Path | None  # its graph.json: graphify reads of it need no OK
+    text: list[str] = field(default_factory=list)
+    end: dict[str, Any] = field(default_factory=dict)  # the `turn_end` event
+    error: str | None = None
+    done: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+class Explainers:
+    """One headless Claude turn per explainer, one at a time per project. Events: `emit`."""
+
+    def __init__(self, chat: Callable[[ChatEvent], ChatRunner], emit: Callable[[dict], None]):
+        self.runner = chat(self.on_event)
+        self.runner.ask = self.ask
+        self.emit = emit
+        self.jobs: dict[str, _Job] = {}  # chat id -> the explainer it writes
+        self.tasks: dict[str, asyncio.Task[None]] = {}  # project -> its turn
+
+    def start(
+        self,
+        project: str,
+        repo: Path,
+        folder: Path,
+        model: str,
+        kind: str | None,
+        system: str | None,
+        graph: Path | None,
+        account: str = "claude",
+    ) -> None:
+        """Write `folder/explainer.md` in the background. InvalidTransition: one runs already."""
+        if project in self.tasks:
+            raise InvalidTransition(f"an explainer of {project} is being written")
+        chat_id = str(uuid.uuid4())
+        self.jobs[chat_id] = job = _Job(project, graph)
+        run = self._run(chat_id, job, repo, folder, model, kind, system, account)
+        self.tasks[project] = asyncio.create_task(run)
+
+    async def _run(
+        self,
+        chat_id: str,
+        job: _Job,
+        repo: Path,
+        folder: Path,
+        model: str,
+        kind: str | None,
+        system: str | None,
+        account: str,
+    ) -> None:
+        self.emit({"type": "explainer_started", "project": job.project})
+        try:
+            await self.runner.open(chat_id, repo, model, None, system, account=account)
+            await self.runner.send(chat_id, prompt(job.project, kind))
+            try:
+                await asyncio.wait_for(job.done.wait(), WAIT)
+            except TimeoutError:
+                job.error = f"no answer in {WAIT // 60} minutes"
+            if job.error:
+                self.emit({"type": "explainer_failed", "project": job.project, "reason": job.error})
+                return
+            text = "".join(job.text)
+            commit = await asyncio.to_thread(git, repo, "rev-parse", "HEAD")
+            written = datetime.now(UTC).isoformat(timespec="seconds")
+            cost = job.end.get("cost_usd")
+            p = page(text, kind)
+            path = await asyncio.to_thread(
+                write, folder, p, written, commit or None, job.end.get("model"), cost
+            )
+            self.emit(
+                {
+                    "type": "explainer_done",
+                    "project": job.project,
+                    "path": str(path),
+                    "cost_usd": cost,
+                    "problems": problems(p.body),
+                }
+            )
+        finally:
+            await self.runner.close(chat_id)
+            del self.jobs[chat_id], self.tasks[job.project]
+
+    async def on_event(self, chat_id: str, event: dict[str, Any]) -> None:
+        if (job := self.jobs.get(chat_id)) is None:
+            return
+        kind = event["type"]
+        if kind == "text":
+            job.text.append(event["text"])
+        elif kind == "tool":
+            self.emit({"type": "explainer_progress", "project": job.project, "line": event["line"]})
+        elif kind == "error":
+            job.error = event["message"]
+            job.done.set()
+        elif kind == "turn_end":
+            job.end = event
+            job.done.set()
+
+    async def ask(self, chat_id: str, tool: str, tool_input: dict[str, Any]) -> dict[str, str]:
+        """Only graphify reads of the project's graph: the explainer writes and runs nothing."""
+        job = self.jobs.get(chat_id)
+        if job and permits.graph_read(tool, tool_input, job.graph):
+            return {"behavior": "allow"}
+        return {"behavior": "deny", "message": "The explainer only reads: write and run nothing."}
+
+    async def close_all(self) -> None:
+        for task in list(self.tasks.values()):
+            task.cancel()
+        await asyncio.gather(*self.tasks.values(), return_exceptions=True)

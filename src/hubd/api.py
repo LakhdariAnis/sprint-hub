@@ -17,6 +17,7 @@ from pydantic import BaseModel, BeforeValidator, Field, StringConstraints, Valid
 from hubd import doctor, reminders, service, windows
 from hubd.chats import Chats, Full
 from hubd.daemon import Hub, MergeConflict, NotFound, spec_text, step_json
+from hubd.explainer import Explainers
 from hubd.graph import Graph, GraphifyGraph, Node, find, report_facts, top
 from hubd.importer import git
 from hubd.init import PROJECTS
@@ -145,6 +146,7 @@ def create_app(
         if hub
         else None
     )
+    explainers = Explainers(chat, hub.emit) if hub else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -164,9 +166,11 @@ def create_app(
         stop.set()
         await asyncio.gather(*tasks)
         await chats.close_all()
+        await explainers.close_all()
 
     app = FastAPI(title="hubd", lifespan=lifespan)
     app.state.chats = chats  # tests reach the idle check through it
+    app.state.explainers = explainers
 
     @app.exception_handler(InvalidTransition)
     async def conflict(_: Request, exc: InvalidTransition) -> JSONResponse:
@@ -492,6 +496,24 @@ def create_app(
     ) -> dict:
         """What a new chat with these pills would be told: label, size, notes (the chip)."""
         return (await hub.context(project, sprint, step)).json()
+
+    @app.post("/projects/{project}/explainer", status_code=202, response_model=None)
+    async def write_explainer(project: str) -> JSONResponse | dict:
+        """Claude writes `explainer.md` next to `project.md`; events say how it goes (660)."""
+        if (p := hub.index.projects.get(project)) is None:
+            raise NotFound(f"no project {project}")
+        if not p.graph:
+            raise NotFound(f"{project} has no graph: turn it on in its project settings")
+        if (repo := hub.repo(project)) is None or not repo.is_dir():
+            return JSONResponse({"detail": f"project {project} has no repo"}, status_code=422)
+        if project in explainers.tasks:  # before the context is built: two fast POSTs
+            raise InvalidTransition(f"an explainer of {project} is being written")
+        context = await hub.context(project, None, None)
+        folder = hub.vault / "projects" / project
+        explainers.start(
+            project, repo, folder, p.model, p.type, context.text, graph(project), p.account
+        )
+        return {"started": True}
 
     @app.get("/chats")
     def list_chats() -> list[dict]:
